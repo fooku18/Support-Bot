@@ -1,0 +1,300 @@
+# Unified native agent deployment: agent, Slack adapter, CLI runtime, PostgreSQL,
+# settings (admin) service and the egress proxy. Fresh provisioning is separate.
+# `test:stack:up --model-mode stub` also starts the model-stub service.
+# The proxy joins the outbound bridge. Admin joins the ingress bridge and publishes its UI on
+# a host port for the operator's HTTPS reverse proxy.
+services:
+  native-postgres:
+    image: postgres@sha256:f3bd19c606e442c3d7bdfa8002e03fe260a1023351e0ea4598032022b68dd6e3
+    environment: { POSTGRES_HOST_AUTH_METHOD: trust }
+    command: [postgres, -c, hba_file=/etc/postgresql/native-answer-pg-hba.conf]
+    networks: [nativedb]
+    volumes:
+      - native-pg-data:/var/lib/postgresql/data
+      - native-pg-socket:/var/run/postgresql
+      - ./docker/native-answer-pg-hba.conf:/etc/postgresql/native-answer-pg-hba.conf:ro
+    healthcheck:
+      test: [CMD, pg_isready, -U, postgres]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    mem_limit: 256m
+    pids_limit: 64
+    security_opt: [no-new-privileges:true]
+
+  native-answer:
+    build: { context: .., dockerfile: deploy/Dockerfile, target: native-coding }
+    image: support-agent/native-coding:${NATIVE_IMAGE_TAG:?explicit image tag required}
+    init: true
+    read_only: true
+    user: '0:0'
+    cap_drop: [ALL]
+    # Mastra LocalSandbox uses bubblewrap for isolated Workspace commands.
+    cap_add: [SYS_ADMIN, NET_ADMIN]
+    security_opt: [no-new-privileges:true, seccomp:unconfined, apparmor:unconfined]
+    networks:
+      nativedb: {}
+      frontend: {}
+      tools: { gw_priority: 1 }
+    depends_on:
+      native-postgres: { condition: service_healthy }
+      adapter: { condition: service_started }
+      admin: { condition: service_healthy }
+      native-cli-runtime: { condition: service_healthy }
+    environment:
+      NATIVE_CODING_STORE: /var/lib/native-coding
+      NATIVE_APPLICATION_PORT: '9879'
+      NATIVE_ADAPTER_URL: http://adapter:9881
+      NATIVE_PG_HOST: native-postgres
+      NATIVE_PG_PASSWORD_FILE: /run/secrets/native_runtime_password
+      SERVICE_TOKEN: ${SUPPORT_AGENT_SERVICE_TOKEN:?service token required}
+      ADMIN_URL: http://admin:9883
+      ADMIN_INTERNAL_TOKEN: ${ADMIN_INTERNAL_TOKEN:?admin token required}
+      CLI_RUNTIME_URL: http://native-cli-runtime:9877
+      CLI_RUNTIME_TOKEN: ${CLI_RUNTIME_TOKEN:?tool runtime transport token required}
+      EGRESS_PROXY_URL: http://egress-tools:3128
+      MODEL_CATALOG: ${MODEL_CATALOG:?trusted models required}
+      MODEL_DEFAULT_KEY: ${MODEL_DEFAULT_KEY:?trusted default model required}
+      NATIVE_MODEL_STUB: ${NATIVE_MODEL_STUB:-}
+      SUPPORT_AGENT_INSTANCE: ${SUPPORT_AGENT_INSTANCE:?instance required}
+    volumes:
+      - native-coding-data:/var/lib/native-coding
+    secrets: [native_runtime_password]
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=128m
+    mem_limit: 768m
+    pids_limit: 256
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "fetch('http://127.0.0.1:9879/readyz',{headers:{authorization:'Bearer '+process.env.SERVICE_TOKEN}}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 10s
+      retries: 12
+    stop_grace_period: 660s
+
+  adapter:
+    build: { context: .., dockerfile: deploy/Dockerfile, target: adapter }
+    image: support-agent/adapter:${NATIVE_IMAGE_TAG:?explicit image tag required}
+    command: [--process-env]
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks: [frontend]
+    depends_on:
+      admin: { condition: service_healthy }
+      egress: { condition: service_healthy }
+    environment:
+      NATIVE_APPLICATION_URL: http://native-answer:9879
+      NATIVE_ADAPTER_PORT: '9881'
+      SERVICE_TOKEN: ${SUPPORT_AGENT_SERVICE_TOKEN:?service token required}
+      SLACK_APP_TOKEN: ${SLACK_APP_TOKEN:?single Socket Mode app token required}
+      ADMIN_URL: http://admin:9883
+      ADMIN_INTERNAL_TOKEN: ${ADMIN_INTERNAL_TOKEN:?admin token required}
+      EGRESS_PROXY_URL: http://egress:3128
+    mem_limit: 128m
+    pids_limit: 64
+    stop_grace_period: 660s
+
+  native-provision:
+    profiles: [maintenance]
+    image: support-agent/native-coding:${NATIVE_IMAGE_TAG:?explicit image tag required}
+    command: [provision]
+    network_mode: none
+    read_only: true
+    environment:
+      NATIVE_PG_SOCKET: /run/native-postgres
+      NATIVE_PG_PASSWORD_FILE: /run/secrets/native_runtime_password
+    volumes:
+      - native-pg-socket:/run/native-postgres
+    secrets: [native_runtime_password]
+    mem_limit: 384m
+    pids_limit: 64
+
+  native-cli-runtime:
+    build: { context: .., dockerfile: deploy/Dockerfile, target: cli-runtime }
+    image: support-agent/cli-runtime:${NATIVE_IMAGE_TAG:?explicit image tag required}
+    init: true
+    read_only: true
+    cap_add: [SYS_ADMIN]
+    security_opt: [no-new-privileges:true, seccomp:unconfined, apparmor:unconfined]
+    networks: [frontend, tools]
+    depends_on:
+      admin: { condition: service_healthy }
+      egress: { condition: service_healthy }
+    environment:
+      CLI_RUNTIME_PORT: '9877'
+      CLI_RUNTIME_TOKEN: ${CLI_RUNTIME_TOKEN:?tool runtime transport token required}
+      ADMIN_URL: http://admin:9883
+      ADMIN_INTERNAL_TOKEN: ${ADMIN_INTERNAL_TOKEN:?admin token required}
+      EGRESS_PROXY_URL: http://egress-tools:3128
+      GITLAB_HOSTS: ${GITLAB_HOSTS:?approved GitLab hosts required}
+      ATLASSIAN_SITES: ${ATLASSIAN_SITES:-}
+      DATADOG_SITES: ${DATADOG_SITES:-}
+      CLOUDFLARE_HOSTS: ${CLOUDFLARE_HOSTS:-}
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=64m
+    mem_limit: 256m
+    pids_limit: 128
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "fetch('http://127.0.0.1:9877/readyz',{headers:{authorization:'Bearer '+process.env.CLI_RUNTIME_TOKEN}}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 10s
+      retries: 12
+
+  admin:
+    build: { context: .., dockerfile: deploy/Dockerfile, target: admin }
+    image: support-agent/admin:${NATIVE_IMAGE_TAG:?explicit image tag required}
+    user: node
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: ['/tmp:rw,noexec,nosuid,size=16m,uid=1000,gid=1000']
+    # frontend: agent, adapter and CLI runtime reach the settings API.
+    # ingress: the only route for the published UI port.
+    networks:
+      frontend: {}
+      ingress: {}
+    ports:
+      - 127.0.0.1:${ADMIN_HOST_PORT:?loopback port for the settings reverse proxy required}:9883
+    depends_on:
+      egress: { condition: service_healthy }
+    environment:
+      ADMIN_PUBLIC_URL: ${ADMIN_PUBLIC_URL:?public HTTPS origin of the settings service required}
+      ADMIN_INTERNAL_TOKEN: ${ADMIN_INTERNAL_TOKEN:?admin token required}
+      ADMIN_STORE_KEY: ${ADMIN_STORE_KEY:?settings credential encryption key required}
+      ADMIN_SESSION_KEY: ${ADMIN_SESSION_KEY:?settings session key required}
+      SLACK_CLIENT_ID: ${SLACK_CLIENT_ID:?Slack OAuth client ID required}
+      SLACK_CLIENT_SECRET: ${SLACK_CLIENT_SECRET:?Slack OAuth client secret required}
+      EGRESS_PROXY_URL: http://egress:3128
+      MODEL_CATALOG: ${MODEL_CATALOG:?trusted models required}
+      MODEL_DEFAULT_KEY: ${MODEL_DEFAULT_KEY:?trusted default model required}
+      NATIVE_MODEL_STUB: ${NATIVE_MODEL_STUB:-}
+    volumes:
+      - type: bind
+        source: ${ADMIN_STORE_DIR:?settings store directory required}
+        target: /var/lib/support-agent-admin
+        bind:
+          create_host_path: false
+    mem_limit: 256m
+    pids_limit: 64
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "fetch('http://127.0.0.1:9883/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    stop_grace_period: 30s
+
+  egress:
+    build: { context: .., dockerfile: deploy/Dockerfile, target: egress }
+    image: support-agent/egress:${NATIVE_IMAGE_TAG:?explicit image tag required}
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    # The proxy decides by source subnet. The agent and CLI runtime use the
+    # tools-only alias so their tunnels leave from the tools subnet.
+    networks:
+      frontend: { aliases: [egress] }
+      tools: { aliases: [egress-tools] }
+      outbound: {}
+    environment:
+      SUPPORT_AGENT_FRONTEND_SUBNET: ${NATIVE_FRONTEND_SUBNET:?private frontend subnet required}
+      SUPPORT_AGENT_TOOLS_SUBNET: ${NATIVE_TOOLS_SUBNET:?private tools subnet required}
+      MODEL_CATALOG: ${MODEL_CATALOG:?trusted models required}
+      MODEL_DEFAULT_KEY: ${MODEL_DEFAULT_KEY:?trusted default model required}
+      NATIVE_MODEL_STUB: ${NATIVE_MODEL_STUB:-}
+      NATIVE_VERTEX_PROJECT: ${NATIVE_VERTEX_PROJECT:-}
+      NATIVE_VERTEX_LOCATION: ${NATIVE_VERTEX_LOCATION:-}
+      GITLAB_HOSTS: ${GITLAB_HOSTS:?approved GitLab hosts required}
+      ATLASSIAN_SITES: ${ATLASSIAN_SITES:-}
+      DATADOG_SITES: ${DATADOG_SITES:-}
+      CLOUDFLARE_HOSTS: ${CLOUDFLARE_HOSTS:-}
+    mem_limit: 128m
+    pids_limit: 128
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "fetch('http://127.0.0.1:3129/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  # Scripted Messages API selected by `test:stack:up --model-mode stub`.
+  # The agent reaches it on the tools network. The stub has no external
+  # route, published ports or mounted credentials.
+  model-stub:
+    profiles: [stub]
+    build: { context: .., dockerfile: deploy/Dockerfile, target: model-stub }
+    image: support-agent/model-stub:${NATIVE_IMAGE_TAG:?explicit image tag required}
+    init: true
+    read_only: true
+    user: node
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks: [tools]
+    environment:
+      MODEL_STUB_PORT: '9877'
+    mem_limit: 64m
+    pids_limit: 32
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "fetch('http://127.0.0.1:9877/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+networks:
+  nativedb:
+    internal: true
+    ipam:
+      config:
+        - subnet: ${NATIVE_DB_SUBNET:?explicit private database subnet required}
+  frontend:
+    internal: true
+    ipam:
+      config:
+        - subnet: ${NATIVE_FRONTEND_SUBNET:?private frontend subnet required}
+  tools:
+    internal: true
+    ipam:
+      config:
+        - subnet: ${NATIVE_TOOLS_SUBNET:?private tools subnet required}
+  # Egress proxy only: its route to the internet.
+  outbound: {}
+  # Admin only: the published settings UI port.
+  ingress: {}
+volumes:
+  native-pg-data: {}
+  native-pg-socket: {}
+  native-coding-data: {}
+secrets:
+  native_runtime_password:
+    file: ${NATIVE_RUNTIME_PASSWORD_FILE:?fresh native runtime secret path required}

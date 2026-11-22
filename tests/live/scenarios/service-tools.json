@@ -1,0 +1,42 @@
+{
+  "name": "native-service-tool-choice",
+  "covers": [
+    "model chooses jira and confluence reads",
+    "model chooses a datadog read",
+    "model chooses a cloudflare read",
+    "model chooses a slack user lookup"
+  ],
+  "budget": {
+    "turns": 5,
+    "modelRequests": 40
+  },
+  "mode": "coding",
+  "requires": ["atlassian", "datadog", "cloudflare", "slack"],
+  "steps": [
+    {
+      "prompt": "Discovery only: find the Jira issue about \"lunar lighthouse handoff\". You do not know its key. Report the issue key and its summary. Do not clone, edit, run commands or tests, export, publish, or write anywhere.",
+      "contains": ["KAN-1", "lunar lighthouse handoff"],
+      "discovery": true
+    },
+    {
+      "prompt": "Discovery only: find the Confluence page about \"lunar lighthouse handoff\" and report its page ID and title. Do not clone, edit, run commands or tests, export, publish, or write anywhere.",
+      "contains": ["123456", "lunar lighthouse handoff"],
+      "discovery": true
+    },
+    {
+      "prompt": "Discovery only: search the Datadog logs for env:prod status:error over the last 5 minutes, at most 100 entries. Report only the exact query, the time window, the number of entries you received (it may be zero) and the Datadog tool you used, named as datadog_<tool>. Do not quote log content.",
+      "contains": ["datadog_search_datadog_logs", "env:prod status:error"],
+      "discovery": true
+    },
+    {
+      "prompt": "Discovery only: check with the Cloudflare tools whether the Cloudflare API token of this channel is valid and report its status in one word. Do not report zone or traffic data.",
+      "contains": ["active"],
+      "discovery": true
+    },
+    {
+      "prompt": "Discovery only: look up the Slack user U0123456789 and report their real name only. Do not look up anyone else.",
+      "contains": ["Alex"],
+      "discovery": true
+    }
+  ]
+}

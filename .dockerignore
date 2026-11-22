@@ -1,0 +1,51 @@
+# Build-context exclusions. This is defense in depth: the Dockerfile copies
+# only the files it needs, but sensitive or irrelevant paths must never be
+# able to enter a build context or an image layer.
+
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# Local credentials — no dotenv file may enter an image, including the
+# placeholder example (nothing in the build reads it).
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Host-side artifacts that must never leak into images
+**/node_modules
+**/.run
+**/dist
+**/test
+**/*.md
+**/artifacts/
+
+# Plans and editor noise
+*.md
+Dockerfile*
+compose*.yaml
+.dockerignore
+
+# Cross-service harnesses and fixtures are host/CI-only.
+tests/
+**/.mastra/
+
+# Local databases and key material
+**/*.db
+**/*.db-*
+**/*.sqlite
+**/*.sqlite-*
+**/*.sqlite3
+**/*.sqlite3-*
+**/*.dump
+**/*.pgdump
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/*.jks
+**/id_rsa*
+**/id_ed25519*
+**/secrets/

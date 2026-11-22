@@ -1,0 +1,21 @@
+# Snapshot of one Support Agent instance's admin store (deploy/docker/admin-backup.sh),
+# instance name %i = SUPPORT_AGENT_INSTANCE of its env file (e.g. prod, test). Started
+# hourly by admin-backup@%i.timer; admin-backup-shutdown@%i.service runs the
+# same script at shutdown.
+#
+# Install (see docs/production-recovery.md, "Admin store backups"):
+#   sudo install -m 0644 deploy/docker/admin-backup@.service deploy/docker/admin-backup@.timer \
+#     deploy/docker/admin-backup-shutdown@.service /etc/systemd/system/
+#   printf 'SUPPORT_AGENT_REPO=%s\nSUPPORT_AGENT_ENV_FILE=%s\nSUPPORT_AGENT_ADMIN_BACKUP_DIR=%s\n' \
+#     "$PWD" "$PWD/.env" /var/backups/support-agent-admin/prod | sudo tee /etc/default/support-agent-admin-backup-prod
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now admin-backup@prod.timer admin-backup-shutdown@prod.service
+[Unit]
+Description=Support Agent admin store backup (instance %i)
+Wants=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/default/support-agent-admin-backup-%i
+ExecStart=/bin/bash ${SUPPORT_AGENT_REPO}/deploy/docker/admin-backup.sh --env-file ${SUPPORT_AGENT_ENV_FILE} --out ${SUPPORT_AGENT_ADMIN_BACKUP_DIR} --reason hourly

@@ -1,0 +1,30 @@
+{
+  "name": "stub-long-answer-preview-file-and-recall",
+  "model": "stub",
+  "steps": [
+    {
+      "prompt": "STUB_LONG 16000",
+      "longAnswer": {
+        "previewContains": [
+          "attached above as",
+          "answer.md",
+          "Line 00001 of the long stub answer."
+        ],
+        "previewExcludes": ["Line 00400 of the long stub answer.", "STUB_LONG_END"]
+      },
+      "contains": [
+        "Line 00001 of the long stub answer.",
+        "Line 00400 of the long stub answer.",
+        "STUB_LONG_END 16000"
+      ]
+    },
+    {
+      "prompt": "STUB_RECALL Line 00400 of the long stub answer|STUB_LONG_END \\d+",
+      "contains": ["Line 00400 of the long stub answer", "STUB_LONG_END 16000"]
+    }
+  ],
+  "isolation": {
+    "prompt": "STUB_RECALL Line 00400 of the long stub answer|STUB_LONG_END \\d+",
+    "contains": ["STUB_NONE"]
+  }
+}

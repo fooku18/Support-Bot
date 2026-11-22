@@ -1,0 +1,21 @@
+{
+  "name": "@support-agent/egress",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Per-instance egress proxy: the only container with a route out. CONNECT-only HTTP proxy with a hostname allowlist per source network. No runtime dependencies.",
+  "engines": {
+    "node": ">=26"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.5",
+    "typescript": "5.9.3",
+    "vitest": "5.0.4"
+  }
+}

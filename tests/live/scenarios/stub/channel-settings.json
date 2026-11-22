@@ -1,0 +1,42 @@
+{
+  "name": "stub-channel-settings-disable-block-model-prompt",
+  "model": "stub",
+  "steps": [
+    {
+      "prompt": "STUB_MODEL\nSTUB_SYSTEM STUB-PROMPT-[0-9a-f]+",
+      "contains": ["STUB_MODEL {{channel.modelId}}", "STUB_NONE"]
+    },
+    {
+      "prompt": "STUB_HOLD 10\nSTUB_REPLY settings-disabled-answer",
+      "channelSettings": { "enabled": false },
+      "refused": true,
+      "settleSeconds": 30,
+      "excludes": ["settings-disabled-answer"]
+    },
+    {
+      "prompt": "STUB_HOLD 10\nSTUB_REPLY settings-blocked-answer",
+      "channelSettings": { "enabled": "restore", "blocked": true },
+      "refused": true,
+      "settleSeconds": 30,
+      "excludes": ["settings-blocked-answer"]
+    },
+    {
+      "prompt": "STUB_MODEL\nSTUB_SYSTEM STUB-PROMPT-[0-9a-f]+",
+      "channelSettings": {
+        "blocked": "restore",
+        "model": "alternate",
+        "prompt": "Live stub scenario channel prompt STUB-PROMPT-7f3a."
+      },
+      "contains": ["STUB_MODEL {{channel.modelId}}", "STUB_SYSTEM STUB-PROMPT-7f3a"]
+    },
+    {
+      "prompt": "STUB_MODEL\nSTUB_SYSTEM STUB-PROMPT-[0-9a-f]+",
+      "channelSettings": { "model": "restore", "prompt": "restore" },
+      "contains": ["STUB_MODEL {{channel.modelId}}", "STUB_NONE"]
+    }
+  ],
+  "isolation": {
+    "prompt": "STUB_RECALL STUB-PROMPT-[0-9a-f]+",
+    "contains": ["STUB_NONE"]
+  }
+}

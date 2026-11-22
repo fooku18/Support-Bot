@@ -1,0 +1,161 @@
+{
+  "_note": "Bash command fixtures for the shared deployment guard. The guard result assumes there is no drain marker. {dir} is the synthetic Git root. The production project is support-agent and the test project is support-agent-test.",
+  "commands": [
+    {
+      "command": "docker compose up -d",
+      "guard": "block"
+    },
+    {
+      "command": "docker compose --env-file .env up -d --build",
+      "guard": "block"
+    },
+    {
+      "command": "docker compose --env-file .env up -d --force-recreate runner",
+      "guard": "block"
+    },
+    {
+      "command": "docker compose --env-file=.env up -d --no-deps runner executor",
+      "guard": "block"
+    },
+    {
+      "command": "git pull && docker compose --env-file .env up -d",
+      "guard": "block"
+    },
+    {
+      "command": "sudo docker compose up -d",
+      "guard": "block"
+    },
+    {
+      "command": "docker compose -p support-agent up -d",
+      "guard": "block"
+    },
+    {
+      "command": "docker compose up -d --scale runner=0 adapter",
+      "guard": "block"
+    },
+    {
+      "command": "cd {dir} && docker compose restart runner",
+      "guard": "block"
+    },
+    {
+      "command": "docker compose stop",
+      "guard": "block"
+    },
+    {
+      "command": "docker compose --env-file .env down",
+      "guard": "block"
+    },
+    {
+      "command": "docker compose kill runner",
+      "guard": "block"
+    },
+    {
+      "command": "docker compose rm -sf runner",
+      "guard": "block"
+    },
+    {
+      "command": "docker compose stop -t 5 runner",
+      "guard": "block"
+    },
+    {
+      "command": "docker-compose up -d",
+      "guard": "block"
+    },
+    {
+      "command": "docker restart support-agent-runner-1",
+      "guard": "block"
+    },
+    {
+      "command": "docker container stop -t 30 support-agent-runner-1",
+      "guard": "block"
+    },
+    {
+      "command": "docker rm -f support-agent-runner-1",
+      "guard": "block"
+    },
+    {
+      "command": "docker compose --env-file .env up -d --no-deps admin",
+      "guard": "allow"
+    },
+    {
+      "command": "docker compose --env-file .env up -d --force-recreate native-answer adapter",
+      "guard": "block"
+    },
+    {
+      "command": "docker compose --env-file .env --dry-run up -d",
+      "guard": "allow"
+    },
+    {
+      "command": "docker compose --env-file .env.testing up -d",
+      "guard": "allow"
+    },
+    {
+      "command": "docker compose --env-file .env.testing restart runner",
+      "guard": "allow"
+    },
+    {
+      "command": "docker compose -p support-agent-test restart runner",
+      "guard": "allow"
+    },
+    {
+      "command": "docker restart support-agent-test-runner-1",
+      "guard": "allow"
+    },
+    {
+      "command": "npm run test:stack:up",
+      "guard": "allow"
+    },
+    {
+      "command": "npm run test:stack:down",
+      "guard": "allow"
+    },
+    {
+      "command": "docker compose --env-file .env ps runner",
+      "guard": "allow"
+    },
+    {
+      "command": "docker compose --env-file .env logs runner --since 10m",
+      "guard": "allow"
+    },
+    {
+      "command": "docker compose exec -T runner node -e 1",
+      "guard": "allow"
+    },
+    {
+      "command": "docker logs --since 15m support-agent-runner-1",
+      "guard": "allow"
+    },
+    {
+      "command": "docker restart support-agent-adapter-1",
+      "guard": "block"
+    },
+    {
+      "command": "echo \"docker compose up -d\"",
+      "guard": "allow"
+    },
+    {
+      "command": "cat <<'EOF'\ndocker compose up -d\nEOF",
+      "guard": "allow"
+    },
+    {
+      "command": "node scripts/deploy-preflight.mjs --env-file .env --wait-idle",
+      "guard": "allow"
+    },
+    {
+      "command": "git tag rollback-pre-abc1234",
+      "guard": "allow"
+    },
+    {
+      "command": "docker compose restart native-answer",
+      "guard": "block"
+    },
+    {
+      "command": "docker compose stop native-postgres",
+      "guard": "block"
+    },
+    {
+      "command": "docker restart native-prod-native-answer-1",
+      "guard": "block"
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+digraph { intake -> validate -> report; }

@@ -1,0 +1,8 @@
+services:
+  native-answer:
+    environment:
+      NATIVE_ANTHROPIC_API_KEY_FILE: /run/secrets/native_anthropic_api_key
+    secrets: [native_anthropic_api_key]
+secrets:
+  native_anthropic_api_key:
+    file: ${NATIVE_ANTHROPIC_API_KEY_FILE:?model connection secret path required}

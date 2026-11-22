@@ -1,0 +1,40 @@
+# Explicit additive telemetry on the existing native database. Primary grants,
+# generation and framework schema are unchanged. No fresh provisioning here.
+services:
+  native-answer:
+    environment:
+      NATIVE_OBSERVABILITY_SOURCE: native
+      NATIVE_OBSERVABILITY_HOST: native-postgres
+      NATIVE_OBSERVABILITY_PASSWORD_FILE: /run/secrets/native_observability_password
+    secrets: [native_observability_password]
+    depends_on:
+      native-observability: { condition: service_healthy }
+  native-observability:
+    image: support-agent/native-coding:${NATIVE_IMAGE_TAG:?explicit image tag required}
+    command: [telemetry]
+    init: true
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      NATIVE_PG_SOCKET: /run/native-postgres
+      NATIVE_OBSERVABILITY_PASSWORD_FILE: /run/secrets/native_observability_password
+    volumes:
+      - native-pg-socket:/run/native-postgres
+    secrets: [native_observability_password]
+    depends_on:
+      native-postgres: { condition: service_healthy }
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=1m
+    healthcheck:
+      test: [CMD, test, -f, /tmp/telemetry-ready]
+      interval: 5s
+      timeout: 2s
+      retries: 30
+    mem_limit: 128m
+    pids_limit: 64
+    stop_grace_period: 30s
+secrets:
+  native_observability_password:
+    file: ${NATIVE_OBSERVABILITY_PASSWORD_FILE:?separate telemetry secret path required}

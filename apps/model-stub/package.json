@@ -1,0 +1,21 @@
+{
+  "name": "@support-agent/model-stub",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Scripted Messages API for the stub model mode (test:stack:up --model-mode stub): deterministic replies from directives in the latest user message. No runtime dependencies.",
+  "engines": {
+    "node": ">=26"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.5",
+    "typescript": "5.9.3",
+    "vitest": "5.0.5"
+  }
+}

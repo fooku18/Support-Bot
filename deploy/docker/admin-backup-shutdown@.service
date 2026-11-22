@@ -1,0 +1,21 @@
+# Admin store backup of one Support Agent instance at shutdown (deploy/docker/admin-backup.sh).
+# Nothing happens at start; ExecStop runs when the system shuts down. Ordered
+# After=docker.service, so systemd stops this unit BEFORE Docker stops the
+# containers: the admin container is still running and the backup is a
+# consistent VACUUM INTO snapshot. A hard reset or crash skips it; the hourly
+# admin-backup@%i.timer covers that.
+[Unit]
+Description=Support Agent admin store backup at shutdown (instance %i)
+Wants=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+EnvironmentFile=/etc/default/support-agent-admin-backup-%i
+ExecStart=/bin/true
+ExecStop=/bin/bash ${SUPPORT_AGENT_REPO}/deploy/docker/admin-backup.sh --env-file ${SUPPORT_AGENT_ENV_FILE} --out ${SUPPORT_AGENT_ADMIN_BACKUP_DIR} --reason shutdown
+TimeoutStopSec=90
+
+[Install]
+WantedBy=multi-user.target

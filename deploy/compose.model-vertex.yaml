@@ -1,0 +1,10 @@
+services:
+  native-answer:
+    environment:
+      NATIVE_VERTEX_CREDENTIALS_FILE: /run/secrets/native_vertex_credentials
+      NATIVE_VERTEX_PROJECT: ${NATIVE_VERTEX_PROJECT:?Vertex project required}
+      NATIVE_VERTEX_LOCATION: ${NATIVE_VERTEX_LOCATION:?Vertex location required}
+    secrets: [native_vertex_credentials]
+secrets:
+  native_vertex_credentials:
+    file: ${NATIVE_VERTEX_CREDENTIALS_FILE:?model connection secret path required}

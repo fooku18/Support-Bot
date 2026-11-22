@@ -1,0 +1,44 @@
+{
+  "name": "stub-message-edit-and-delete",
+  "model": "stub",
+  "steps": [
+    {
+      "prompt": "STUB_REPLY lifecycle-root-answer",
+      "contains": ["lifecycle-root-answer"]
+    },
+    {
+      "edit": { "step": 0, "prompt": "STUB_REPLY lifecycle-edited-answer" },
+      "settleSeconds": 20,
+      "excludes": ["lifecycle-edited-answer"]
+    },
+    {
+      "prompt": "STUB_HOLD 15\nSTUB_REPLY lifecycle-held-answer",
+      "wait": false,
+      "excludes": ["lifecycle-held-answer"]
+    },
+    {
+      "delete": { "step": 2 },
+      "settleSeconds": 45,
+      "excludes": ["lifecycle-held-answer"]
+    },
+    {
+      "prompt": "STUB_RECALL lifecycle-(root|edited)-answer",
+      "contains": ["STUB_RECALL lifecycle-root-answer"],
+      "excludes": ["lifecycle-edited-answer"]
+    },
+    {
+      "delete": { "step": 0 },
+      "settleSeconds": 10
+    },
+    {
+      "prompt": "STUB_HOLD 10\nSTUB_REPLY lifecycle-after-root-deleted",
+      "refused": true,
+      "settleSeconds": 30,
+      "excludes": ["lifecycle-after-root-deleted"]
+    }
+  ],
+  "isolation": {
+    "prompt": "STUB_RECALL lifecycle-[a-z]+-answer",
+    "contains": ["STUB_NONE"]
+  }
+}

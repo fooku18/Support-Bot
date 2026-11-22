@@ -1,0 +1,32 @@
+{
+  "name": "Native answer corrections, recall and thread isolation",
+  "covers": [
+    "model applies a correction over earlier turns",
+    "model keeps another thread out of its answer"
+  ],
+  "budget": {
+    "turns": 4,
+    "modelRequests": 8
+  },
+  "steps": [
+    {
+      "prompt": "Use no tools. Remember this fictional booking: reference CF-731, timeout 20 minutes. State exactly CF-731: 20 minutes.",
+      "contains": ["CF-731", "20 minutes"]
+    },
+    {
+      "prompt": "Correction: the timeout is now 45 minutes. State the booking reference from our conversation and the current timeout only. Use no tools.",
+      "contains": ["CF-731", "45 minutes"],
+      "excludes": ["20 minutes"]
+    },
+    {
+      "prompt": "Without tools, repeat only the booking reference and latest timeout we agreed on.",
+      "contains": ["CF-731", "45 minutes"],
+      "excludes": ["20 minutes"]
+    }
+  ],
+  "isolation": {
+    "prompt": "Without tools, has a booking reference been provided in THIS thread? If none was supplied, reply exactly NO_BOOKING_CONTEXT. Do not guess.",
+    "contains": ["NO_BOOKING_CONTEXT"],
+    "excludes": ["CF-731", "45 minutes"]
+  }
+}

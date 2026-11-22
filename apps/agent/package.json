@@ -1,0 +1,40 @@
+{
+  "name": "@support-agent/agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "build:native": "node scripts/build-native.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --config vitest.config.ts"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "4.0.107",
+    "@ai-sdk/google-vertex": "5.0.144",
+    "@ai-sdk/openai": "4.0.122",
+    "@mastra/core": "1.83.0",
+    "@mastra/isolated-vm": "0.1.4",
+    "@mastra/memory": "1.41.1",
+    "@mastra/observability": "1.24.0",
+    "@mastra/pg": "1.36.0",
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "ajv": "8.20.0",
+    "google-auth-library": "11.3.4",
+    "pg": "8.23.1",
+    "undici": "8.12.3",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@hono/node-server": "2.1.1",
+    "@slack/web-api": "7.19.0",
+    "@types/node": "26.6.5",
+    "@types/pg": "8.23.1",
+    "esbuild": "0.28.2",
+    "https-proxy-agent": "9.1.0",
+    "mastra": "1.39.0",
+    "typescript": "5.9.3",
+    "vitest": "5.0.5"
+  },
+  "description": "Shared Mastra agent, application composition, service integrations and domain policy."
+}

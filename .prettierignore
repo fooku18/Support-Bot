@@ -1,0 +1,10 @@
+# Prettier never touches generated or vendored paths, nor generated evidence reports.
+**/node_modules/
+**/dist/
+**/coverage/
+**/artifacts/
+.run/
+package-lock.json
+**/package-lock.json
+# Operator-owned local configuration is not source.
+.claude/settings.local.json

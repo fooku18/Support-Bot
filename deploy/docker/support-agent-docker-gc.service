@@ -1,0 +1,19 @@
+# Removal of superseded Support Agent images and old build cache (deploy/docker/docker-gc.sh).
+# Host-wide, not per instance: images are shared by every instance. Started
+# daily by support-agent-docker-gc.timer.
+#
+# Install (see docs/production-recovery.md, "Docker disk cleanup"):
+#   sudo install -m 0644 deploy/docker/support-agent-docker-gc.service deploy/docker/support-agent-docker-gc.timer \
+#     /etc/systemd/system/
+#   printf 'SUPPORT_AGENT_REPO=%s\n' "$PWD" | sudo tee /etc/default/support-agent-docker-gc
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now support-agent-docker-gc.timer
+[Unit]
+Description=Support Agent Docker image and build cache cleanup
+Wants=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/default/support-agent-docker-gc
+ExecStart=/bin/bash ${SUPPORT_AGENT_REPO}/deploy/docker/docker-gc.sh

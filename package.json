@@ -1,0 +1,60 @@
+{
+  "name": "@support-agent/workspace",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "description": "Mastra Slack application: workspaces, cross-service qualification and development commands.",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "typecheck:all": "npm run generate:protocol -- --check && npm run typecheck && npm run typecheck --workspaces --if-present",
+    "test:stack:up": "node scripts/test-stack.mjs up",
+    "test:stack:ps": "node scripts/test-stack.mjs ps",
+    "test:stack:down": "node scripts/test-stack.mjs down",
+    "env:parity": "node scripts/env-parity.mjs",
+    "slack:manifest": "node scripts/slack-manifest.mjs",
+    "test:packages": "npm run test --workspaces --if-present",
+    "generate:protocol": "node scripts/generate-protocol-clients.mjs",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepare": "husky",
+    "test:native:integration": "node tests/integration/run-native.mjs",
+    "test:native:live": "node tests/live/run.mjs",
+    "studio": "node scripts/studio.mjs",
+    "build": "npm run build --workspaces --if-present"
+  },
+  "lint-staged": {
+    "*.{js,mjs,cjs,ts}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,jsonc,yaml,yml,md}": [
+      "prettier --write"
+    ]
+  },
+  "devDependencies": {
+    "@eslint/js": "9.34.0",
+    "@types/node": "26.6.5",
+    "eslint": "9.34.0",
+    "eslint-config-prettier": "10.1.8",
+    "globals": "16.3.0",
+    "husky": "9.1.7",
+    "lint-staged": "16.4.0",
+    "prettier": "3.6.2",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.71.0",
+    "vitest": "5.0.5",
+    "esbuild": "0.28.2",
+    "yaml": "2.9.1",
+    "ws": "8.22.1"
+  },
+  "license": "ISC",
+  "workspaces": [
+    "apps/*"
+  ],
+  "overrides": {
+    "isolated-vm": "7.0.2"
+  }
+}

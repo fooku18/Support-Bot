@@ -1,0 +1,13 @@
+{
+  "name": "slack-agent-fixture",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Dependency-free fixture repository for milestone-5 coding tasks. No install step; tests run with the Node built-in test runner (Node >=26).",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node --test test/greet.test.js"
+  },
+  "engines": {
+    "node": ">=26"
+  }
+}

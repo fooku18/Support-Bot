@@ -1,0 +1,8 @@
+services:
+  native-answer:
+    environment:
+      NATIVE_OPENAI_API_KEY_FILE: /run/secrets/native_openai_api_key
+    secrets: [native_openai_api_key]
+secrets:
+  native_openai_api_key:
+    file: ${NATIVE_OPENAI_API_KEY_FILE:?model connection secret path required}

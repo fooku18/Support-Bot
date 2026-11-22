@@ -1,0 +1,25 @@
+{
+  "name": "native-gitlab-discovery-and-job-trace",
+  "covers": [
+    "model chooses typed gitlab reads for discovery",
+    "model reads the head and tail of a bounded ci job trace"
+  ],
+  "budget": {
+    "turns": 2,
+    "modelRequests": 16
+  },
+  "mode": "coding",
+  "requires": ["gitlab"],
+  "steps": [
+    {
+      "prompt": "Discovery only: in GitLab project {{gitlab.project}}, use the GitLab read tools to find the project's numeric ID and default branch, and list the files at the top of that branch. Reply in plain text with the ID and the branch name. Do not clone, edit, run commands or tests, export, publish, or write to GitLab.",
+      "contains": ["{{gitlab.projectId}}", "{{gitlab.targetBranch}}"],
+      "discovery": true
+    },
+    {
+      "prompt": "Discovery only: read the log of CI job {{gitlab.traceJobId}} in that project twice: once from its end and once from its beginning. Quote one line that starts with \"trace-marker\" from each part and say whether each read was truncated. Do not clone, edit, run commands or tests, export, publish, or write to GitLab.",
+      "contains": ["{{gitlab.traceHeadMarker}}", "{{gitlab.traceTailMarker}}", "truncated"],
+      "discovery": true
+    }
+  ]
+}

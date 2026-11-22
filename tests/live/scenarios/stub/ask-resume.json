@@ -1,0 +1,21 @@
+{
+  "name": "stub-ask-user-suspension-and-resume",
+  "model": "stub",
+  "steps": [
+    {
+      "prompt": "STUB_ASK Which colour code should I use?",
+      "contains": ["Which colour code should I use?", "continue"],
+      "question": true
+    },
+    {
+      "prompt": "continue teal-42",
+      "contains": ["STUB_ASK_RESULT", "teal-42"],
+      "resume": true
+    }
+  ],
+  "isolation": {
+    "prompt": "STUB_RECALL teal-\\d+",
+    "contains": ["STUB_NONE"],
+    "excludes": ["teal-42"]
+  }
+}

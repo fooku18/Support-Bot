@@ -1,0 +1,25 @@
+{
+  "name": "native-provider-web-search-discovery-and-followup",
+  "covers": ["hosted search within the selected provider"],
+  "budget": {
+    "turns": 2,
+    "modelRequests": 10
+  },
+  "mode": "coding",
+  "steps": [
+    {
+      "prompt": "Discovery only: use your provider web_search tool to find the title of RFC 2606 and its reserved second-level domain names. Name the exact title and domains and cite a source URL. Do not clone, edit files, run commands or tests, export, publish, or write to GitLab. Do not answer from memory: if search fails, report the failure.",
+      "contains": ["Reserved Top Level DNS Names", "example.com", "https://"],
+      "webSearch": {
+        "minSearches": 1
+      }
+    },
+    {
+      "prompt": "Discovery only: search the web again for the publication year of that RFC and cite a source URL. Perform a new search. Do not clone, edit files, run commands or tests, export, publish, or write to GitLab.",
+      "contains": ["1999", "https://"],
+      "webSearch": {
+        "minSearches": 1
+      }
+    }
+  ]
+}

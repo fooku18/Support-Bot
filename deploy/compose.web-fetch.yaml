@@ -1,0 +1,12 @@
+# Optional existing isolated web service; page downloads never run in the agent.
+services:
+  native-answer:
+    networks:
+      webapi: {}
+    environment:
+      WEB_RUNTIME_URL: ${NATIVE_WEB_RUNTIME_URL:?approved private web runtime required}
+      WEB_RUNTIME_TOKEN: ${WEB_RUNTIME_TOKEN:?web runtime transport token required}
+networks:
+  webapi:
+    external: true
+    name: ${NATIVE_WEB_NETWORK:?approved private web API network required}

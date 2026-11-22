@@ -1,0 +1,45 @@
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+!.env.e2e.example
+.authorization-policy.*.json
+.repo-registry.*
+
+# Node.js
+node_modules/
+dist/
+
+# Local verification evidence
+artifacts/
+
+# Local dev vars (service credential + deployment policy, host-local)
+.dev.vars
+# Local deployment authorization policy (environment-specific, like .env.testing)
+.authorization-policy.testing.json
+# Local repository-registry override for live runs (references only)
+.repo-registry.testing
+
+# Local CI-equivalent reports (JUnit, audit JSON, Trivy output)
+reports/
+
+# Supervisor runtime files (pid records)
+.run/
+
+# Databases, database backups, and local key material
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+*.dump
+*.pgdump
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+id_rsa*
+id_ed25519*
+secrets/

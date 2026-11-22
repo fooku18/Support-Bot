@@ -1,0 +1,26 @@
+{
+  "name": "stub-working-indication-unmentioned-followup-and-mention",
+  "model": "stub",
+  "steps": [
+    {
+      "prompt": "STUB_HOLD 5\nSTUB_REPLY marker amber-lighthouse-731",
+      "contains": ["marker amber-lighthouse-731"],
+      "working": true
+    },
+    {
+      "prompt": "STUB_HOLD 5\nSTUB_RECALL amber-lighthouse-\\d+",
+      "contains": ["STUB_RECALL amber-lighthouse-731"],
+      "mention": false,
+      "working": true
+    },
+    {
+      "prompt": "STUB_RECALL amber-lighthouse-\\d+",
+      "contains": ["STUB_RECALL amber-lighthouse-731"]
+    }
+  ],
+  "isolation": {
+    "prompt": "STUB_RECALL amber-lighthouse-\\d+",
+    "contains": ["STUB_NONE"],
+    "excludes": ["amber-lighthouse-731"]
+  }
+}

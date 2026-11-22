@@ -1,0 +1,118 @@
+name: Publish runtime image
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*.*.*']
+    paths:
+      - .github/workflows/publish-runtime-image.yml
+      - .dockerignore
+      - deploy/Dockerfile
+      - deploy/docker/support-agent
+      - apps/**
+      - package*.json
+      - tests/integration/runtime-image.sh
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: ghcr.io/fooku18/support-bot
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    concurrency:
+      group: publish-runtime-${{ github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive tags and labels
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.IMAGE }}
+          flavor: latest=auto
+          tags: |
+            type=sha,format=long
+            type=raw,value=main,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+          labels: |
+            org.opencontainers.image.source=https://github.com/fooku18/Support-Bot
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.title=Support Agent runtime
+            org.opencontainers.image.description=Unified non-root runtime for Support Agent workloads
+
+      - name: Look up previously published commit
+        id: lookup
+        run: |
+          ref="$IMAGE:sha-$GITHUB_SHA"
+          if docker buildx imagetools inspect "$ref" --format '{{json .Manifest}}' > manifest.json 2>lookup-error; then
+            digest=$(jq -er '.digest | select(test("^sha256:[0-9a-f]{64}$"))' manifest.json)
+            docker pull --platform linux/amd64 "$IMAGE@$digest"
+            docker tag "$IMAGE@$digest" "$ref"
+            echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          elif ! grep -Fq "$ref: not found" lookup-error; then
+            cat lookup-error >&2
+            exit 1
+          fi
+
+      - name: Build and load runtime
+        if: steps.lookup.outputs.digest == ''
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: deploy/Dockerfile
+          target: runtime
+          platforms: linux/amd64
+          provenance: false
+          sbom: false
+          load: true
+          tags: ${{ env.IMAGE }}:sha-${{ github.sha }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=runtime-amd64
+          cache-to: type=gha,scope=runtime-amd64,mode=max
+
+      - name: Qualify runtime
+        run: tests/integration/runtime-image.sh --prebuilt "$IMAGE:sha-$GITHUB_SHA"
+
+      - name: Publish qualified manifest and record wrapper base
+        env:
+          EXISTING_DIGEST: ${{ steps.lookup.outputs.digest }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          ref="$IMAGE:sha-$GITHUB_SHA"
+          if [[ -z "$EXISTING_DIGEST" ]]; then
+            docker push --platform linux/amd64 "$ref"
+          fi
+          docker buildx imagetools inspect "$ref" --format '{{json .Manifest}}' > manifest.json
+          digest=$(jq -er '.digest | select(test("^sha256:[0-9a-f]{64}$"))' manifest.json)
+          docker buildx imagetools inspect "$IMAGE@$digest" --raw |
+            jq -e '.schemaVersion == 2 and has("config") and has("layers")' >/dev/null
+          while IFS= read -r tag; do
+            if [[ "$tag" != "$ref" ]]; then
+              docker buildx imagetools create --prefer-index=false -t "$tag" "$IMAGE@$digest"
+            fi
+          done <<< "$TAGS"
+          base_ref="$IMAGE@$digest"
+          if [[ "$GITHUB_REF_TYPE" == "tag" && "$GITHUB_REF_NAME" == v* ]]; then
+            base_ref="$IMAGE:${GITHUB_REF_NAME#v}@$digest"
+          elif [[ "$GITHUB_REF" == "refs/heads/main" ]]; then
+            base_ref="$IMAGE:main@$digest"
+          fi
+          printf '### Digest-pinned base image\n\n```dockerfile\nFROM %s\n```\n' "$base_ref" >> "$GITHUB_STEP_SUMMARY"

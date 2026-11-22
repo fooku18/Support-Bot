@@ -1,0 +1,4 @@
+# Trivy exceptions for container vulnerability scanning.
+# Keep every entry path-scoped with an expiry and a justification; full
+# HIGH/CRITICAL reports retained as CI artifacts still list excepted findings.
+vulnerabilities: []

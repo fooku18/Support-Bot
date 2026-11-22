@@ -1,0 +1,25 @@
+{
+  "name": "stub-cancel-control-stops-a-held-run",
+  "model": "stub",
+  "steps": [
+    {
+      "prompt": "STUB_HOLD 60\nSTUB_REPLY held answer must not be delivered",
+      "wait": false,
+      "working": true,
+      "excludes": ["held answer must not be delivered"]
+    },
+    {
+      "prompt": "cancel",
+      "contains": ["Stopped."],
+      "cancel": true
+    },
+    {
+      "prompt": "STUB_REPLY served after cancel",
+      "contains": ["served after cancel"]
+    }
+  ],
+  "isolation": {
+    "prompt": "STUB_RECALL served after cancel",
+    "contains": ["STUB_NONE"]
+  }
+}

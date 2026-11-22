@@ -1,0 +1,12 @@
+# Daily Support Agent Docker cleanup (support-agent-docker-gc.service). Persistent: a run
+# missed while the VM was stopped happens at the next boot.
+[Unit]
+Description=Clean up superseded Support Agent images and build cache daily
+
+[Timer]
+OnCalendar=*-*-* 04:00
+RandomizedDelaySec=15min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

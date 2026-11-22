@@ -1,0 +1,53 @@
+{
+  "name": "stub-file-and-message-attachments-reach-the-model",
+  "model": "stub",
+  "steps": [
+    {
+      "prompt": "STUB_RECALL fox,\\d+",
+      "contains": ["STUB_RECALL fox,14"],
+      "attachments": [
+        {
+          "name": "input.csv",
+          "data": "bmFtZSx2YWx1ZQpmb3gsMTQK"
+        }
+      ]
+    },
+    {
+      "prompt": "Alert posted by a bot.\nSTUB_REPLY alert noted",
+      "contains": ["alert noted"],
+      "messageAttachments": [
+        {
+          "fallback": "Synthetic alert",
+          "fields": [
+            {
+              "title": "Ticket",
+              "value": "ATT-7351",
+              "short": true
+            }
+          ]
+        },
+        {
+          "fallback": "Synthetic alert detail",
+          "blocks": [
+            {
+              "type": "section",
+              "text": {
+                "type": "mrkdwn",
+                "text": "Alert detail BLK-4826"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "prompt": "STUB_RECALL ATT-\\d+|BLK-\\d+",
+      "contains": ["ATT-7351", "BLK-4826"]
+    }
+  ],
+  "isolation": {
+    "prompt": "STUB_RECALL fox,\\d+|ATT-\\d+|BLK-\\d+",
+    "contains": ["STUB_NONE"],
+    "excludes": ["fox,14", "ATT-7351", "BLK-4826"]
+  }
+}

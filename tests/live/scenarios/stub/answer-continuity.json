@@ -1,0 +1,23 @@
+{
+  "name": "stub-answer-continuity-correction-and-isolation",
+  "model": "stub",
+  "steps": [
+    {
+      "prompt": "STUB_REPLY Booking CF-731 noted with timeout 20 minutes.",
+      "contains": ["Booking CF-731 noted with timeout 20 minutes."]
+    },
+    {
+      "prompt": "Correction: the timeout is now 45 minutes.\nSTUB_REPLY Correction noted.",
+      "contains": ["Correction noted."]
+    },
+    {
+      "prompt": "STUB_RECALL CF-\\d+|\\d+ minutes",
+      "contains": ["STUB_RECALL CF-731; 20 minutes; 45 minutes"]
+    }
+  ],
+  "isolation": {
+    "prompt": "STUB_RECALL CF-\\d+|\\d+ minutes",
+    "contains": ["STUB_NONE"],
+    "excludes": ["CF-731", "45 minutes"]
+  }
+}
