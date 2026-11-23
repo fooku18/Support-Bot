@@ -22,7 +22,8 @@ perl-base 5.36.0-7+deb12u4, so remove the temporary apt upgrade for that package
 - The pinned base reported Node v26.13.1 and perl-base 5.36.0-7+deb12u4.
 - On the updated Dockerfile based on `e27a0e9264ea`, `tests/integration/runtime-image.sh support-agent/runtime:tr2941` passed. Running `node --version` in that runtime returned `v26.13.1`.
 - T0 typecheck, lint and format checks, T1 package tests and T2 root tests passed. T3 application passed 80 records (evidence ID `7a007d77`) and T3 tools passed 19 (evidence ID `0113b4fd`).
-- T4 with `--suite stub --run --switch-mode` on the rebuilt images failed the answer-continuity scenario. The first answer passed. The threaded correction timed out with `native_answer_timeout_no_retry`. The operator confirmed test isolation. Retained suite ID: `suite-f0cfa228-3356-4ea0-9c9f-d86aff34a5d0`.
+- T4 ran all eight stub scenarios on the images in `0489850` with `--suite stub --run --switch-mode`. Six scenarios timed out waiting for an answer, cancellation failed with `cancel_not_confirmed`, and thread-followup was blocked with `working_indication_not_observed`. The cause is unconfirmed. Retained test-instance report: `artifacts/native-live/suite-f0cfa228-3356-4ea0-9c9f-d86aff34a5d0/summary.json`.
+- The driver restored gateway mode. The test instance was then stopped and its original image tag restored.
 - Live acceptance is **BLOCKED**. No gateway run has qualified these images.
 
 ## Rollout
