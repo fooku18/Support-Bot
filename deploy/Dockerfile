@@ -4,19 +4,8 @@
 # Test target: model-stub (test:stack:up --model-mode stub only).
 # All dependencies are locked; no credentials enter images.
 
-# Node 26, Debian 12 (bookworm) slim variant, pinned by digest (linux/amd64).
-# Verified in this image: node v26.11.1, npm 11.20.0 (bundles tar 7.5.22),
-# node:sqlite without a flag or ExperimentalWarning, user node (uid 1000),
-# setpriv, gunzip, sha256sum, ldd (glibc 2.36). No curl in the base image.
-FROM node@sha256:c84568746cfadd444003e37bb5d1411779bfa4a42828c798d5d800fb9076380a AS base
-
-# The pinned digest still ships perl-base 5.36.0-7+deb12u3 (critical
-# CVE-2026-13221, CVE-2026-42496, CVE-2026-8376; upstream node:26-bookworm-slim
-# had not been rebuilt on 2026-10-12, deb12u4 is in the Debian security
-# archive). Upgrade only that package until a rebuilt digest is pinned.
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends --only-upgrade perl-base \
-    && rm -rf /var/lib/apt/lists/*
+# Node 26.13.1, Debian 12 (bookworm) slim, pinned to the linux/amd64 manifest.
+FROM node:26.13.1-bookworm-slim@sha256:18a166e2d50578afe933434857ed2d9059bd1aa398a223e9c89eb4302354f079 AS base
 
 # Marks every Support Agent image, prod and test, for deploy/docker/docker-gc.sh,
 # which removes them once they are dangling (untagged). Every target must
