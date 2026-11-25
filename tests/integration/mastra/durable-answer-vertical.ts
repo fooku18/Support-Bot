@@ -251,7 +251,7 @@ const peer = http.createServer(async (req, res) => {
             gitlab: {
               ready: true,
               host: 'gitlab.synthetic.invalid',
-              contractVersion: discoveryState.malformed ? 0 : 5,
+              contractVersion: discoveryState.malformed ? 0 : 6,
             },
           },
         ],
