@@ -53,9 +53,13 @@ function response(part: Part) {
   return new Response(events.join(''), { headers: { 'content-type': 'text/event-stream' } });
 }
 
-it.each([false, true])(
-  'discovers assigned read tools with a coding workspace bound: %s',
-  async (withWorkspace) => {
+it.each([
+  [false, false],
+  [false, true],
+  [true, true],
+])(
+  'discovers assigned read tools with a coding workspace bound: %s, Code Mode bound: %s',
+  async (withWorkspace, withCodeMode) => {
     const root = path.resolve('artifacts/native-handover', randomUUID());
     await fs.mkdir(root, { recursive: true });
     const requests: Request[] = [];
@@ -74,9 +78,9 @@ it.each([false, true])(
         expect(names).toContain('task_write');
         expect(names).toContain('mastra_workspace_read_file');
       } else {
-        expect(names.every((n) => ['ask_user', 'search_tools', 'read_release'].includes(n))).toBe(
-          true,
-        );
+        const allowed = ['ask_user', 'search_tools', 'read_release'];
+        if (withCodeMode) allowed.push('execute_typescript');
+        expect(names.filter((n) => !allowed.includes(n))).toEqual([]);
       }
       const content = JSON.stringify(request.messages);
       if (mode === 'code') {
@@ -117,15 +121,17 @@ it.each([false, true])(
         coding: {
           workspace,
           tools: {},
-          codeMode: {
-            execute_typescript: createTool({
-              id: 'execute_typescript',
-              description:
-                'Run TypeScript using these tools: declare function external_fixture(): void;',
-              inputSchema: z.object({ code: z.string() }),
-              execute: async () => 'synthetic',
-            }),
-          },
+        },
+      }),
+      ...(withCodeMode && {
+        codeMode: {
+          execute_typescript: createTool({
+            id: 'execute_typescript',
+            description:
+              'Run TypeScript using these tools: declare function external_fixture(): void;',
+            inputSchema: z.object({ code: z.string() }),
+            execute: async () => 'synthetic',
+          }),
         },
       }),
       storage: new InMemoryStore({ id: randomUUID() }),
@@ -164,7 +170,7 @@ it.each([false, true])(
       expect(Object.keys(runtime.mastra.listAgents())).toEqual(['coding']);
       expect(requests[0]!.tools.map((t) => t.name)).not.toContain('read_release');
       expect(JSON.stringify(requests[0])).not.toContain('declare function external_fixture');
-      if (withWorkspace) {
+      if (withCodeMode) {
         mode = 'code';
         expect((await run('thread-a', 'tenant-a')).text).toBe('Code Mode discovered.');
       }

@@ -108,6 +108,102 @@ describe('fixed test Studio ingress', () => {
       }
     },
   );
+  it.each([
+    ['assigned with a read tool', true, true, true],
+    ['unassigned', false, true, false],
+    ['assigned without any read tool', true, false, false],
+  ])('binds Code Mode without a workspace: %s', async (_name, assigned, gitlab, expected) => {
+    const require = createRequire(new URL('../../package.json', import.meta.url));
+    const { InMemoryStore } = require('@mastra/core/storage') as {
+      InMemoryStore: new () => Parameters<typeof runtime.createNativeAgent>[0]['storage'];
+    };
+    const instance = 'ti_1150000000000009';
+    const config = deriveCoordinatorConfig(
+      compileDocument(1, {
+        installations: [
+          {
+            teamId: 'TTEAM',
+            teamName: 'Synthetic',
+            botUserId: 'UBOT',
+            botId: 'BBOT',
+            status: 'whitelisted',
+            trustedBotSender: null,
+          },
+        ],
+        channels: [{ teamId: 'TTEAM', channelId: 'CCHAN', enabled: true }],
+        blockedMembers: [],
+        toolInstances: [
+          {
+            id: instance,
+            teamId: 'TTEAM',
+            kind: 'codeMode',
+            label: 'Code Mode',
+            host: null,
+            settings: {},
+            hasCredential: false,
+            credentialVersion: 1,
+            status: 'enabled',
+          },
+        ],
+        channelTools: assigned
+          ? [{ teamId: 'TTEAM', channelId: 'CCHAN', kind: 'codeMode', instanceId: instance }]
+          : [],
+      }),
+      {
+        modelPolicy: { defaultKey: 'test', models: [testSelection('test', 'synthetic')] },
+        admission: { global: 2, perThread: 1 },
+        execution: { maxInferenceInvocations: 3 },
+      },
+    );
+    const authority = vi.fn(async () => {});
+    const factory = vi.spyOn(runtime, 'createNativeAgent');
+    const studio = await createNativeStudio({
+      identity: {
+        installationId: 'UBOT',
+        teamId: 'TTEAM',
+        channelId: 'CCHAN',
+        userId: 'UTEST',
+        authorBotId: null,
+      } as Parameters<typeof createNativeStudio>[0]['identity'],
+      authority,
+      port: 4111,
+      service: {
+        pool: { query: vi.fn(async () => ({ rows: [], rowCount: 1 })) },
+        storage: new InMemoryStore(),
+        configuration: async () => config,
+        channelInstructions: async () => '',
+        bindModel: (selection: ReturnType<typeof testSelection>) =>
+          testModel('http://127.0.0.1:1', 'synthetic', selection),
+        services: async () => ({
+          enabled: new Set(),
+          catalog: { gitlab },
+          services: {
+            gitlab: async () => ({ ok: true, output: 'FACT', operationId: 'r', data: 'FACT' }),
+          },
+        }),
+        limits: { contextTokens: 2000, outputTokens: 64, maxSteps: 3, timeoutMs: 1000 },
+      } as unknown as NativeAgentOptions,
+    });
+    try {
+      const options = factory.mock.calls[0]![0];
+      expect(options.coding).toBeUndefined();
+      expect(Object.keys(options.codeMode ?? {})).toEqual(expected ? ['execute_typescript'] : []);
+      if (!expected) return;
+      const tool = (
+        options.codeMode as Record<
+          string,
+          { execute(args: { code: string }, context: object): Promise<unknown> }
+        >
+      ).execute_typescript!;
+      const code = `return (await external_get_project({ project: 'g/p' })).result.output;`;
+      expect(await tool.execute({ code }, {})).toMatchObject({ success: true, result: 'FACT' });
+      authority.mockRejectedValueOnce(new Error('membership revoked'));
+      await expect(tool.execute({ code }, {})).rejects.toThrow('membership revoked');
+    } finally {
+      await studio.close();
+      factory.mockRestore();
+    }
+  });
   it('rejects public origins with insecure schemes, credentials, paths or query data', () => {
     for (const origin of [
       'http://studio.example.test',

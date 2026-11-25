@@ -1,8 +1,10 @@
 # Code Mode
 
 Mastra Code Mode lets the shared agent combine authorized read tools in a
-single TypeScript computation, `execute_typescript`. It is discoverable when
-the coding workspace is available. Mastra generates the tool signatures.
+single TypeScript computation, `execute_typescript`. Without a coding
+workspace, the channel's **Code Mode** assignment enables it; it also needs at
+least one available read tool. With a coding workspace it is always
+discoverable. Mastra generates the tool signatures.
 
 The script runs in Mastra's isolated-vm transport (`@mastra/isolated-vm`): a
 V8 isolate inside the agent process. Each run gets a fresh isolate. The
@@ -25,6 +27,9 @@ Limits per run, in
 | Memory | 64 MiB | `RangeError: Array buffer allocation failed`, or the isolate is disposed: "disposed … due to memory limit" |
 | Stack  | V8     | `RangeError: Maximum call stack size exceeded`, e.g. on recursion                                          |
 
+A script may make at most 50 read calls; further calls are refused. A result
+with logs above 48 000 bytes is refused as `OutputLimitError`.
+
 Array buffers count against the memory limit. The stack uses V8's default.
 
 ## Runtime requirements
@@ -39,7 +44,7 @@ Node must start with `--no-node-snapshot`, or creating an isolate can crash
 the process. The `native-answer` and `native-coding` images set
 `NODE_OPTIONS=--no-node-snapshot`. So do the agent's T1 tests
 (`apps/agent/vitest.config.ts`) and Studio (`scripts/studio.mjs`). The
-application refuses to start with a coding store when the flag is missing.
+application refuses to start when the flag is missing.
 
 Code Mode checks the current authorization before a script starts. Each read
 call then passes the same channel assignments, service schemas and current

@@ -1,16 +1,11 @@
-import {
-  evaluateAuthorization,
-  parseAuthorizationPolicy,
-} from '../../domain/authorization/policy.js';
 import type { IntakeRequest } from '../../contracts/dto.js';
 import {
-  coordinatorAdminSnapshot,
   coordinatorRunConfiguration,
   type CoordinatorConfig,
 } from '../../application/configuration/config.js';
+import { channelToolGranted } from '../../application/tool-grant.js';
 
-/** Assignment alone cannot grant hosted execution. Omit a denied capability so
- * an otherwise authorized ordinary answer remains available. */
+/** Hosted search needs a granted assignment and a model that offers it. */
 export function providerSearchEnabled(
   config: CoordinatorConfig,
   identity: Pick<IntakeRequest, 'teamId' | 'channelId' | 'userId'>,
@@ -19,18 +14,7 @@ export function providerSearchEnabled(
   const model = config.modelPolicy.models.find(
     ({ key }) => key === (current.channel.modelKey ?? config.modelPolicy.defaultKey),
   );
-  return (
-    model?.webSearch === true &&
-    current.tools.some((t) => t.kind === 'webSearch' && t.ready) &&
-    evaluateAuthorization(parseAuthorizationPolicy(coordinatorAdminSnapshot(config).policySource), {
-      workspace: identity.teamId,
-      channel: identity.channelId,
-      user: identity.userId,
-      action: 'tool.use',
-      resourceType: 'tool',
-      resourceId: 'webSearch',
-    }).allowed
-  );
+  return model?.webSearch === true && channelToolGranted(config, identity, 'webSearch');
 }
 
 /** Counts-only evidence from actual framework call/result pairs. Text answers,

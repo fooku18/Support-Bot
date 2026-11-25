@@ -21,8 +21,9 @@ export function createNativeAgent(
     coding?: {
       workspace: AnyWorkspace;
       tools: ToolsInput;
-      codeMode: NativeAgentConfiguration['tools'];
     };
+    /** Discovered on demand like the reads; independent of the workspace. */
+    codeMode?: NativeAgentConfiguration['tools'];
   },
 ) {
   const common = nativeAgentConfiguration(options, 600000);
@@ -52,7 +53,7 @@ export function createNativeAgent(
       inputProcessors: [
         ...(options.coding ? [new TaskStateProcessor()] : []),
         new ToolSearchProcessor({
-          tools: { ...options.tools, ...options.coding?.codeMode },
+          tools: { ...options.tools, ...options.codeMode },
           storage: 'context',
           search: { topK: 3, autoLoad: true },
           filter: async () => {
