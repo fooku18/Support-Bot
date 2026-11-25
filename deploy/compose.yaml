@@ -121,8 +121,8 @@ services:
     image: support-agent/cli-runtime:${NATIVE_IMAGE_TAG:?explicit image tag required}
     init: true
     read_only: true
-    cap_add: [SYS_ADMIN]
-    security_opt: [no-new-privileges:true, seccomp:unconfined, apparmor:unconfined]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
     networks: [frontend, tools]
     depends_on:
       admin: { condition: service_healthy }

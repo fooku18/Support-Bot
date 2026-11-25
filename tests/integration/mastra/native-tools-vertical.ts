@@ -366,7 +366,7 @@ async function client(): Promise<void> {
     };
   });
 
-  await check('gitlab-read-through-packaged-glab-and-egress', async () => {
+  await check('gitlab-read-through-egress', async () => {
     const result = await call(full.tools, 'get_project', { project: 'fixture/project' });
     assert.equal(result.ok, true, JSON.stringify(result).slice(0, 400));
     assert.match(result.output, /TOOLS_FACT_gitlab_4242/);
@@ -379,18 +379,16 @@ async function client(): Promise<void> {
   });
 
   /**
-   * One GitLab tool call through the packaged glab and the egress proxy: the
-   * result, and the one API read it made (glab's usage event aside), which
-   * carried only the GitLab credential. The query comes back sorted by key.
+   * One GitLab tool call through the CLI runtime and the egress proxy: the
+   * result, and the one API read it made, which carried only the GitLab
+   * credential. The query comes back sorted by key.
    */
   const gitlabRead = async (name: string, args: Record<string, unknown>) => {
     const before = upstream().length;
     const result = await call(full.tools, name, args);
     assert.equal(result.ok, true, JSON.stringify(result).slice(0, 400));
     assert.deepEqual(leaks(result), []);
-    const reads = upstream()
-      .slice(before)
-      .filter((r) => r.path !== '/api/v4/usage_data/track_event');
+    const reads = upstream().slice(before);
     assert.equal(
       reads.length,
       1,
@@ -406,7 +404,7 @@ async function client(): Promise<void> {
   const sorted = (params: Record<string, string>) =>
     Object.entries(params).sort(([a], [b]) => a.localeCompare(b));
 
-  await check('gitlab-list-projects-through-packaged-glab-and-egress', async () => {
+  await check('gitlab-list-projects-through-egress', async () => {
     const { result, read } = await gitlabRead('list_projects', {
       search: 'fixture',
       page: 2,
@@ -437,7 +435,7 @@ async function client(): Promise<void> {
     return { request: `${read.method} ${read.path}${read.raw}`, projects: result.data.length };
   });
 
-  await check('gitlab-list-branches-through-packaged-glab-and-egress', async () => {
+  await check('gitlab-list-branches-through-egress', async () => {
     const { result, read } = await gitlabRead('list_branches', {
       project: GITLAB_PROJECT,
       search: 'release',
@@ -458,7 +456,7 @@ async function client(): Promise<void> {
     return { request: `${read.method} ${read.path}${read.raw}`, branches: result.data.length };
   });
 
-  await check('gitlab-list-merge-requests-through-packaged-glab-and-egress', async () => {
+  await check('gitlab-list-merge-requests-through-egress', async () => {
     const { result, read } = await gitlabRead('list_merge_requests', {
       project: GITLAB_PROJECT,
       state: 'merged',
@@ -488,7 +486,7 @@ async function client(): Promise<void> {
     return { request: `${read.method} ${read.path}${read.raw}`, mergeRequests: result.data.length };
   });
 
-  await check('gitlab-get-repository-file-through-packaged-glab-and-egress', async () => {
+  await check('gitlab-get-repository-file-through-egress', async () => {
     const { result, read } = await gitlabRead('get_repository_file', {
       project: GITLAB_PROJECT,
       file_path: GITLAB_FILE_PATH,

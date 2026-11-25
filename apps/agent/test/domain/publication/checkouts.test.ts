@@ -33,7 +33,7 @@ import {
   operationScopeLabel,
   type ValidatedGitlabArgs,
 } from '../../../src/integrations/gitlab/gitlab-operations.js';
-import type { GitlabNormalizedResult } from '../../../src/integrations/gitlab/gitlab-cli-adapter.js';
+import type { GitlabNormalizedResult } from '../../../src/integrations/gitlab/gitlab-rest-adapter.js';
 import {
   workspacePaths,
   type WorkspacePaths,
@@ -88,7 +88,7 @@ function fakeGitlab(projects: Array<{ id: number; path: string }>) {
   const mrs: FakeMr[] = [];
   const calls: string[] = [];
   type Category = NonNullable<GitlabNormalizedResult['errorCategory']>;
-  /** One scripted failure per operation, optionally with the glab excerpt. */
+  /** One scripted failure per operation, optionally with GitLab's excerpt. */
   const failOnce = new Map<string, Category | { category: Category; detail: string }>();
   /** `GET /user`: the token's own user, who authors published commits. */
   const user: { current: Record<string, unknown> } = {
@@ -652,14 +652,14 @@ describe('multi-repository checkouts and publication', () => {
 
   it('publishes the task MR in a later run when the tree was pushed but MR creation failed', async () => {
     // Production 2026-10-23 (handbook thread): run 3 pushed and MR creation
-    // failed (glab exit 1); run 4 refused with "snapshot is unchanged".
+    // failed (GitLab request failed); run 4 refused with "snapshot is unchanged".
     const checkouts = manager(3);
     await checkouts.clone('example-group/test');
     fs.writeFileSync(path.join(paths.checkouts, 'example-group__test/hello'), 'handbook change\n');
     await checkouts.verify({ argv: ['true'], timeoutMs: 1000 });
     fake.failOnce.set('create_merge_request', {
       category: 'upstream',
-      detail: 'glab: could not decode the response: unexpected EOF',
+      detail: 'could not decode the response: unexpected EOF',
     });
     const failure = await publishCheckout(publishOptions(checkouts, 3), {
       title: 'Handbook',
@@ -667,9 +667,9 @@ describe('multi-repository checkouts and publication', () => {
     expect(failure).toBeInstanceOf(PublisherError);
     expect((failure as PublisherError).terminal).toBe(false);
     expect((failure as Error).message).toBe('task MR creation failed: [upstream] upstream');
-    // The glab excerpt reaches the runner log with the failure.
+    // GitLab's excerpt reaches the runner log with the failure.
     expect(warnings).toContainEqual(
-      expect.stringContaining('glab: could not decode the response: unexpected EOF'),
+      expect.stringContaining('could not decode the response: unexpected EOF'),
     );
     const intent = readIntent(path.join(root, 'store'), WORKSPACE_ID, 'example-group__test');
     expect(intent).toMatchObject({ state: 'failed', mrIid: null });

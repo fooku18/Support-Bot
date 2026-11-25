@@ -10,8 +10,11 @@ import {
   validateTransportGitlabArgs,
   type ValidatedGitlabArgs,
 } from '../../../src/integrations/gitlab/gitlab-operations.js';
-import { buildGitlabRequest } from '../../../src/integrations/gitlab/gitlab-cli-adapter.js';
-import { createTextRetainer, redactTraceOutput } from '../../../../tool-runtime/src/main.js';
+import {
+  buildGitlabRequest,
+  createTextRetainer,
+} from '../../../src/integrations/gitlab/gitlab-rest-adapter.js';
+import { redactTraceOutput } from '../../../../tool-runtime/src/main.js';
 
 /** The job of project g/p whose trace the fake serves; any other job is 404. */
 export const FAKE_TRACE_JOB_ID = 4242;
@@ -67,7 +70,7 @@ export function runtimeTraceAnswer(body: string, part: 'head' | 'tail', chunkByt
   const { text, meta } = retainer.finish();
   return {
     status: 'completed' as const,
-    exitCode: 0,
+    httpStatus: 200,
     output: redactTraceOutput(text),
     truncated: meta.cut || meta.returnedBytes < meta.totalBytes,
     textMeta: meta,
@@ -171,7 +174,7 @@ function listMatches<T extends FakeMergeRequest | FakeIssue>(
 /**
  * Deterministic GitLab for runner workflows: authenticated smart-HTTP Git
  * for two projects (g/p, g/q) the token reaches, plus a fake isolated tool
- * runtime (/readyz and the typed /gitlab route) whose answers mimic glab's
+ * runtime (/readyz and the typed /gitlab route) whose answers mimic GitLab's
  * stdout/stderr. The runtime serves one admin-managed GitLab instance
  * (`instanceId` on `instanceHost` for workspace `teamId`) and refuses
  * requests for any other. Projects outside `projects` are unreachable (404).
@@ -338,8 +341,8 @@ export async function startGitLab() {
     /** Issues created through `create_issue` (feedback issues). */
     createdIssues: [] as FakeIssue[],
     /**
-     * The next `create_issue` answer instead of a created issue: glab stderr
-     * of a failure, `timeout` (execution deadline), `malformed` (exit 0, bad
+     * The next `create_issue` answer instead of a created issue: the HTTP
+     * status of a failure, `timeout` (execution deadline), `malformed` (HTTP 200, bad
      * JSON) or `hang` (the runtime never answers).
      */
     nextIssueFailure: null as string | null,
@@ -411,21 +414,20 @@ export async function startGitLab() {
   // The instance's host is the loopback server (host:port), like a self-managed GitLab.
   const instanceHost = host;
 
-  /** glab-shaped answer of the typed /gitlab route. */
+  /** Answer of the typed /gitlab route. */
   const answer = (request: GitlabTransportRequest) => {
     const args = request.operationArgs as unknown as Record<string, unknown>;
     state.operations.push(request.operation);
     const ok = (data: unknown) => ({
       status: 'completed',
-      exitCode: 0,
+      httpStatus: 200,
       output: JSON.stringify(data),
       truncated: false,
     });
-    const fail = (stderr: string) => ({
+    const fail = (httpStatus: number, message: string) => ({
       status: 'failed',
-      exitCode: 1,
-      output: '',
-      stderr,
+      httpStatus,
+      output: JSON.stringify({ message }),
       truncated: false,
     });
     // The runtime re-validates the transport shape and builds the fixed request.
@@ -433,7 +435,7 @@ export async function startGitLab() {
     try {
       validated = validateTransportGitlabArgs(request.operation, request.operationArgs);
     } catch (err) {
-      return fail(`glab: 400 ${(err as Error).message}`);
+      return fail(400, `400 ${(err as Error).message}`);
     }
     state.endpoints.push(buildGitlabRequest(validated).endpoint);
     if (validated.kind === 'get_current_user') return ok(state.currentUser);
@@ -444,13 +446,13 @@ export async function startGitLab() {
         const scoped = projects.find(
           (entry) => String(entry.id) === validated.project || entry.path === validated.project,
         );
-        if (scoped === undefined) return fail('glab: 404 Project Not Found');
+        if (scoped === undefined) return fail(404, '404 Project Not Found');
         projectIds = [scoped.id];
       } else if (validated.group !== undefined) {
         const group = groups.find(
           (entry) => String(entry.id) === validated.group || entry.path === validated.group,
         );
-        if (group === undefined) return fail('glab: 404 Group Not Found');
+        if (group === undefined) return fail(404, '404 Group Not Found');
         projectIds = group.projectIds;
       } else {
         projectIds = projects.map((entry) => entry.id);
@@ -462,17 +464,15 @@ export async function startGitLab() {
     const project = projects.find(
       (entry) => String(entry.id) === String(args.project) || entry.path === args.project,
     );
-    if (project === undefined) return fail('glab: 404 Project Not Found');
+    if (project === undefined) return fail(404, '404 Project Not Found');
     const own = mrs.filter((mr) => mr.project_id === project.id);
     if (validated.kind === 'get_job_trace') {
       if (project.path !== 'g/p' || validated.job_id !== FAKE_TRACE_JOB_ID) {
         return {
           status: 'failed',
-          exitCode: 1,
+          httpStatus: 404,
           output: '{"message":"404 Not found"}',
-          stderr: 'glab: 404 Not Found (HTTP 404)',
           truncated: false,
-          textMeta: { totalBytes: 27, returnedBytes: 27, part: 'tail', cut: false },
         };
       }
       return runtimeTraceAnswer(fakeJobTrace(), validated.head ? 'head' : 'tail');
@@ -487,11 +487,11 @@ export async function startGitLab() {
         });
       case 'get_merge_request': {
         const found = own.find((mr) => mr.iid === args.merge_request_iid);
-        return found === undefined ? fail('glab: 404 Not Found') : ok(found);
+        return found === undefined ? fail(404, '404 Not Found') : ok(found);
       }
       case 'create_merge_request': {
         if (own.some((mr) => mr.source_branch === args.source_branch && mr.state === 'opened'))
-          return fail('glab: 409 Conflict: Another open merge request already exists');
+          return fail(409, '409 Conflict: Another open merge request already exists');
         state.creates++;
         const iid = own.length + 1;
         const mr: FakeMergeRequest = {
@@ -524,11 +524,11 @@ export async function startGitLab() {
         const failure = state.nextIssueFailure;
         state.nextIssueFailure = null;
         if (failure === 'timeout')
-          return { status: 'timed_out', exitCode: null, output: '', truncated: false };
+          return { status: 'timed_out', httpStatus: null, output: '', truncated: false };
         if (failure === 'malformed')
-          return { status: 'completed', exitCode: 0, output: '{"iid":', truncated: false };
+          return { status: 'completed', httpStatus: 200, output: '{"iid":', truncated: false };
         if (failure === 'hang') return 'hang';
-        if (failure !== null) return fail(failure);
+        if (failure !== null) return fail(Number(failure), 'scripted failure');
         const iid = state.createdIssues.length + 1;
         const issue: FakeIssue = {
           id: 9000 + iid,
@@ -554,13 +554,13 @@ export async function startGitLab() {
       }
       case 'update_merge_request': {
         const found = own.find((mr) => mr.iid === args.merge_request_iid);
-        if (found === undefined) return fail('glab: 404 Not Found');
+        if (found === undefined) return fail(404, '404 Not Found');
         if (typeof args.description === 'string') found.description = args.description;
         if (typeof args.title === 'string') found.title = args.title;
         return ok(found);
       }
       default:
-        return fail(`glab: 400 operation ${request.operation} is not served by this fake`);
+        return fail(400, `400 operation ${request.operation} is not served by this fake`);
     }
   };
 
@@ -589,13 +589,10 @@ export async function startGitLab() {
             state: 'ready',
             detail: 'ready',
             gitlab: {
-              tool: 'glab',
+              tool: 'gitlab',
               ready: true,
               status: 'ready',
               detail: 'ready',
-              version: 'fake',
-              binaryPath: null,
-              binarySha256: null,
               host: instanceHost,
               contractVersion: GITLAB_CONTRACT_VERSION,
             },
@@ -612,7 +609,7 @@ export async function startGitLab() {
       if (request.instanceId !== instanceId || request.teamId !== teamId) {
         send(200, {
           status: 'not_run',
-          exitCode: null,
+          httpStatus: null,
           output: 'unknown gitlab tool instance',
           truncated: false,
           refused: 'unknown gitlab tool instance',

@@ -289,8 +289,7 @@ const server = http.createServer(async (req, res) => {
           gitlab: {
             ready: true,
             host: 'gitlab.synthetic.invalid',
-            contractVersion: 5,
-            version: 'synthetic',
+            contractVersion: 6,
           },
         },
       ],

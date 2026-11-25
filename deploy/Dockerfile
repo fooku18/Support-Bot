@@ -125,49 +125,17 @@ RUN npm run build --workspace @support-agent/tool-runtime
 FROM workspace-manifests AS tools-deps
 RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev --workspace @support-agent/tool-runtime --include-workspace-root=false --ignore-scripts --no-audit --no-fund
 
-FROM base AS cli-tools
-RUN apt-get update && apt-get install -y --no-install-recommends bubblewrap ca-certificates && rm -rf /var/lib/apt/lists/*
-# glab release (gitlab-org/cli). The defaults equal
-# deploy/docker/cli-tools-manifest.json (tar.gz digests from the release's own
-# checksums.txt); GLAB_VERSION/GLAB_SHA256_AMD64/GLAB_SHA256_ARM64 build args
-# select another release, and its checksum stays mandatory.
-ARG GLAB_VERSION=1.117.0
-ARG GLAB_SHA256_AMD64=1edfd0fba284e93396a9fd8899b9fff10f34f90b733943b1a70e21431a1991ab
-ARG GLAB_SHA256_ARM64=ce533c314b69014664020567d006b5c86435f0fa16561aba18929bea26506828
-
-RUN set -eux; \
-    case "$(uname -m)" in \
-      x86_64) arch=amd64; glab_sha="${GLAB_SHA256_AMD64}" ;; \
-      aarch64) arch=arm64; glab_sha="${GLAB_SHA256_ARM64}" ;; \
-      *) echo "unsupported architecture: $(uname -m)" >&2; exit 1 ;; \
-    esac; \
-    printf '%s' "${GLAB_VERSION}" | grep -Eqx '[0-9]+\.[0-9]+\.[0-9]+'; \
-    printf '%s' "${glab_sha}" | grep -Eqx '[0-9a-f]{64}'; \
-    node -e ' \
-      const fs = require("node:fs"); \
-      const [url, dest] = process.argv.slice(1); \
-      fetch(url).then(async (res) => { \
-        if (!res.ok) { throw new Error("HTTP " + res.status + " for " + url); } \
-        fs.writeFileSync(dest, Buffer.from(await res.arrayBuffer())); \
-      }).catch((err) => { console.error(err.message); process.exit(1); }); \
-    ' "https://gitlab.com/gitlab-org/cli/-/releases/v${GLAB_VERSION}/downloads/glab_${GLAB_VERSION}_linux_${arch}.tar.gz" /tmp/glab.tar.gz; \
-    echo "${glab_sha}  /tmp/glab.tar.gz" | sha256sum -c -; \
-    tar -xzf /tmp/glab.tar.gz -C /tmp bin/glab; \
-    install -o root -g root -m 0755 /tmp/bin/glab /usr/local/bin/glab; \
-    rm -rf /tmp/glab.tar.gz /tmp/bin; \
-    CI=1 glab --version | grep -qx "glab ${GLAB_VERSION}.*"
-
 # --------------------------------------------------------------------------
-# cli-runtime: the isolated, credential-scoped tool runtime. Packages the
-# pinned glab binary plus the private sandbox launcher; Atlassian reads are scoped REST from Node. Controller/Slack/Gateway credentials never enter this image.
+# cli-runtime: the isolated, credential-scoped tool runtime. Every service is
+# reached over HTTPS from Node. Controller/Slack/Gateway credentials never enter this image.
 # --------------------------------------------------------------------------
-FROM cli-tools AS cli-runtime
+FROM base AS cli-runtime
+ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=tools-deps /build/node_modules ./node_modules
 COPY --from=tools-deps /build/apps/tool-runtime ./apps/tool-runtime
 COPY --from=tools-build /build/apps/tool-runtime/dist ./apps/tool-runtime/dist
-COPY --chmod=755 deploy/docker/tool-sandbox.sh /usr/local/bin/tool-sandbox
-COPY --chmod=755 deploy/docker/tool-sandbox-inner.sh /usr/local/bin/tool-sandbox-inner
+USER node
 ENTRYPOINT ["node", "apps/tool-runtime/dist/cli-runtime-service.js", "--serve"]
 
 # Native application build inputs. Framework state is owned by Mastra.

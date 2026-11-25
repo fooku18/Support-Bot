@@ -325,7 +325,7 @@ const peer = http.createServer(async (req, res) => {
     res.end(
       JSON.stringify({
         status: 'completed',
-        exitCode: 0,
+        httpStatus: 200,
         output: JSON.stringify({
           id: 117,
           name: 'fixture-project',
@@ -558,7 +558,7 @@ const service = createNativeAgentService({
               signal,
             );
             return {
-              ok: result.exitCode === 0,
+              ok: result.status === 'completed',
               output: result.output,
               operationId: 'read-effect-115',
             };

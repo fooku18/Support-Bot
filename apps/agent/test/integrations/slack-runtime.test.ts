@@ -57,7 +57,6 @@ function harness(api = fakeSlack()) {
       datadog: new Set(),
       cloudflare: new Set(),
     },
-    glab: { path: '/opt/glab', installed: false, sha256: null, version: null },
     secret: async (instanceId) => {
       secretCalls.push(instanceId);
       return { credential: BOT_TOKEN, credentialVersion: INSTALLED_AT };

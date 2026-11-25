@@ -1,5 +1,5 @@
 /**
- * Typed GitLab operations backed by the pinned glab CLI (contract v4).
+ * Typed GitLab operations over the REST API (contract v6).
  *
  * The GitLab token is the permission boundary: every operation names the
  * project it addresses (`project`: a `group/subgroup/name` path or a numeric
@@ -9,10 +9,10 @@
  * group ID, subgroups included) or neither (the whole instance, then
  * narrowed by at least one person, search, label or milestone filter).
  * People are addressed by GitLab username, never by user ID. The host is never a
- * model argument — the credential-owning runtime pins `--hostname` to its
- * GITLAB_HOST. No model-supplied URL, endpoint, method, GraphQL, argv, cwd,
- * credential, or file-output path is accepted; every model value becomes a
- * URL-encoded literal or a JSON body built by trusted code.
+ * model argument — the credential-owning runtime pins it to the
+ * instance's host. No model-supplied URL, endpoint, method, GraphQL or
+ * credential is accepted; every model value becomes a URL-encoded literal or
+ * a JSON body built by trusted code.
  *
  * Names are the agent's GitLab tool names. They are
  * inspired by GitLab's MCP catalog but this contract is application-owned.
@@ -23,7 +23,7 @@
  * deletion, CI variables, and project settings are not part of this contract.
  */
 
-export const GITLAB_CONTRACT_VERSION = 5;
+export const GITLAB_CONTRACT_VERSION = 6;
 
 export const GITLAB_READ_OPERATIONS = [
   'get_project',

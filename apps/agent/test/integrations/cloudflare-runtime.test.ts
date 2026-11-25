@@ -52,7 +52,6 @@ function harness(api = fakeCloudflare(), admitted = ['api.cloudflare.com']) {
       datadog: new Set(),
       cloudflare: new Set(admitted),
     },
-    glab: { path: '/opt/glab', installed: false, sha256: null, version: null },
     secret: async (instanceId) => {
       secretCalls.push(instanceId);
       return { credential: TOKEN, credentialVersion: 2 };

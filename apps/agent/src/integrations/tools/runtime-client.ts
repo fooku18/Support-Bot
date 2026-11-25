@@ -1,7 +1,7 @@
 /** Typed clients for the credential-owning service. No tool loop or action journal. */
 import type { ToolFailureClass } from '../../contracts/protocol.js';
 import { isGitlabWriteOperation, type ValidatedGitlabArgs } from '../gitlab/gitlab-operations.js';
-import type { GitlabTextMeta } from '../gitlab/gitlab-cli-adapter.js';
+import type { GitlabTextMeta } from '../gitlab/gitlab-rest-adapter.js';
 import type { AtlassianResult } from '../atlassian/atlassian-rest-adapter.js';
 import type {
   AtlassianBinding,
@@ -99,11 +99,12 @@ export interface GitlabTransportRequest extends InstanceRef {
 
 export interface GitlabTransportResponse {
   status: 'completed' | 'failed' | 'timed_out' | 'not_run';
-  exitCode: number | null;
-  /** glab stdout: the JSON payload (the retained text for a job trace). */
+  /** Status of GitLab's answer; null when there was none. */
+  httpStatus: number | null;
+  /** GitLab's answer: the JSON payload (the retained text for a job trace). */
   output: string;
-  /** glab stderr (warnings/errors; never parsed as data). */
-  stderr?: string;
+  /** Transport failure (fixed sentence, never upstream text). */
+  error?: string;
   truncated: boolean;
   refused?: string;
   /** Retention report of a streamed text body (`get_job_trace` only). */
@@ -331,9 +332,9 @@ export async function gitlabViaRuntime(
   }
   return {
     status: parsed.status as GitlabTransportResponse['status'],
-    exitCode: typeof parsed.exitCode === 'number' ? parsed.exitCode : null,
+    httpStatus: typeof parsed.httpStatus === 'number' ? parsed.httpStatus : null,
     output: parsed.output,
-    stderr: typeof parsed.stderr === 'string' ? parsed.stderr : undefined,
+    error: typeof parsed.error === 'string' ? parsed.error.slice(0, 200) : undefined,
     truncated: parsed.truncated === true,
     refused: typeof parsed.refused === 'string' ? parsed.refused : undefined,
     textMeta: parseTextMeta(parsed.textMeta),

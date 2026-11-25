@@ -246,7 +246,12 @@ export async function codingDeploymentFixture(root: string) {
         default:
           throw new Error(`unplanned synthetic GitLab operation ${request.operation}`);
       }
-      return { status: 'completed', exitCode: 0, output: JSON.stringify(data), truncated: false };
+      return {
+        status: 'completed',
+        httpStatus: 200,
+        output: JSON.stringify(data),
+        truncated: false,
+      };
     },
     response(body: any) {
       if (JSON.stringify(body.messages).includes('CODING_FILES')) {

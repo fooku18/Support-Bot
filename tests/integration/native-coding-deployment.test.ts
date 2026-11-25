@@ -92,7 +92,6 @@ async function fixture() {
               ready: true,
               host: 'gitlab.example.test',
               contractVersion: GITLAB_CONTRACT_VERSION,
-              version: 'synthetic',
             },
           },
         ],

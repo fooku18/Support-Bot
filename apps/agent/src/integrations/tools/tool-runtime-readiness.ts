@@ -155,7 +155,6 @@ export interface RuntimeInstanceReadiness {
     ready: boolean;
     status: string;
     detail: string;
-    version: string | null;
     host: string;
     contractVersion: number;
   };
@@ -172,12 +171,11 @@ export interface CliRuntimeReadiness {
   instances: RuntimeInstanceReadiness[];
 }
 
-/** Qualified GitLab binding for this run (instance, host, contract; informational version). */
+/** Qualified GitLab binding for this run (instance, host, contract). */
 export interface GitlabBinding {
   instanceId: string;
   host: string;
   contractVersion: number;
-  version: string | null;
 }
 
 /** Trusted Atlassian site/cloud-ID/credential binding for brokered Jira and Confluence calls. */
@@ -314,7 +312,6 @@ export function verifyGitlabInstance(
     instanceId: gitlab.instanceId,
     host: gitlab.host,
     contractVersion: GITLAB_CONTRACT_VERSION,
-    version: state.version,
   };
 }
 

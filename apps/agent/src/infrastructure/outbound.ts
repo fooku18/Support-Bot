@@ -4,10 +4,10 @@
  * networks with no route out; their external HTTPS tunnels through the
  * proxy as CONNECT requests:
  *
- * - `configureOutbound`: undici's global dispatcher for `fetch` (model providers, Atlassian/Datadog/Cloudflare/Slack tool calls). Requests to Compose service names (no dot:
- *   native-answer, admin, executor, cli-runtime, web-runtime) and loopback stay direct.
- * - `sandboxProxyEnv`: the HTTPS_PROXY/HTTP_PROXY/NO_PROXY triple for
- *   spawned sandboxes (glab, git, npm), which honor the variables.
+ * - `configureOutbound`: undici's global dispatcher for `fetch` (model
+ *   providers, GitLab/Atlassian/Datadog/Cloudflare/Slack tool calls). Requests
+ *   to Compose service names (no dot: native-answer, admin, executor,
+ *   cli-runtime, web-runtime) and loopback stay direct.
  * - `outboundProxyUrl`: the configured proxy for git's `http.proxy` and the
  *   web runtime's CONNECT page transport.
  *
@@ -16,24 +16,6 @@
 import { lookup } from 'node:dns';
 import { refusedModelAddress } from '../contracts/model-address.js';
 import { Agent, Dispatcher, ProxyAgent, setGlobalDispatcher } from 'undici';
-
-/**
- * Hosts a sandboxed CLI reaches directly: loopback and the Compose service
- * names of an instance (internal networks; the proxy admits no undotted name).
- */
-export const NO_PROXY_HOSTS = [
-  'localhost',
-  '127.0.0.1',
-  '::1',
-  'native-answer',
-  'admin',
-  'adapter',
-  'runner',
-  'executor',
-  'cli-runtime',
-  'web-runtime',
-  'egress',
-] as const;
 
 /** Dotted host names and IP literals leave through the proxy; service names and loopback do not. */
 export function proxiedHost(hostname: string): boolean {
@@ -107,25 +89,6 @@ export function configureOutbound(proxyUrl: string | undefined): RoutingDispatch
 /** The proxy installed by `configureOutbound`, or undefined (direct). */
 export function outboundProxyUrl(): string | undefined {
   return configuredProxyUrl;
-}
-
-/**
- * Proxy variables for a spawned sandbox (both spellings: curl/git read the
- * lowercase `http_proxy` only). Empty without a configured proxy.
- */
-export function sandboxProxyEnv(
-  proxyUrl: string | undefined = configuredProxyUrl,
-): Record<string, string> {
-  if (proxyUrl === undefined) return {};
-  const noProxy = NO_PROXY_HOSTS.join(',');
-  return {
-    HTTPS_PROXY: proxyUrl,
-    HTTP_PROXY: proxyUrl,
-    NO_PROXY: noProxy,
-    https_proxy: proxyUrl,
-    http_proxy: proxyUrl,
-    no_proxy: noProxy,
-  };
 }
 
 const modelDispatcher = new Agent({
