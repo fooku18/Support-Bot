@@ -197,7 +197,12 @@ export async function createNativeStudio(options: {
   };
   await guard();
   const binding = await service.services(identity, stop.signal);
-  const reads = createReadServiceTools({ ...binding, authorize: guard });
+  // Message reads act for a Slack thread's requester; Studio has no thread.
+  const reads = createReadServiceTools({
+    ...binding,
+    catalog: { ...binding.catalog, slackMessages: false },
+    authorize: guard,
+  });
   const workspaceId = hash(`studio:${identity.teamId}:${identity.channelId}:${identity.userId}`);
   const taskKey = `studio:${workspaceId}`;
   const runId = randomUUID();

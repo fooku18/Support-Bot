@@ -395,6 +395,11 @@ async function main() {
           ),
       ];
     }),
+    [
+      'apps/slack/src/generated/slack-messages.ts',
+      '/** GENERATED from apps/agent/src/contracts/slack-messages.ts; run npm run generate:protocol. */\n' +
+        readFileSync(path.join(REPO_ROOT, 'apps/agent/src/contracts/slack-messages.ts'), 'utf8'),
+    ],
     ...['apps/admin', 'apps/slack'].map((pkg) => [
       `${pkg}/src/generated/channel-commands.ts`,
       commandMirror,

@@ -143,6 +143,25 @@ export function createNativeAgentStorage(pool: Pool) {
     ]);
     return epochResult(nextAction);
   }
+  /** Whether this model conversation already holds the thread's first message:
+   * supplied as context to a finished segment, or itself an earlier request. */
+  async function holdsThreadRoot(r: IdentityRow, conversation: { epoch: string }) {
+    const { rowCount } = await pool.query(
+      `SELECT 1 FROM native_agents.requests r
+       JOIN native_agents.actions a ON a.run_id=r.run_id
+       WHERE r.task_key=$1 AND (a.action=$2 OR
+             (r.accepted->>'messageTs'=$3 AND a.action LIKE 'model-conversation:%:' || $4 || '%'))
+       LIMIT 1`,
+      [r.task_key, `thread-root:${conversation.epoch}`, r.accepted.rootTs, conversation.epoch],
+    );
+    return !!rowCount;
+  }
+  async function recordThreadRoot(r: IdentityRow, conversation: { epoch: string }) {
+    await pool.query(
+      'INSERT INTO native_agents.actions(run_id,action,actor) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',
+      [r.run_id, `thread-root:${conversation.epoch}`, r.accepted.userId],
+    );
+  }
   /** The model key a run executed with; the answer footer names it. A run
    * refused before execution has none. */
   async function runModel(r: IdentityRow): Promise<string | undefined> {
@@ -202,6 +221,8 @@ export function createNativeAgentStorage(pool: Pool) {
     stopped,
     admit,
     recordModel,
+    holdsThreadRoot,
+    recordThreadRoot,
     runModel,
     inputReceipts,
     sequence,

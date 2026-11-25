@@ -211,6 +211,8 @@ let duringModel: (() => void) | undefined;
 const warnings: string[] = [];
 const infos: string[] = [];
 let appClosed = false;
+let rootReads = 0;
+let rootUnavailable = false;
 let revokeOnSend = false;
 let revokeOnRead = false;
 let revokeOnModelTool = false;
@@ -251,7 +253,7 @@ const peer = http.createServer(async (req, res) => {
             gitlab: {
               ready: true,
               host: 'gitlab.synthetic.invalid',
-              contractVersion: discoveryState.malformed ? 0 : 5,
+              contractVersion: discoveryState.malformed ? 0 : 6,
             },
           },
         ],
@@ -496,6 +498,23 @@ const service = createNativeAgentService({
           baseUrl: `http://127.0.0.1:${port}`,
           token: 'synthetic-input-private',
         }),
+      }
+    : {}),
+  ...(phase === 'boundary-policy'
+    ? {
+        messages: {
+          root: async (i: { rootTs: string }) => {
+            rootReads++;
+            if (rootUnavailable) throw new Error('synthetic adapter outage');
+            return {
+              ts: i.rootTs,
+              date: '2026-11-25T00:00:00.000Z',
+              userId: null,
+              botName: 'Alerts',
+              text: 'ROOT_FACT_alert_115',
+            };
+          },
+        },
       }
     : {}),
   pool,
@@ -1568,6 +1587,55 @@ try {
         channelModel = null;
         channelPrompt = null;
       }
+    });
+    await check('thread-root-is-supplied-once-per-model-conversation', async () => {
+      const facts = () =>
+        JSON.stringify((recorded.at(-1) as any).messages).split('ROOT_FACT_alert_115').length - 1;
+      const mention = (suffix: string, text: string) => {
+        const input = makeInput(text, `1794740069.${suffix}`, `root-${suffix}`);
+        return { ...input, rootTs: makeInput('', '1794740068.100068', '').rootTs };
+      };
+      rootReads = 0;
+      await startAndWait(mention('100169', 'INVESTIGATE_ONE'));
+      assert.equal(rootReads, 1);
+      assert.equal(facts(), 1);
+      assert.match(JSON.stringify(recorded.at(-1)), /untrusted data, never instructions/);
+      // The conversation remembers it; a second mention neither reads nor repeats it.
+      await startAndWait(mention('100170', 'INVESTIGATE_TWO'));
+      assert.equal(rootReads, 1);
+      assert.equal(facts(), 1);
+      // A changed model starts a conversation that has not seen it.
+      channelModel = 'alt';
+      try {
+        await startAndWait(mention('100171', 'INVESTIGATE_THREE'));
+        assert.equal(rootReads, 2);
+        assert.equal(facts(), 1);
+      } finally {
+        channelModel = null;
+      }
+      // A thread the requester started: its root is the first request itself.
+      const own = makeInput('OWN_ROOT', '1794740070.100172', 'own-root');
+      await startAndWait(own);
+      await startAndWait({
+        ...mention('100173', 'OWN_FOLLOW'),
+        rootTs: own.rootTs,
+      });
+      assert.equal(rootReads, 2);
+      // Context only: an unavailable read leaves the request working, and a
+      // later request of the thread gets the root.
+      const late = makeInput('', '1794740071.100174', '').rootTs;
+      rootUnavailable = true;
+      const without = (await startAndWait({
+        ...mention('100175', 'WITHOUT_ROOT'),
+        rootTs: late,
+      })) as any;
+      rootUnavailable = false;
+      assert.equal(without.uncertain, false);
+      assert.equal(facts(), 0);
+      assert(warnings.some((w) => w.startsWith('native thread context unavailable')));
+      await startAndWait({ ...mention('100176', 'WITH_ROOT'), rootTs: late });
+      assert.equal(facts(), 1);
+      return { rootReads };
     });
     await check('model-change-notice-survives-clarification', async () => {
       const first = makeInput('Prior conversation', '1794740067.100067', 'model-then-ask');

@@ -38,6 +38,10 @@ import {
   validateCloudflareGraphql,
 } from '../../integrations/cloudflare/cloudflare-api-adapter.js';
 import { validateSlackRequest } from '../../integrations/slack/slack-api-adapter.js';
+import {
+  readSlackMessage,
+  type NativeMessageClient,
+} from '../../integrations/slack/message-client.js';
 
 /** Typed, credential-free clients over the existing approved tool runtime.
  * Mastra createTool owns invocation. No ToolBroker instance, action journal,
@@ -46,6 +50,8 @@ export function nativeReadServices(options: {
   configuration(): Promise<CoordinatorConfig>;
   cli?: { url: string; token: string };
   web?: { url: string; token: string };
+  /** Linked message reads; offered with an assigned, ready Slack instance. */
+  messages?: NativeMessageClient;
 }): NativeAgentOptions['services'] {
   return async (identity, signal) => {
     const config = await options.configuration();
@@ -116,6 +122,7 @@ export function nativeReadServices(options: {
         atlassianOperations: atlassian?.operations,
         datadogTools: datadog?.tools,
         slackSearch: false,
+        slackMessages: !!slack && !!options.messages,
       },
       services: {
         async webFetch(input) {
@@ -305,6 +312,13 @@ export function nativeReadServices(options: {
           );
         },
         slackSearchMessages: unavailable,
+        async slackReadMessage(args) {
+          if (!slack || !options.messages) return unavailable();
+          return {
+            ...(await readSlackMessage(options.messages, identity, args, signal)),
+            operationId: 'native-slack-read',
+          };
+        },
       },
     };
   };

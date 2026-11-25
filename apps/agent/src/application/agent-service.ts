@@ -15,6 +15,7 @@ import {
   NATIVE_INPUT_COUNT,
   NATIVE_INPUT_BYTES,
 } from '../domain/files/native-inputs.js';
+import { withThreadRoot } from '../integrations/slack/message-client.js';
 import { nativeInputMessage, NativeInputEncodingError } from '../mastra/runtime/native-inputs.js';
 import { coordinatorRunConfiguration, resolveChannelModel } from './configuration/config.js';
 import { CoordinatorError } from './errors.js';
@@ -39,6 +40,8 @@ export function createNativeAgentService(options: NativeAgentOptions) {
     stopped,
     admit,
     recordModel,
+    holdsThreadRoot,
+    recordThreadRoot,
     inputReceipts,
     sequence,
     publicationReceipts,
@@ -62,6 +65,21 @@ export function createNativeAgentService(options: NativeAgentOptions) {
     // Register admissions before asynchronous preparation, including work that
     // has not yet obtained a native stream when shutdown begins.
     return track(Promise.resolve().then(work));
+  }
+  /** The thread's first message when the request does not start the thread and
+   * its model conversation does not hold it yet. Context only: an unavailable
+   * read leaves the request as it is. */
+  async function threadRoot(r: IdentityRow, conversation: { epoch: string }, signal: AbortSignal) {
+    const { messageTs, rootTs } = r.accepted;
+    if (!options.messages || messageTs === rootTs) return undefined;
+    if (await holdsThreadRoot(r, conversation)) return undefined;
+    try {
+      return (await options.messages.root(r.accepted, signal)) ?? undefined;
+    } catch {
+      signal.throwIfAborted();
+      options.log.warn(`native thread context unavailable run_id=${r.run_id}`);
+      return undefined;
+    }
   }
   async function execute(
     r: IdentityRow,
@@ -220,8 +238,13 @@ export function createNativeAgentService(options: NativeAgentOptions) {
       );
       admitted = true;
       logger.info('native.segment.started', { runId: r.run_id });
-      let prompt: Parameters<typeof runtime.agent.stream>[0] =
-        'prompt' in input ? input.prompt : '';
+      // A mention inside a thread is often about the thread's first message (an
+      // alert). The model gets it once per conversation, as untrusted data.
+      const root = 'prompt' in input ? await threadRoot(r, conversation, signal.signal) : undefined;
+      const request =
+        'prompt' in input ? (root ? withThreadRoot(input.prompt, root) : input.prompt) : '';
+      if (root) await guard();
+      let prompt: Parameters<typeof runtime.agent.stream>[0] = request;
       if (options.inputs && r.accepted.files?.length && 'prompt' in input) {
         // Return the admitted handle before downloading. Cancellation and drain
         // cover acquisition too. An ambiguous read is never replayed on this run.
@@ -259,7 +282,7 @@ export function createNativeAgentService(options: NativeAgentOptions) {
             },
           });
         }
-        prompt = nativeInputMessage(input.prompt, acquired, model.route);
+        prompt = nativeInputMessage(request, acquired, model.route);
         await options.inputs.check(
           inputIdentity(r.accepted),
           acquired.map((a) => a.receipt),
@@ -277,7 +300,7 @@ export function createNativeAgentService(options: NativeAgentOptions) {
         if (coding) {
           const files = await coding.stageInputs(acquired);
           prompt = nativeInputMessage(
-            `${input.prompt}\n\nUntrusted attachment working copies in the native Workspace: ${JSON.stringify(files)}. Original bytes/provenance remain retained independently.`,
+            `${request}\n\nUntrusted attachment working copies in the native Workspace: ${JSON.stringify(files)}. Original bytes/provenance remain retained independently.`,
             acquired,
             model.route,
           );
@@ -316,6 +339,7 @@ export function createNativeAgentService(options: NativeAgentOptions) {
       }, options.limits.timeoutMs);
       timer.unref();
       const result = await runNativeSegment(segment);
+      if (root && !result.uncertain) await recordThreadRoot(r, conversation);
       await guard();
       // Searches and fetches already ran, each authorized at its dispatch. Record
       // them under the run's current authority; a later tool assignment change

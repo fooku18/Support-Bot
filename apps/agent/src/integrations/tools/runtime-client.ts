@@ -181,6 +181,8 @@ export interface ServiceToolHandlers {
   slackGetUser(input: unknown): Promise<BrokerToolResult>;
   slackLookupUserByEmail(input: unknown): Promise<BrokerToolResult>;
   slackSearchMessages(input: unknown): Promise<BrokerToolResult>;
+  /** Reads one linked message and its thread through the Slack adapter. */
+  slackReadMessage(input: { permalink?: unknown }): Promise<BrokerToolResult>;
 }
 /** One deadline covers headers and body, including the single admitted read retry. */
 function runtimeExchange(timeoutMs: number, attemptSignal?: AbortSignal, gitlab = false) {

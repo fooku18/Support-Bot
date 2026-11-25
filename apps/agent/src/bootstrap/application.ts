@@ -18,6 +18,7 @@ import {
   startChannelMemoryProxy,
 } from '../integrations/slack/channel-memory.js';
 import { createNativeInputClient } from '../integrations/slack/input-client.js';
+import { createNativeMessageClient } from '../integrations/slack/message-client.js';
 import { nativeCoding } from '../application/bindings/coding.js';
 import { checkNativeCodingSandbox } from '../mastra/tools/coding.js';
 import { assertCodeModeRuntime } from '../mastra/tools/code-mode.js';
@@ -198,6 +199,7 @@ export async function startNativeAnswerProcess(
       maxSteps: storageDir ? 40 : 12,
       timeoutMs: storageDir ? 600000 : 120000,
     };
+    const messages = createNativeMessageClient({ baseUrl: adapterUrl, token });
     stage = 'dependency-readiness';
     application = await serve({
       service: {
@@ -241,9 +243,11 @@ export async function startNativeAnswerProcess(
             }
           : {}),
         inputs: createNativeInputClient({ baseUrl: adapterUrl, token }),
+        messages,
         services: nativeReadServices({
           configuration,
           cli,
+          messages,
           ...(env.WEB_RUNTIME_URL || env.WEB_RUNTIME_TOKEN
             ? {
                 web: {
