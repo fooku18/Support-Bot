@@ -30,7 +30,7 @@ import {
 import {
   normalizeGitlabOutput,
   renderGitlabResultText,
-} from '../../integrations/gitlab/gitlab-cli-adapter.js';
+} from '../../integrations/gitlab/gitlab-rest-adapter.js';
 import { validateAtlassianOperation } from '../../integrations/atlassian/atlassian-operations.js';
 import { validateDatadogArguments } from '../../integrations/datadog/datadog-schema.js';
 import {
@@ -178,10 +178,10 @@ export function nativeReadServices(options: {
           const normalized = normalizeGitlabOutput({
             operation: validated.kind,
             project,
-            exitCode: response.exitCode,
             status: response.status,
-            stdout: response.output,
-            stderr: response.stderr ?? '',
+            httpStatus: response.httpStatus,
+            output: response.output,
+            error: response.error,
             ...('page' in validated ? { page: validated.page } : {}),
             ...('per_page' in validated ? { per_page: validated.per_page } : {}),
             ...(validated.kind === 'search' ? { scope: validated.scope } : {}),

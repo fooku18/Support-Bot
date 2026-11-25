@@ -177,7 +177,6 @@ describe('cli-runtime /datadog', () => {
         datadog: new Set(['datadoghq.eu']),
         cloudflare: new Set(),
       },
-      glab: { path: '/nonexistent/glab', installed: false, sha256: null, version: null },
     });
     registry.install({ instance: INSTANCE, unusable: null, datadog: provider });
     setInstanceRegistry(registry);

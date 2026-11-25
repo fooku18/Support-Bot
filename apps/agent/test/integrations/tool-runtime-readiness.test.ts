@@ -54,9 +54,8 @@ function gitlabStatus(
       ready: true,
       status: 'ready',
       detail: 'authenticated against the instance host',
-      version: 'glab 1.117.0',
       host: 'gitlab.test.example',
-      contractVersion: 5,
+      contractVersion: 6,
       ...gitlab,
     } as RuntimeInstanceReadiness['gitlab'],
     ...overrides,
@@ -272,21 +271,13 @@ describe('tool runtime Atlassian readiness', () => {
 });
 
 describe('tool runtime GitLab readiness', () => {
-  it('qualifies the instance for its host and contract (version informational)', () => {
-    expect(verifyGitlabInstance(gitlabStatus(), GITLAB, TEAM)).toEqual({
-      instanceId: GITLAB_ID,
-      host: 'gitlab.test.example',
-      contractVersion: 5,
-      version: 'glab 1.117.0',
-    });
-    // A rebuilt image with a different glab version needs no recovery; host case is normalized.
+  it('qualifies the instance for its host and contract', () => {
+    const binding = { instanceId: GITLAB_ID, host: 'gitlab.test.example', contractVersion: 6 };
+    expect(verifyGitlabInstance(gitlabStatus(), GITLAB, TEAM)).toEqual(binding);
+    // Host case is normalized.
     expect(
-      verifyGitlabInstance(
-        gitlabStatus({}, { version: 'glab 1.118.0', host: 'GitLab.Test.Example' }),
-        GITLAB,
-        TEAM,
-      ).version,
-    ).toBe('glab 1.118.0');
+      verifyGitlabInstance(gitlabStatus({}, { host: 'GitLab.Test.Example' }), GITLAB, TEAM),
+    ).toEqual(binding);
   });
 
   it('fails visibly when the instance is unserved, foreign, unready, on another host, or another contract', () => {
@@ -309,11 +300,11 @@ describe('tool runtime GitLab readiness', () => {
       [gitlabStatus({ gitlab: undefined }), TEAM, /GitLab readiness is missing/],
       [gitlabStatus({}, { ready: false }), TEAM, /GitLab readiness is missing/],
       [gitlabStatus({}, { host: 'gitlab.other.example' }), TEAM, /different host/],
-      // A runtime still on v4 (partially rebuilt pair) must not become ready.
+      // A runtime still on v5 (partially rebuilt pair) must not become ready.
       [
-        gitlabStatus({}, { contractVersion: 4 }),
+        gitlabStatus({}, { contractVersion: 5 }),
         TEAM,
-        /contract v4 .* does not match this runner \(v5\)/,
+        /contract v5 .* does not match this runner \(v6\)/,
       ],
       [gitlabStatus({ credentialVersion: 2 }), TEAM, /another credential version; retry shortly/],
     ];

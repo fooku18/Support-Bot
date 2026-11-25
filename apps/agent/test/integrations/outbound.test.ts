@@ -7,7 +7,6 @@ import {
   egressProxyUrlProblem,
   outboundProxyUrl,
   proxiedHost,
-  sandboxProxyEnv,
 } from '../../src/infrastructure/outbound.js';
 
 function recorder(name: string, calls: string[]): Dispatcher {
@@ -107,37 +106,5 @@ describe('configureOutbound', () => {
     // The process environment is never changed (the SDK subprocess inherits nothing).
     expect(process.env.HTTPS_PROXY).toBeUndefined();
     expect(process.env.https_proxy).toBeUndefined();
-  });
-});
-
-describe('sandboxProxyEnv', () => {
-  it('is empty without a proxy', () => {
-    expect(sandboxProxyEnv(undefined)).toEqual({});
-  });
-
-  it('gives sandboxes the proxy in both spellings and keeps loopback and service names direct', () => {
-    const env = sandboxProxyEnv('http://egress:3128');
-    expect(env.HTTPS_PROXY).toBe('http://egress:3128');
-    expect(env.HTTP_PROXY).toBe('http://egress:3128');
-    expect(env.https_proxy).toBe('http://egress:3128');
-    expect(env.http_proxy).toBe('http://egress:3128');
-    expect(env.NO_PROXY).toBe(env.no_proxy);
-    const noProxy = (env.NO_PROXY ?? '').split(',');
-    for (const host of [
-      'localhost',
-      '127.0.0.1',
-      '::1',
-      'native-answer',
-      'admin',
-      'executor',
-      'egress',
-    ])
-      expect(noProxy).toContain(host);
-    expect(noProxy.some((host) => host.includes('.') && !/^\d/.test(host))).toBe(false);
-  });
-
-  it('defaults to the configured proxy', () => {
-    configureOutbound('http://egress:3128');
-    expect(sandboxProxyEnv().HTTPS_PROXY).toBe('http://egress:3128');
   });
 });

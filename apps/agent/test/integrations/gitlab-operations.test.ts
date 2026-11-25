@@ -20,12 +20,12 @@ import {
   buildGitlabRequest,
   cleanTraceText,
   decodeRepositoryFileOutput,
-  gitlabArgv,
+  gitlabUrl,
   MAX_TRACE_BYTES,
   normalizeGitlabOutput,
   renderGitlabResultText,
   type GitlabTraceData,
-} from '../../src/integrations/gitlab/gitlab-cli-adapter.js';
+} from '../../src/integrations/gitlab/gitlab-rest-adapter.js';
 import {
   FAKE_FLAKY_TEST,
   FAKE_TRACE_TOKEN,
@@ -38,7 +38,7 @@ const request = (operation: string, args: Record<string, unknown>) =>
 
 describe('typed GitLab operations (contract v5)', () => {
   it('exposes the read and write catalog under contract v5', () => {
-    expect(GITLAB_CONTRACT_VERSION).toBe(5);
+    expect(GITLAB_CONTRACT_VERSION).toBe(6);
     expect(GITLAB_READ_OPERATIONS).toHaveLength(21);
     expect(GITLAB_READ_OPERATIONS).toContain('get_job_trace');
     expect(GITLAB_WRITE_OPERATIONS).toEqual([
@@ -79,9 +79,9 @@ describe('typed GitLab operations (contract v5)', () => {
     const user = normalizeGitlabOutput({
       operation: 'get_current_user',
       project: 'instance',
-      exitCode: 0,
+      httpStatus: 200,
       status: 'completed',
-      stdout: JSON.stringify({
+      output: JSON.stringify({
         id: 7,
         username: 'bot',
         name: 'Bot',
@@ -91,7 +91,6 @@ describe('typed GitLab operations (contract v5)', () => {
         private_profile: false,
         identities: [{ provider: 'ldap' }],
       }),
-      stderr: '',
     });
     expect(user.data).toEqual({
       id: 7,
@@ -352,55 +351,41 @@ describe('typed GitLab operations (contract v5)', () => {
     }
   });
 
-  it('pins the host and passes bodies only through a runtime-owned --input file', () => {
-    const read = request('get_merge_request', { project: 'g/p', merge_request_iid: 1 });
-    expect(gitlabArgv(read, 'gitlab.example.com', null)).toEqual([
-      'api',
-      '--method',
-      'GET',
-      '--hostname',
-      'gitlab.example.com',
-      'projects/g%2Fp/merge_requests/1',
-    ]);
-    const write = request('create_merge_request_note', {
-      project: 'g/p',
-      merge_request_iid: 1,
-      body: '--method DELETE @/etc/passwd :id',
+  it('pins the host and the API path; nothing can move a request elsewhere', () => {
+    const { endpoint } = request('get_repository_file', {
+      project: 'group/sub/app',
+      file_path: 'docs/on call.md',
+      ref: 'release/1',
     });
-    const argv = gitlabArgv(write, 'gitlab.example.com', '/tmp/request-body.json');
-    expect(argv).toEqual([
-      'api',
-      '--method',
-      'POST',
-      '--hostname',
-      'gitlab.example.com',
-      '--input',
-      '/tmp/request-body.json',
-      '--header',
-      'Content-Type: application/json',
-      'projects/g%2Fp/merge_requests/1/notes',
-    ]);
-    // The model text never becomes argv, and no field coercion is used.
-    expect(argv.join(' ')).not.toContain('passwd');
-    expect(argv).not.toContain('--field');
-    expect(argv).not.toContain('-F');
-    expect(() => gitlabArgv(write, 'gitlab.example.com', null)).toThrow(/body file/);
+    expect(gitlabUrl('GitLab.example.com', endpoint).href).toBe(
+      'https://gitlab.example.com/api/v4/projects/group%2Fsub%2Fapp/repository/files/docs%2Fon%20call.md?ref=release%2F1',
+    );
+    for (const hostile of [
+      '../../admin',
+      'projects/../user',
+      'projects/%2e%2e/user',
+      'projects/..',
+      'projects/x#fragment',
+      'projects\\x',
+    ])
+      expect(() => gitlabUrl('gitlab.example.com', hostile), hostile).toThrow(/pinned API surface/);
+    for (const host of ['user@evil.example', 'a:b@evil.example', 'evil.example/x?', '', 'a b'])
+      expect(() => gitlabUrl(host, 'user'), host).toThrow(/pinned API surface/);
   });
 
   it('normalizes success and error envelopes, including conflicts and write results', () => {
     const ok = normalizeGitlabOutput({
       operation: 'get_project',
       project: 'group/project',
-      exitCode: 0,
+      httpStatus: 200,
       status: 'completed',
-      stdout: JSON.stringify({
+      output: JSON.stringify({
         id: 1,
         path_with_namespace: 'group/project',
         default_branch: 'main',
         web_url: 'https://h/group/project',
         runners_token: 'secret-ish',
       }),
-      stderr: '',
     });
     expect(ok.ok).toBe(true);
     expect(ok.data).toEqual({
@@ -412,43 +397,46 @@ describe('typed GitLab operations (contract v5)', () => {
     const malformed = normalizeGitlabOutput({
       operation: 'get_project',
       project: 'group/project',
-      exitCode: 0,
+      httpStatus: 200,
       status: 'completed',
-      stdout: '{"id":',
-      stderr: '',
+      output: '{"id":',
     });
     expect(malformed).toMatchObject({ ok: false, errorCategory: 'invalid_response' });
-    for (const [stderr, category] of [
-      ['glab: 404 Not Found', 'not_found'],
-      ['glab: 401 Unauthorized', 'authentication'],
-      ['glab: 403 Forbidden', 'forbidden'],
-      ['glab: 409 Conflict', 'conflict'],
-      ['glab: 422 Unprocessable Entity', 'invalid_input'],
-      ['glab: 429 Too Many Requests', 'rate_limit'],
-      ['glab: 502 Bad Gateway', 'upstream'],
+    for (const [httpStatus, category, output] of [
+      [404, 'not_found'],
+      [401, 'authentication'],
+      [403, 'forbidden'],
+      [409, 'conflict'],
+      [422, 'invalid_input'],
+      [400, 'conflict', '{"message":["Another open merge request already exists"]}'],
+      [429, 'rate_limit'],
+      [501, 'unsupported'],
+      [502, 'upstream'],
+      [405, 'upstream'],
+      [null, 'upstream'],
+      // The status decides; words of the answer's text do not.
+      [500, 'upstream', '{"message":"upstream said 404 not found, 401 unauthorized"}'],
     ] as const) {
       const failed = normalizeGitlabOutput({
         operation: 'create_issue',
         project: 'group/project',
-        exitCode: 1,
         status: 'failed',
-        stdout: '',
-        stderr,
+        httpStatus,
+        output: output ?? '',
       });
-      expect(failed, stderr).toMatchObject({ ok: false, errorCategory: category });
+      expect(failed, String(httpStatus)).toMatchObject({ ok: false, errorCategory: category });
     }
     const note = normalizeGitlabOutput({
       operation: 'create_merge_request_note',
       project: 'group/project',
-      exitCode: 0,
+      httpStatus: 200,
       status: 'completed',
-      stdout: JSON.stringify({
+      output: JSON.stringify({
         id: 77,
         body: 'hi',
         author: { id: 1, username: 'bot', email: 'x@y' },
         system: false,
       }),
-      stderr: '',
     });
     expect(note.data).toEqual({
       id: 77,
@@ -459,56 +447,50 @@ describe('typed GitLab operations (contract v5)', () => {
     const timedOut = normalizeGitlabOutput({
       operation: 'get_project',
       project: 'group/project',
-      exitCode: null,
+      httpStatus: null,
       status: 'timed_out',
-      stdout: '',
-      stderr: 'killed',
+      output: '',
     });
     expect(timedOut).toMatchObject({ ok: false, errorCategory: 'timeout' });
   });
 
-  it('keeps a bounded, scrubbed excerpt of an unrecognised glab failure outside the model text', () => {
-    // Production 2026-10-23: MR creation exited 1 with output matching no
-    // HTTP pattern, and the output was discarded.
+  it('keeps a bounded, scrubbed excerpt of a failure outside the model text', () => {
     const failed = normalizeGitlabOutput({
       operation: 'create_merge_request',
       project: 'company/handbook',
-      exitCode: 1,
       status: 'failed',
-      stdout: 'partial body\n',
-      stderr: `glab: could not decode the response: unexpected end of JSON input\n  via https://oauth2:glpat-abcdefghijklmnop@gitlab.example/api   Authorization: Bearer abc.def-123\n${'x'.repeat(2000)}`,
+      httpStatus: 500,
+      output: `could not decode\n  via https://oauth2:glpat-abcdefghijklmnop@gitlab.example/api   Authorization: Bearer abc.def-123\n${'x'.repeat(2000)}`,
     });
     expect(failed).toMatchObject({
       ok: false,
       errorCategory: 'upstream',
-      error: 'GitLab request failed (exit 1)',
+      error: 'GitLab upstream error (HTTP 500)',
     });
     expect(failed.detail).toMatch(
-      /^glab: could not decode the response: unexpected end of JSON input via https:\/\/\[redacted\]@gitlab\.example\/api Authorization: Bearer \[redacted\]/,
+      /^HTTP 500 \| could not decode via https:\/\/\[redacted\]@gitlab\.example\/api Authorization: Bearer \[redacted\]/,
     );
     expect(failed.detail).not.toMatch(/glpat-|abc\.def-123/);
     expect(failed.detail!.length).toBeLessThanOrEqual(500);
     expect(failed.detail).toContain('…');
-    // Stdout follows stderr when there is room; the model text keeps only the reason.
-    const short = normalizeGitlabOutput({
+    expect(renderGitlabResultText(failed)).not.toContain('could not decode');
+    const unreached = normalizeGitlabOutput({
       operation: 'create_merge_request',
       project: 'company/handbook',
-      exitCode: 1,
       status: 'failed',
-      stdout: 'partial body\n',
-      stderr: 'glab: unexpected EOF\n',
+      httpStatus: null,
+      output: '',
+      error: 'GitLab could not be reached',
     });
-    expect(short.detail).toBe('glab: unexpected EOF | partial body');
-    expect(renderGitlabResultText(short)).not.toContain('unexpected EOF');
+    expect(unreached).toMatchObject({ errorCategory: 'upstream', detail: unreached.error });
     // Successes and timeouts carry no detail.
     expect(
       normalizeGitlabOutput({
         operation: 'get_project',
         project: 'g/p',
-        exitCode: null,
         status: 'timed_out',
-        stdout: '',
-        stderr: 'killed',
+        httpStatus: null,
+        output: '',
       }).detail,
     ).toBeUndefined();
   });
@@ -522,10 +504,9 @@ describe('typed GitLab operations (contract v5)', () => {
     const listed = normalizeGitlabOutput({
       operation: 'list_merge_requests',
       project: 'group/project',
-      exitCode: 0,
+      httpStatus: 200,
       status: 'completed',
-      stdout: JSON.stringify(many),
-      stderr: '',
+      output: JSON.stringify(many),
     });
     expect(listed.ok).toBe(true);
     expect((listed.data as unknown[]).length).toBeLessThanOrEqual(100);
@@ -537,9 +518,9 @@ describe('typed GitLab operations (contract v5)', () => {
       normalizeGitlabOutput({
         operation: 'get_repository_file',
         project: 'group/project',
-        exitCode: 0,
+        httpStatus: 200,
         status: 'completed',
-        stdout: decodeRepositoryFileOutput(
+        output: decodeRepositoryFileOutput(
           JSON.stringify({
             file_path: 'hello',
             size: content.length,
@@ -549,7 +530,6 @@ describe('typed GitLab operations (contract v5)', () => {
           }),
           captureBound,
         ),
-        stderr: '',
       });
     const file = readFile('amber-falcon-3102\n');
     expect(file.ok).toBe(true);
@@ -585,14 +565,13 @@ describe('typed GitLab operations (contract v5)', () => {
     const undecoded = normalizeGitlabOutput({
       operation: 'get_repository_file',
       project: 'group/project',
-      exitCode: 0,
+      httpStatus: 200,
       status: 'completed',
-      stdout: JSON.stringify({
+      output: JSON.stringify({
         file_path: 'hello',
         encoding: 'base64',
         content: Buffer.from('glpat-undecoded-secret').toString('base64'),
       }),
-      stderr: '',
     });
     expect(undecoded.data).toEqual({
       file_path: 'hello',
@@ -602,10 +581,9 @@ describe('typed GitLab operations (contract v5)', () => {
     const blobs = normalizeGitlabOutput({
       operation: 'search',
       project: 'instance',
-      exitCode: 0,
+      httpStatus: 200,
       status: 'completed',
-      stdout: JSON.stringify([{ project_id: 5, path: 'a.ts', data: 'x', ref: 'main', id: null }]),
-      stderr: '',
+      output: JSON.stringify([{ project_id: 5, path: 'a.ts', data: 'x', ref: 'main', id: null }]),
       scope: 'blobs',
     });
     expect(blobs.data).toEqual([{ project_id: 5, path: 'a.ts', data: 'x', ref: 'main' }]);
@@ -938,9 +916,9 @@ describe('typed GitLab operations (contract v5)', () => {
       const listed = normalizeGitlabOutput({
         operation: 'list_merge_requests',
         project: 'instance',
-        exitCode: 0,
+        httpStatus: 200,
         status: 'completed',
-        stdout: JSON.stringify([
+        output: JSON.stringify([
           {
             id: 1,
             iid: 5,
@@ -963,7 +941,6 @@ describe('typed GitLab operations (contract v5)', () => {
             task_completion_status: { count: 0 },
           },
         ]),
-        stderr: '',
       });
       const [mr] = listed.data as Array<Record<string, unknown>>;
       expect(Object.keys(mr!).sort()).toEqual(
@@ -999,9 +976,9 @@ describe('typed GitLab operations (contract v5)', () => {
       const issue = normalizeGitlabOutput({
         operation: 'get_issue',
         project: 'g/p',
-        exitCode: 0,
+        httpStatus: 200,
         status: 'completed',
-        stdout: JSON.stringify({
+        output: JSON.stringify({
           id: 2,
           iid: 7,
           title: 'bug',
@@ -1016,7 +993,6 @@ describe('typed GitLab operations (contract v5)', () => {
           weight: 3,
           time_stats: {},
         }),
-        stderr: '',
       });
       expect(issue.data).toEqual({
         id: 2,
@@ -1074,16 +1050,15 @@ describe('typed GitLab operations (contract v5)', () => {
   });
 });
 
-describe('get_job_trace (contract v4)', () => {
+describe('get_job_trace', () => {
   const traceResult = (part: 'head' | 'tail', body = fakeJobTrace()) => {
     const answer = runtimeTraceAnswer(body, part);
     return normalizeGitlabOutput({
       operation: 'get_job_trace',
       project: 'g/p',
-      exitCode: answer.exitCode,
+      httpStatus: answer.httpStatus,
       status: 'completed',
-      stdout: answer.output,
-      stderr: '',
+      output: answer.output,
       textMeta: answer.textMeta,
     });
   };
@@ -1136,14 +1111,6 @@ describe('get_job_trace (contract v4)', () => {
       bytes: 48_000,
       part: 'head',
     });
-    expect(gitlabArgv(tail, 'gitlab.example.test', null)).toEqual([
-      'api',
-      '--method',
-      'GET',
-      '--hostname',
-      'gitlab.example.test',
-      'projects/group%2Fsub%2Fapp/jobs/77/trace',
-    ]);
     // Every other operation stays a JSON request without retention.
     expect(request('get_job', { project: 'g/p', job_id: 77 })).toMatchObject({
       endpoint: 'projects/g%2Fp/jobs/77',
@@ -1254,10 +1221,9 @@ describe('get_job_trace (contract v4)', () => {
     const result = normalizeGitlabOutput({
       operation: 'get_job_trace',
       project: 'g/p',
-      exitCode: 0,
+      httpStatus: 200,
       status: 'completed',
-      stdout: 'last line\n',
-      stderr: '',
+      output: 'last line\n',
       textMeta: { totalBytes: 8_400_000, returnedBytes: 10, part: 'tail', cut: true },
     });
     expect(result).toMatchObject({ ok: true, truncated: true });
@@ -1271,31 +1237,27 @@ describe('get_job_trace (contract v4)', () => {
     const missing = normalizeGitlabOutput({
       operation: 'get_job_trace',
       project: 'g/p',
-      exitCode: 1,
       status: 'failed',
-      stdout: '{"message":"404 Not found"}',
-      stderr: 'glab: 404 Not Found (HTTP 404)',
-      textMeta: { totalBytes: 27, returnedBytes: 27, part: 'tail', cut: false },
+      httpStatus: 404,
+      output: '{"message":"404 Not found"}',
     });
     expect(missing).toMatchObject({ ok: false, errorCategory: 'not_found' });
     expect(
       normalizeGitlabOutput({
         operation: 'get_job_trace',
         project: 'g/p',
-        exitCode: 1,
         status: 'failed',
-        stdout: '{"message":"403 Forbidden"}',
-        stderr: '',
+        httpStatus: 403,
+        output: '{"message":"403 Forbidden"}',
       }),
     ).toMatchObject({ ok: false, errorCategory: 'forbidden' });
     expect(
       normalizeGitlabOutput({
         operation: 'get_job_trace',
         project: 'g/p',
-        exitCode: null,
+        httpStatus: null,
         status: 'timed_out',
-        stdout: '',
-        stderr: '',
+        output: '',
       }),
     ).toMatchObject({ ok: false, errorCategory: 'timeout' });
     // A trace is never JSON-parsed; without the runtime's report it is not trusted.
@@ -1303,10 +1265,9 @@ describe('get_job_trace (contract v4)', () => {
       normalizeGitlabOutput({
         operation: 'get_job_trace',
         project: 'g/p',
-        exitCode: 0,
+        httpStatus: 200,
         status: 'completed',
-        stdout: 'plain text',
-        stderr: '',
+        output: 'plain text',
       }),
     ).toMatchObject({ ok: false, errorCategory: 'invalid_response' });
   });
@@ -1316,10 +1277,9 @@ describe('get_job_trace (contract v4)', () => {
     const result = normalizeGitlabOutput({
       operation: 'get_job_trace',
       project: 'g/p',
-      exitCode: 0,
+      httpStatus: 200,
       status: 'completed',
-      stdout: quotes,
-      stderr: '',
+      output: quotes,
       textMeta: { totalBytes: 48_000, returnedBytes: 48_000, part: 'tail', cut: false },
     });
     expect(result.ok).toBe(true);

@@ -18,7 +18,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { StageLogger } from '../../infrastructure/logger.js';
 import { validateGitlabOperation } from '../../integrations/gitlab/gitlab-operations.js';
-import type { GitlabNormalizedResult } from '../../integrations/gitlab/gitlab-cli-adapter.js';
+import type { GitlabNormalizedResult } from '../../integrations/gitlab/gitlab-rest-adapter.js';
 import { identityFromProject, validateTargetBranch } from './gitlab-policy.js';
 import {
   buildStagingCommit,
@@ -126,7 +126,7 @@ function requireOk(result: GitlabNormalizedResult, what: string): GitlabNormaliz
     const terminal = ['authentication', 'forbidden', 'invalid_input'].includes(
       result.errorCategory ?? '',
     );
-    // glab's excerpt rides along as detail: runner log and action
+    // GitLab's excerpt rides along as detail: runner log and action
     // evidence, never the model-visible message.
     throw new PublisherError(
       `${what} failed: [${result.errorCategory ?? 'upstream'}] ${result.error ?? 'request failed'}`,

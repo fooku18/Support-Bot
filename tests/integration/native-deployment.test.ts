@@ -235,6 +235,11 @@ describe('native deployment conversion', () => {
     expect(c.services['native-cli-runtime'].environment.EGRESS_PROXY_URL).toBe(
       'http://egress-tools:3128',
     );
+    // The CLI runtime needs no privilege: every tool is an HTTPS call from Node.
+    expect(c.services['native-cli-runtime'].cap_drop).toEqual(['ALL']);
+    expect(c.services['native-cli-runtime'].cap_add).toBeUndefined();
+    expect(c.services['native-cli-runtime'].security_opt).toEqual(['no-new-privileges:true']);
+    expect(c.services['native-cli-runtime'].user).toBeUndefined();
     expect(c.services.adapter.environment.EGRESS_PROXY_URL).toBe('http://egress:3128');
     expect(c.services.egress.networks.tools.aliases).toEqual(['egress-tools']);
     expect(c.services.admin.ports).toEqual([

@@ -1,7 +1,7 @@
 import { MODEL_SETTING_NAMES } from './generated/model-catalog.js';
 /**
  * Isolated credential-owning runtime for the admin-managed tool instances of
- * kind GitLab (typed glab requests), Atlassian (scoped read-only REST),
+ * kind GitLab (typed REST requests), Atlassian (scoped read-only REST),
  * Datadog (read-only remote MCP), Cloudflare (read-only REST and GraphQL
  * Analytics API) and Slack (read-only user lookups and public-channel message
  * search with the workspace's bot token).
@@ -16,24 +16,16 @@ import { MODEL_SETTING_NAMES } from './generated/model-catalog.js';
  * reported `blocked` and never probed; a Slack instance's only legal host
  * is the fixed `slack.com`. Readiness outcomes go back to the admin service.
  *
- * Egress: the runtime sits on internal networks only. Its own provider
- * calls (fetch) and the sandboxed glab (HTTPS_PROXY) tunnel through the
- * instance's egress proxy (EGRESS_PROXY_URL), which admits the same host
- * lists for the tools network.
+ * Egress: the runtime sits on internal networks only. Its provider calls
+ * (fetch) tunnel through the instance's egress proxy (EGRESS_PROXY_URL),
+ * which admits the same host lists for the tools network.
  */
 
 import {
   configureOutbound,
   egressProxyUrlFromEnv,
-  sandboxProxyEnv,
 } from '../../agent/src/infrastructure/outbound.js';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import fs from 'node:fs';
-import { createHash } from 'node:crypto';
-import os from 'node:os';
-import path from 'node:path';
-import { execFile, spawn, spawnSync, type ChildProcess } from 'node:child_process';
-import { stopProcessGroup } from '../../agent/src/infrastructure/processes/process-groups.js';
 import {
   GITLAB_CONTRACT_VERSION,
   isGitlabTransportOperationName,
@@ -41,13 +33,12 @@ import {
   type ValidatedGitlabArgs,
 } from '../../agent/src/integrations/gitlab/gitlab-operations.js';
 import {
-  MAX_TRACE_RAW_BYTES,
   buildGitlabRequest,
   decodeRepositoryFileOutput,
-  gitlabArgv,
-  type GitlabTextMeta,
-  type GitlabTextRetain,
-} from '../../agent/src/integrations/gitlab/gitlab-cli-adapter.js';
+  sendGitlabRequest,
+  type GitlabFetch,
+  type GitlabHttpResult,
+} from '../../agent/src/integrations/gitlab/gitlab-rest-adapter.js';
 import {
   ATLASSIAN_CONTRACT_VERSION,
   ATLASSIAN_ADAPTER,
@@ -104,14 +95,12 @@ import {
 
 /**
  * Sanitized GitLab readiness categories (no raw auth output, no
- * credentials): ready = bounded authenticated read succeeded;
- * missing_binary = the packaged glab binary is absent; invalid_auth /
+ * credentials): ready = bounded authenticated read succeeded; invalid_auth /
  * forbidden / unreachable = probe classifications.
  */
 export type ProviderStatus =
   | 'ready'
   | 'pending'
-  | 'missing_binary'
   | 'invalid_auth'
   | 'forbidden'
   | 'unreachable'
@@ -119,15 +108,11 @@ export type ProviderStatus =
 
 /** GitLab readiness of one instance (sanitized; never the credential). */
 export interface ProviderState {
-  tool: 'glab';
+  tool: 'gitlab';
   ready: boolean;
   status: ProviderStatus;
   /** Actionable, sanitized diagnostic (no secret values, no raw auth output). */
   detail: string;
-  /** Informational: packaged glab version and binary digest (never a pin). */
-  version: string | null;
-  binaryPath: string | null;
-  binarySha256: string | null;
   host: string;
   contractVersion: number;
 }
@@ -168,69 +153,17 @@ const REMOVED_TOOL_ENV = [
   'DATADOG_TOOLSETS',
 ];
 
-/** Fixed packaged location inside the cli-runtime image (never a host mount). */
-const PACKAGED_GLAB = '/usr/local/bin/glab';
-
 function cliRuntimeToken(): string {
   return (process.env.CLI_RUNTIME_TOKEN ?? '').trim();
 }
 
-/**
- * The glab binary. The override (TOOL_GLAB_BIN) is a qualification/test
- * hook only: production images package glab at the fixed path and Compose
- * never passes a binary path.
- */
-export function glabBinaryPath(env: NodeJS.ProcessEnv = process.env): string {
-  const override = (env.TOOL_GLAB_BIN ?? '').trim();
-  if (override.length > 0 && (!path.isAbsolute(override) || override.includes('..'))) {
-    throw new Error('TOOL_GLAB_BIN must be an absolute path without traversal');
-  }
-  return override.length > 0 ? override : PACKAGED_GLAB;
-}
-
-/** Bounded --version capture from a packaged binary (CI=1 suppresses update checks). */
-function binaryVersion(binaryPath: string): string | null {
-  const result = spawnSync(binaryPath, ['--version'], {
-    env: { PATH: '/usr/local/bin:/usr/bin:/bin', HOME: '/tmp', CI: '1', LANG: 'C.UTF-8' },
-    encoding: 'utf8',
-    timeout: 15_000,
-  });
-  if (result.status !== 0) return null;
-  return (result.stdout ?? '').split('\n')[0]?.trim().slice(0, 80) ?? null;
-}
-
-export interface GlabBinary {
-  path: string;
-  installed: boolean;
-  sha256: string | null;
-  version: string | null;
-}
-
-/** File state of the glab binary (packaged = present in the image). */
-export function inspectGlabBinary(binaryPath: string): GlabBinary {
-  try {
-    const stat = fs.statSync(binaryPath);
-    if (!stat.isFile()) throw new Error('not a file');
-    fs.accessSync(binaryPath, fs.constants.X_OK);
-    const sha256 = createHash('sha256').update(fs.readFileSync(binaryPath)).digest('hex');
-    return { path: binaryPath, installed: true, sha256, version: binaryVersion(binaryPath) };
-  } catch {
-    return { path: binaryPath, installed: false, sha256: null, version: null };
-  }
-}
-
 /** Initial (pre-probe) GitLab state of one instance. */
-export function initialGitlabState(host: string, binary: GlabBinary): ProviderState {
+export function initialGitlabState(host: string): ProviderState {
   return {
-    tool: 'glab',
+    tool: 'gitlab',
     ready: false,
-    status: binary.installed ? 'pending' : 'missing_binary',
-    detail: binary.installed
-      ? 'readiness has not been established yet'
-      : `the packaged glab binary is not executable at ${binary.path}`,
-    version: binary.version,
-    binaryPath: binary.installed ? binary.path : null,
-    binarySha256: binary.sha256,
+    status: 'pending',
+    detail: 'readiness has not been established yet',
     host,
     contractVersion: GITLAB_CONTRACT_VERSION,
   };
@@ -290,18 +223,10 @@ async function readBody(req: IncomingMessage, maxBytes: number): Promise<Buffer>
   return Buffer.concat(chunks);
 }
 
-/** Result of one typed GitLab request (stdout is the JSON payload). */
-export interface GitlabRuntimeResponse {
-  status: 'completed' | 'failed' | 'timed_out' | 'not_run';
-  exitCode: number | null;
-  /** glab stdout (redacted; a repository file decoded first), parsed by the runner as the JSON payload. */
-  output: string;
-  /** glab stderr captured separately (redacted; warnings/errors, never parsed as data). */
-  stderr?: string;
-  truncated: boolean;
+/** Result of one typed GitLab request (redacted; a repository file decoded first). */
+export interface GitlabRuntimeResponse extends Omit<GitlabHttpResult, 'status'> {
+  status: GitlabHttpResult['status'] | 'not_run';
   refused?: string;
-  /** Retention report of a streamed text body (`get_job_trace` only). */
-  textMeta?: GitlabTextMeta;
 }
 
 // --- Instance registry --------------------------------------------------------------
@@ -332,7 +257,7 @@ export interface CliInstanceEntry {
     /** A transient failure (the credential could not be read): retried. */
     retry?: boolean;
   } | null;
-  gitlab?: { credential: string; state: ProviderState };
+  gitlab?: { credential: string; state: ProviderState; fetchImpl?: GitlabFetch };
   atlassian?: AtlassianRestProvider;
   datadog?: DatadogMcpProvider;
   cloudflare?: CloudflareApiProvider;
@@ -371,11 +296,11 @@ export function admittedHostsFromEnv(env: NodeJS.ProcessEnv = process.env): Admi
 
 export interface CliInstanceRegistryDeps {
   admitted: AdmittedHosts;
-  glab: GlabBinary;
   /** Reads an instance's credential (the admin service in production). */
   secret?(instanceId: string): Promise<{ credential: string; credentialVersion: number }>;
   /** Receives readiness outcomes (the admin service in production). */
   report?(statuses: ToolInstanceStatusReport[]): Promise<void>;
+  gitlabFetch?: GitlabFetch;
   atlassianFetch?: AtlassianFetch;
   datadogFetch?: DatadogFetch;
   /** Retry and grace bounds of the Atlassian/Datadog/Cloudflare/Slack probes (tests shorten them). */
@@ -383,7 +308,7 @@ export interface CliInstanceRegistryDeps {
   cloudflareFetch?: CloudflareFetch;
   slackFetch?: SlackFetch;
   /** GitLab readiness probe (injected in tests). */
-  probeGitlab?(host: string, credential: string, binary: string): Promise<ProbeResult>;
+  probeGitlab?(host: string, credential: string): Promise<ProbeResult>;
   log?(line: string): void;
 }
 
@@ -472,7 +397,11 @@ export class CliInstanceRegistry {
       return {
         instance: bound,
         unusable: null,
-        gitlab: { credential: secret.credential, state: initialGitlabState(host, this.deps.glab) },
+        gitlab: {
+          credential: secret.credential,
+          state: initialGitlabState(host),
+          fetchImpl: this.deps.gitlabFetch,
+        },
       };
     if (kind === 'atlassian') {
       const settings = instance.settings as { cloudId: string; email: string };
@@ -537,20 +466,20 @@ export class CliInstanceRegistry {
     if (entry === undefined || entry.unusable !== null) return;
     try {
       if (entry.gitlab !== undefined) {
-        const state = entry.gitlab.state;
-        if (state.status !== 'missing_binary') {
-          const probe = this.deps.probeGitlab ?? probeGlab;
-          let last: ProbeResult = { ok: false, status: 'error', detail: 'probe did not run' };
-          for (let attempt = 1; attempt <= PROBE_ATTEMPTS; attempt += 1) {
-            last = await probe(state.host, entry.gitlab.credential, this.deps.glab.path);
-            if (last.ok) break;
-            if (attempt < PROBE_ATTEMPTS)
-              await new Promise((resolve) => setTimeout(resolve, PROBE_RETRY_MS));
-          }
-          state.ready = last.ok;
-          state.status = last.status;
-          state.detail = last.detail;
+        const { state, credential, fetchImpl } = entry.gitlab;
+        const probe =
+          this.deps.probeGitlab ??
+          ((host: string, token: string) => probeGitlab(host, token, fetchImpl));
+        let last: ProbeResult = { ok: false, status: 'error', detail: 'probe did not run' };
+        for (let attempt = 1; attempt <= PROBE_ATTEMPTS; attempt += 1) {
+          last = await probe(state.host, credential);
+          if (last.ok) break;
+          if (attempt < PROBE_ATTEMPTS)
+            await new Promise((resolve) => setTimeout(resolve, PROBE_RETRY_MS));
         }
+        state.ready = last.ok;
+        state.status = last.status;
+        state.detail = last.detail;
       }
       await entry.atlassian?.refresh();
       await entry.datadog?.refresh();
@@ -697,10 +626,7 @@ export function setInstanceRegistry(next: CliInstanceRegistry | null): void {
 }
 
 function currentRegistry(): CliInstanceRegistry {
-  registry ??= new CliInstanceRegistry({
-    admitted: admittedHostsFromEnv(),
-    glab: inspectGlabBinary(glabBinaryPath()),
-  });
+  registry ??= new CliInstanceRegistry({ admitted: admittedHostsFromEnv() });
   return registry;
 }
 
@@ -728,10 +654,6 @@ function resolveInstance(
 }
 
 // --- Credential redaction (credential-owning runtime) ---------------------------------
-
-export function redactCliOutput(text: string): string {
-  return redactRuntimeOutput(text);
-}
 
 /** Redacts every held credential and generic token-shaped material. Exported for MCP paths. */
 export function redactRuntimeOutput(text: string, requestSecrets: readonly string[] = []): string {
@@ -766,94 +688,7 @@ export function redactTraceOutput(text: string): string {
     .replace(/\b([a-z][a-z0-9+.-]*:\/\/)[^\s/@:"']+:[^\s/@"']+@/gi, '$1[redacted]@');
 }
 
-/**
- * Streaming retention of a text body: counts every byte, keeps only the
- * first (`head`) or last (`tail`) `retain.bytes`, and reports `cut` once
- * the count passes `hardCut` (the caller then stops the child). When the
- * body was larger than the retained part, the partial line at the cut edge
- * is dropped, so no half token or broken UTF-8 sequence reaches redaction.
- */
-export function createTextRetainer(
-  retain: GitlabTextRetain,
-  hardCut: number = MAX_TRACE_RAW_BYTES,
-): {
-  push(chunk: Buffer): 'continue' | 'cut';
-  finish(): { text: string; meta: GitlabTextMeta };
-} {
-  const limit = Math.max(1, Math.floor(retain.bytes));
-  let total = 0;
-  let cut = false;
-  let kept = Buffer.alloc(0);
-  return {
-    push(chunk) {
-      if (cut) return 'cut';
-      total += chunk.length;
-      if (retain.part === 'head') {
-        if (kept.length < limit) {
-          kept = Buffer.concat([kept, chunk.subarray(0, limit - kept.length)]);
-        }
-      } else {
-        kept = Buffer.concat([kept, chunk]);
-        // Compact lazily so a stream of small chunks stays linear.
-        if (kept.length > 2 * limit) kept = Buffer.from(kept.subarray(kept.length - limit - 1));
-      }
-      if (total > hardCut) cut = true;
-      return cut ? 'cut' : 'continue';
-    },
-    finish() {
-      let out = retain.part === 'tail' ? kept.subarray(Math.max(0, kept.length - limit)) : kept;
-      if (out.length < total) {
-        if (retain.part === 'tail') {
-          // The byte before the window tells whether it starts at a line.
-          const before = kept.length > out.length ? kept[kept.length - out.length - 1] : undefined;
-          const newline = before === 0x0a ? -1 : out.indexOf(0x0a);
-          if (before !== 0x0a)
-            out = newline >= 0 ? out.subarray(newline + 1) : out.subarray(utf8Start(out));
-        } else {
-          const newline = out.lastIndexOf(0x0a);
-          out = newline >= 0 ? out.subarray(0, newline + 1) : out.subarray(0, utf8End(out));
-        }
-      }
-      return {
-        text: out.toString('utf8'),
-        meta: { totalBytes: total, returnedBytes: out.length, part: retain.part, cut },
-      };
-    },
-  };
-}
-
-/** First index that does not continue a UTF-8 sequence. */
-function utf8Start(buf: Buffer): number {
-  let i = 0;
-  while (i < buf.length && i < 4 && (buf[i]! & 0xc0) === 0x80) i += 1;
-  return i;
-}
-
-/** End index that excludes a trailing incomplete UTF-8 sequence. */
-function utf8End(buf: Buffer): number {
-  for (let back = 1; back <= Math.min(4, buf.length); back += 1) {
-    const byte = buf[buf.length - back]!;
-    if ((byte & 0xc0) === 0x80) continue;
-    const width = byte >= 0xf0 ? 4 : byte >= 0xe0 ? 3 : byte >= 0xc0 ? 2 : 1;
-    return width > back ? buf.length - back : buf.length;
-  }
-  return buf.length;
-}
-
 // --- Deterministic authentication (background probes, never a model tool call) -------
-
-/** Clean environment for a trusted runtime-side CLI launch (proxy triple included). */
-export function trustedSpawnEnv(extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
-  return {
-    PATH: '/usr/local/bin:/usr/bin:/bin',
-    HOME: '/tmp',
-    TMPDIR: '/tmp',
-    CI: '1',
-    LANG: 'C.UTF-8',
-    ...sandboxProxyEnv(),
-    ...extra,
-  };
-}
 
 export interface ProbeResult {
   ok: boolean;
@@ -861,72 +696,44 @@ export interface ProbeResult {
   detail: string;
 }
 
-/** Maps bounded probe output to sanitized readiness categories. */
-export function classifyProbeOutput(text: string): ProviderStatus {
-  const t = text.toLowerCase();
-  if (/unauthor|401|invalid[_ ]?token|not authenticated|authentication failed/.test(t))
-    return 'invalid_auth';
-  if (/forbidden|403|access denied|insufficient permissions/.test(t)) return 'forbidden';
-  if (
-    /dial tcp|lookup [a-z]|no such host|connection refused|network|timed out|i\/o timeout|temporary failure/.test(
-      t,
-    )
-  )
-    return 'unreachable';
-  return 'error';
-}
-
-function sanitizeProbeDetail(text: string): string {
-  return redactCliOutput(text).replace(/\s+/g, ' ').trim().slice(0, 200);
-}
-
-/** Bounded readiness probe for glab: the authenticated `GET /user` read. */
-export async function probeGlab(
+/** Bounded readiness probe: the authenticated `GET /user` read. Details are fixed sentences. */
+export async function probeGitlab(
   host: string,
   credential: string,
-  binaryPath: string,
+  fetchImpl?: GitlabFetch,
 ): Promise<ProbeResult> {
-  const probeHome = fs.mkdtempSync(path.join(os.tmpdir(), 'glab-probe-'));
+  const failed = (status: ProviderStatus, detail: string): ProbeResult => ({
+    ok: false,
+    status,
+    detail,
+  });
+  let result: GitlabHttpResult;
   try {
-    const result = await new Promise<{ code: number | null; stdout: string; stderr: string }>(
-      (resolve) => {
-        execFile(
-          binaryPath,
-          ['api', '--hostname', host, 'user'],
-          {
-            env: trustedSpawnEnv({
-              GITLAB_TOKEN: credential,
-              GITLAB_HOST: host,
-              HOME: probeHome,
-              XDG_CONFIG_HOME: path.join(probeHome, '.config'),
-              GLAB_NO_PROMPT: 'true',
-              GLAB_CHECK_UPDATE: 'false',
-            }),
-            encoding: 'utf8',
-            timeout: 30_000,
-            maxBuffer: 1_000_000,
-          },
-          (error, stdout, stderr) => {
-            const code = error === null ? 0 : typeof error.code === 'number' ? error.code : null;
-            resolve({ code, stdout: String(stdout ?? ''), stderr: String(stderr ?? '') });
-          },
-        );
-      },
+    result = await sendGitlabRequest(
+      buildGitlabRequest(validateTransportGitlabArgs('get_current_user', {})),
+      host,
+      credential,
+      { timeoutMs: 30_000, maxOutputBytes: 100_000, fetchImpl },
     );
-    const text = `${result.stdout}\n${result.stderr}`;
-    const failure = classifyProbeOutput(text);
-    if (result.code === 0 && failure === 'error' && !/"message"\s*:/.test(result.stdout))
-      return { ok: true, status: 'ready', detail: 'authenticated against the instance host' };
-    return {
-      ok: false,
-      status: failure === 'error' ? 'invalid_auth' : failure,
-      detail:
-        sanitizeProbeDetail(text.replaceAll(credential, '[redacted]')) ||
-        `glab api user exited ${result.code ?? 'unknown'}`,
-    };
-  } finally {
-    fs.rmSync(probeHome, { recursive: true, force: true });
+  } catch {
+    return failed('error', 'the instance host is not usable');
   }
+  if (result.httpStatus === 401)
+    return failed('invalid_auth', 'GitLab rejected the token (wrong, expired or revoked)');
+  if (result.httpStatus === 403)
+    return failed('forbidden', 'GitLab refused the token (blocked user or missing API scope)');
+  if (result.status === 'timed_out') return failed('unreachable', 'GitLab did not answer in time');
+  if (result.httpStatus === null) return failed('unreachable', 'GitLab could not be reached');
+  if (result.status !== 'completed')
+    return failed('error', `GitLab answered the user read with HTTP ${result.httpStatus}`);
+  try {
+    const user = JSON.parse(result.output) as { id?: unknown } | null;
+    if (typeof user?.id === 'number')
+      return { ok: true, status: 'ready', detail: 'authenticated against the instance host' };
+  } catch {
+    // Reported below: not a GitLab API answer (e.g. a sign-in page).
+  }
+  return failed('error', 'GitLab answered the user read with an unexpected response');
 }
 
 /** Retry interval for an instance whose credential could not be read. */
@@ -936,26 +743,6 @@ export const PROBE_ATTEMPTS = 3;
 export const PROBE_RETRY_MS = 3_000;
 
 // --- Typed GitLab requests ---------------------------------------------------------
-
-/** Single-quoted shell literal for env-file delivery (values never in argv). */
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`;
-}
-
-/**
- * Writes the instance's GitLab environment to the protected env file (mode
- * 0600, root-owned) consumed by the sandbox inner script.
- */
-function writeProviderEnvFile(staging: string, host: string, credential: string): void {
-  const lines = [
-    'export CI=1',
-    `export GITLAB_TOKEN=${shellQuote(credential)}`,
-    `export GITLAB_HOST=${shellQuote(host)}`,
-    'export GLAB_NO_PROMPT=true',
-    'export GLAB_CHECK_UPDATE=false',
-  ];
-  fs.writeFileSync(path.join(staging, 'env'), `${lines.join('\n')}\n`, { mode: 0o600 });
-}
 
 const TRANSPORT_KEYS = [
   'instanceId',
@@ -968,20 +755,17 @@ const TRANSPORT_KEYS = [
 ];
 
 /**
- * Runs one typed GitLab request inside the tool sandbox against the named
- * instance. The runtime builds the fixed invocation from the re-validated
- * operation; host and credential come from the instance, never the request.
- * Write bodies are JSON written by this runtime to a file passed via
- * `--input`.
+ * Runs one typed GitLab request against the named instance. The runtime
+ * builds the fixed REST request from the re-validated operation; host and
+ * credential come from the instance, never the request.
  */
 export async function handleGitlab(
   body: unknown,
   signal?: AbortSignal,
-  sandboxScript = '/usr/local/bin/tool-sandbox',
 ): Promise<GitlabRuntimeResponse> {
   const refuse = (refused: string): GitlabRuntimeResponse => ({
     status: 'not_run',
-    exitCode: null,
+    httpStatus: null,
     output: refused,
     truncated: false,
     refused,
@@ -1027,257 +811,31 @@ export async function handleGitlab(
       : 60_000,
     300_000,
   );
-  const request = buildGitlabRequest(validated);
-  const uid = 1000;
-  const workspaceDir =
-    (process.env.CLI_RUNTIME_WORKSPACE_DIR ?? '').trim() || path.join(os.tmpdir(), 'cli-runtime');
-  fs.mkdirSync(workspaceDir, { recursive: true });
-  const staging = fs.mkdtempSync(path.join(workspaceDir, 'glab-'));
+  let outcome: GitlabHttpResult;
   try {
-    if (!fs.existsSync(sandboxScript)) return refuse('CLI sandbox is unavailable');
-    const stageDirs = ['checkout', 'reports', 'tmp', 'home'].map((name) =>
-      path.join(staging, name),
+    outcome = await sendGitlabRequest(
+      buildGitlabRequest(validated),
+      state.host,
+      gitlab.credential,
+      {
+        timeoutMs,
+        maxOutputBytes,
+        signal,
+        fetchImpl: gitlab.fetchImpl,
+      },
     );
-    for (const dir of [staging, ...stageDirs]) {
-      fs.mkdirSync(dir, { recursive: true });
-      if (process.getuid?.() === 0) fs.chownSync(dir, uid, 1000);
-    }
-    // Runtime-owned request body: written here, read by glab via --input.
-    let inputPath: string | null = null;
-    if (request.body !== null) {
-      const bodyFile = path.join(staging, 'tmp', 'request-body.json');
-      fs.writeFileSync(bodyFile, JSON.stringify(request.body), { mode: 0o644 });
-      if (process.getuid?.() === 0) fs.chownSync(bodyFile, uid, 1000);
-      inputPath = '/tmp/request-body.json';
-    }
-    writeProviderEnvFile(staging, state.host, gitlab.credential);
-    const outcome = await runCliCommand({
-      staging,
-      sandboxScript,
-      mappedCwd: '/tmp',
-      binary: state.binaryPath ?? PACKAGED_GLAB,
-      uid,
-      argv: gitlabArgv(request, state.host, inputPath),
-      timeoutMs,
-      maxOutputBytes,
-      signal,
-      retain: request.responseKind === 'text' ? request.retain : null,
-    });
-    if (outcome.textMeta !== undefined) {
-      return {
-        status: outcome.status,
-        exitCode: outcome.exitCode,
-        output: redactTraceOutput(outcome.output),
-        stderr: redactCliOutput(outcome.stderr),
-        truncated: outcome.truncated,
-        textMeta: outcome.textMeta,
-      };
-    }
-    // A repository file arrives base64-encoded: decode it before redaction,
-    // so the redaction sees the text that reaches the model.
-    const output =
-      validated.kind === 'get_repository_file' &&
-      outcome.status === 'completed' &&
-      outcome.exitCode === 0
-        ? decodeRepositoryFileOutput(outcome.output, outcome.truncated ? maxOutputBytes : undefined)
-        : outcome.output;
-    return {
-      status: outcome.status,
-      exitCode: outcome.exitCode,
-      output: redactCliOutput(output),
-      stderr: redactCliOutput(outcome.stderr),
-      truncated: outcome.truncated,
-    };
-  } finally {
-    fs.rmSync(staging, { recursive: true, force: true });
+  } catch {
+    return refuse('GitLab request refused: outside the pinned API surface');
   }
-}
-
-/** Upper bound for reading a CLI's remaining output after its process group stopped. */
-export const CLI_OUTPUT_DRAIN_MS = 2000;
-
-/**
- * Resolves true once the child's stdout and stderr have closed, i.e. every
- * byte they carried was delivered to the `data` listeners; false when
- * `graceMs` passes first (a descendant outside the stopped process group
- * still holds a pipe). The child's `exit` event can precede the last pipe
- * data: reading the buffers at `exit` returned a completed typed read with an
- * empty payload under load (seen under load).
- */
-export async function stdioDrained(child: ChildProcess, graceMs: number): Promise<boolean> {
-  const closed = [child.stdout, child.stderr].map((stream) =>
-    stream === null || stream.closed
-      ? Promise.resolve()
-      : new Promise<void>((resolve) => stream.once('close', () => resolve())),
-  );
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const expired = new Promise<boolean>((resolve) => {
-    timer = setTimeout(() => resolve(false), graceMs);
-  });
-  try {
-    return await Promise.race([Promise.all(closed).then(() => true), expired]);
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-/** Supervised sandbox CLI execution (cwd-mapped, env-file credential delivery). */
-async function runCliCommand(args: {
-  staging: string;
-  sandboxScript: string;
-  mappedCwd: string;
-  binary: string;
-  uid: number;
-  argv: string[];
-  timeoutMs: number;
-  maxOutputBytes: number;
-  signal?: AbortSignal;
-  /** Text body: stream stdout through a retainer instead of the byte cap. */
-  retain?: GitlabTextRetain | null;
-}): Promise<{
-  status: 'completed' | 'failed' | 'timed_out';
-  exitCode: number | null;
-  output: string;
-  stderr: string;
-  truncated: boolean;
-  textMeta?: GitlabTextMeta;
-}> {
-  if (args.signal?.aborted)
-    return { status: 'timed_out', exitCode: null, output: '', stderr: '', truncated: false };
-  const blocks = String(Math.max(1, Math.floor(2_000_000 / 1024)));
-  // Non-secret corporate trust configuration and the egress proxy triple
-  // pass through to the launcher (which forwards them into the namespace);
-  // TLS verification is never disabled.
-  const spawnEnv: NodeJS.ProcessEnv = {
-    PATH: '/usr/local/bin:/usr/bin:/bin',
-    CLI_SANDBOX_UID: String(args.uid),
-    ...sandboxProxyEnv(),
-  };
-  if (process.env.SSL_CERT_FILE) spawnEnv.SSL_CERT_FILE = process.env.SSL_CERT_FILE;
-  if (process.env.SSL_CERT_DIR) spawnEnv.SSL_CERT_DIR = process.env.SSL_CERT_DIR;
-  const child = spawn(
-    args.sandboxScript,
-    [args.staging, blocks, `--cwd=${args.mappedCwd}`, args.binary, ...args.argv],
-    {
-      cwd: args.staging,
-      env: spawnEnv,
-      detached: true,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    },
-  );
-  child.stdin?.on('error', () => {});
-  child.stdin?.end();
-  const exited = new Promise<number | null>((resolve) => {
-    child.once('exit', resolve);
-    child.once('error', () => resolve(null));
-  });
-  // stdout (the JSON payload) and stderr (CLI chatter and error text) are
-  // captured separately so warnings can never corrupt the parse.
-  const stdoutCap = args.maxOutputBytes;
-  const stderrCap = Math.min(args.maxOutputBytes, 16_384);
-  let stdout = Buffer.alloc(0);
-  let stderr = Buffer.alloc(0);
-  let truncated = false;
-  const retainer = args.retain ? createTextRetainer(args.retain) : null;
-  let cut = false;
-  child.stdout?.on('data', (chunk: Buffer) => {
-    if (retainer !== null) {
-      if (retainer.push(chunk) === 'cut' && !cut) {
-        // Hard cut: stop the child; what was read is the (truncated) result.
-        cut = true;
-        killGroup('SIGTERM');
-        escalation ??= setTimeout(() => killGroup('SIGKILL'), 200);
-      }
-      return;
-    }
-    const remaining = Math.max(0, stdoutCap - stdout.length);
-    if (chunk.length > remaining) truncated = true;
-    stdout = Buffer.concat([stdout, chunk.subarray(0, remaining)]);
-  });
-  child.stderr?.on('data', (chunk: Buffer) => {
-    const remaining = Math.max(0, stderrCap - stderr.length);
-    stderr = Buffer.concat([stderr, chunk.subarray(0, remaining)]);
-  });
-  let interrupted = false;
-  let escalation: ReturnType<typeof setTimeout> | undefined;
-  const killGroup = (signal: NodeJS.Signals): void => {
-    if (child.pid === undefined) return;
-    try {
-      process.kill(-child.pid, signal);
-    } catch {
-      /* gone */
-    }
-  };
-  const abort = (): void => {
-    interrupted = true;
-    killGroup('SIGTERM');
-    escalation ??= setTimeout(() => killGroup('SIGKILL'), 200);
-  };
-  args.signal?.addEventListener('abort', abort, { once: true });
-  const timeout = setTimeout(abort, args.timeoutMs);
-  if (args.signal?.aborted) abort();
-  try {
-    const exitCode = await exited;
-    try {
-      await stopProcessGroup(child.pid);
-    } catch {
-      /* already gone */
-    }
-    // The payload is complete only once the pipes closed, not at `exit`.
-    const drained = await stdioDrained(child, CLI_OUTPUT_DRAIN_MS);
-    const incomplete = !drained && !cut;
-    const stderrText =
-      stderr.toString('utf8') +
-      (incomplete
-        ? '\n[CLI output incomplete: output pipes did not close before the drain deadline]'
-        : '');
-    if (retainer !== null) {
-      const { text, meta } = retainer.finish();
-      // A hard cut is a deliberate stop of a successful read, not a failure.
-      if (incomplete) meta.cut = true;
-      const status = interrupted
-        ? 'timed_out'
-        : incomplete
-          ? 'failed'
-          : cut || exitCode === 0
-            ? 'completed'
-            : 'failed';
-      return {
-        status,
-        exitCode: cut && !interrupted ? 0 : exitCode,
-        output: text,
-        stderr: stderrText,
-        truncated: meta.cut || meta.returnedBytes < meta.totalBytes,
-        textMeta: meta,
-      };
-    }
-    const status = interrupted
-      ? 'timed_out'
-      : incomplete
-        ? 'failed'
-        : exitCode === 0
-          ? 'completed'
-          : 'failed';
-    truncated ||= incomplete;
-    return {
-      status,
-      exitCode,
-      output: stdout.toString('utf8') + (truncated ? '\n[output truncated]' : ''),
-      stderr: stderrText,
-      truncated,
-    };
-  } finally {
-    clearTimeout(timeout);
-    if (escalation !== undefined) clearTimeout(escalation);
-    args.signal?.removeEventListener('abort', abort);
-    try {
-      await stopProcessGroup(child.pid);
-    } catch {
-      /* already gone */
-    }
-    child.stdout?.destroy();
-    child.stderr?.destroy();
-  }
+  if (outcome.textMeta !== undefined)
+    return { ...outcome, output: redactTraceOutput(outcome.output) };
+  // A repository file arrives base64-encoded: decode it before redaction,
+  // so the redaction sees the text that reaches the model.
+  const output =
+    validated.kind === 'get_repository_file' && outcome.status === 'completed'
+      ? decodeRepositoryFileOutput(outcome.output, outcome.truncated ? maxOutputBytes : undefined)
+      : outcome.output;
+  return { ...outcome, output: redactRuntimeOutput(output) };
 }
 
 /** Readiness metadata (sanitized: states, versions, digests, never credentials). */
@@ -1683,7 +1241,6 @@ export async function handleSlack(
 export async function startCliRuntimeServer(): Promise<void> {
   assertCliRuntimeEnvClean();
   const admitted = admittedHostsFromEnv();
-  const glab = inspectGlabBinary(glabBinaryPath());
   instanceSync = new ToolInstanceSync({
     adminUrl: (process.env.ADMIN_URL ?? '').trim(),
     adminToken: (process.env.ADMIN_INTERNAL_TOKEN ?? '').trim(),
@@ -1699,13 +1256,12 @@ export async function startCliRuntimeServer(): Promise<void> {
   const sync = instanceSync;
   registry = new CliInstanceRegistry({
     admitted,
-    glab,
     secret: (instanceId) => sync.secret(instanceId),
     report: (statuses) => sync.report(statuses),
     log: (line) => console.log(line),
   });
-  // Provider calls (fetch) and the sandboxed glab leave through the egress
-  // proxy; the admin service stays direct on the internal adminapi network.
+  // Provider calls (fetch) leave through the egress proxy; the admin service
+  // stays direct on the internal adminapi network.
   const proxyUrl = egressProxyUrlFromEnv();
   configureOutbound(proxyUrl);
   console.log(`cli-runtime outbound: ${proxyUrl !== undefined ? 'egress proxy' : 'direct'}`);
@@ -1725,8 +1281,8 @@ export async function startCliRuntimeServer(): Promise<void> {
     try {
       const url = new URL(req.url ?? '/', 'http://cli-runtime');
       if (req.method === 'GET' && url.pathname === '/healthz') {
-        // Open liveness: packaged facts only; never a readiness claim.
-        json(res, 200, { ok: true, service: 'cli-runtime', packaged: { glab: glab.installed } });
+        // Open liveness; never a readiness claim.
+        json(res, 200, { ok: true, service: 'cli-runtime' });
         return;
       }
       const header = req.headers.authorization ?? '';
@@ -1777,7 +1333,7 @@ export async function startCliRuntimeServer(): Promise<void> {
   });
   server.listen(port, () => {
     console.log(
-      `cli runtime ready on :${port} (glab=${glab.installed ? 'packaged' : 'missing'}, admitted gitlab=${admitted.gitlab.size} atlassian=${admitted.atlassian.size} datadog=${admitted.datadog.size} cloudflare=${admitted.cloudflare.size} hosts)`,
+      `cli runtime ready on :${port} (admitted gitlab=${admitted.gitlab.size} atlassian=${admitted.atlassian.size} datadog=${admitted.datadog.size} cloudflare=${admitted.cloudflare.size} hosts)`,
     );
   });
   const shutdown = (): void => {

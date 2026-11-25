@@ -1,16 +1,15 @@
 /**
- * Invocation and result mapping for typed GitLab operations (contract v4).
+ * Requests, transport and result mapping for typed GitLab operations.
  *
- * Trusted code only: the credential-owning runtime constructs the exact glab
- * invocation from the validated operation. Model input never contributes
- * flags, hosts, methods, or endpoints beyond the validated resource/query
- * arguments, which are URL-encoded literals (never shell-interpolated or
- * passed through `--field` coercion). Request bodies are JSON objects built
- * here and handed to glab through `--input` from a runtime-owned file.
+ * Trusted code only: the credential-owning runtime builds the exact REST
+ * request from the validated operation. Model input never contributes hosts,
+ * methods, headers or endpoints beyond the validated resource/query
+ * arguments, which are URL-encoded literals. Request bodies are JSON objects
+ * built here.
  *
- * Backend: `glab api --method <M> --hostname <GITLAB_HOST>` REST requests.
- * No GraphQL, no pagination-URL following (subsequent pages rebuild from
- * validated operation/page parameters).
+ * Backend: HTTPS requests under `/api/v4` of the instance host. No GraphQL,
+ * no pagination-URL following (subsequent pages rebuild from validated
+ * operation/page parameters).
  *
  * Every endpoint answers JSON except the job trace (`get_job_trace`), which
  * is plain text. Its request carries `responseKind: 'text'` and a `retain`
@@ -359,22 +358,270 @@ export function buildGitlabRequest(validated: ValidatedGitlabArgs): GitlabReques
   }
 }
 
+// --- Transport --------------------------------------------------------------------
+
+export type GitlabFetch = (input: URL, init: RequestInit) => Promise<Response>;
+
+const GITLAB_BASE_PATH = '/api/v4/';
+/** Bytes kept of an error answer (for its message and the failure excerpt). */
+const MAX_ERROR_BODY_BYTES = 16_384;
+/** GitLab redirects reads of a renamed or transferred project to its new path. */
+const MAX_REDIRECTS = 3;
+
+/** Outcome of one GitLab request (not yet redacted; the runtime does that). */
+export interface GitlabHttpResult {
+  /** `completed`: a 2xx answer, read to its end or to its bound. */
+  status: 'completed' | 'failed' | 'timed_out';
+  /** Status of GitLab's answer; null when there was none. */
+  httpStatus: number | null;
+  /** The answer's body, bounded (the retained text for a job trace). */
+  output: string;
+  truncated: boolean;
+  /** Fixed sentence of a transport failure (never upstream text). */
+  error?: string;
+  /** Retention report of a streamed text body (`get_job_trace` only). */
+  textMeta?: GitlabTextMeta;
+}
+
 /**
- * Fixed glab argv for one request: host pinned via `--hostname`, the
- * method explicit, a JSON body only through `--input` (a runtime-owned file).
+ * The pinned URL of one request. Refuses anything URL parsing would move off
+ * the instance's `/api/v4` or normalize to another path (e.g. `..`).
  */
-export function gitlabArgv(
+export function gitlabUrl(host: string, endpoint: string): URL {
+  const url = URL.parse(`https://${host}${GITLAB_BASE_PATH}${endpoint}`);
+  if (
+    url === null ||
+    url.host !== host.toLowerCase() ||
+    url.username ||
+    url.password ||
+    url.hash ||
+    url.pathname !== `${GITLAB_BASE_PATH}${endpoint.split('?', 1)[0]}`
+  )
+    throw new Error('GitLab request outside the pinned API surface');
+  return url;
+}
+
+/** Target of a redirect that stays on the same origin's API, or null. */
+function redirectTarget(response: Response, from: URL): URL | null {
+  const location = response.headers.get('location');
+  const url = location === null ? null : URL.parse(location, from);
+  return url !== null &&
+    url.origin === from.origin &&
+    url.pathname.startsWith(GITLAB_BASE_PATH) &&
+    !url.username &&
+    !url.password &&
+    !url.hash
+    ? url
+    : null;
+}
+
+/** Feeds the body to `push` until it returns false; the rest is discarded. */
+async function readBody(response: Response, push: (chunk: Buffer) => boolean): Promise<void> {
+  if (response.body === null) return;
+  const reader = response.body.getReader();
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) return;
+      if (!push(Buffer.from(value))) {
+        await reader.cancel().catch(() => {});
+        return;
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+/** Collects at most `limit` bytes of a body. */
+function boundedCollector(limit: number): {
+  push(chunk: Buffer): boolean;
+  finish(): { output: string; truncated: boolean };
+} {
+  const chunks: Buffer[] = [];
+  let total = 0;
+  let truncated = false;
+  return {
+    push(chunk) {
+      const room = limit - total;
+      truncated = chunk.length > room;
+      chunks.push(chunk.subarray(0, room));
+      total += Math.min(chunk.length, room);
+      return !truncated;
+    },
+    finish: () => ({
+      output: Buffer.concat(chunks).toString('utf8') + (truncated ? '\n[output truncated]' : ''),
+      truncated,
+    }),
+  };
+}
+
+/**
+ * The only way a request reaches GitLab: HTTPS under `/api/v4` of the
+ * instance host, the token attached here and nowhere else, the body capped.
+ * Only a read follows a redirect, and only within that host's API. No retries.
+ */
+export async function sendGitlabRequest(
   request: GitlabRequest,
   host: string,
-  inputPath: string | null,
-): string[] {
-  const argv = ['api', '--method', request.method, '--hostname', host];
-  if (request.body !== null) {
-    if (inputPath === null) throw new Error('a GitLab write needs a request body file');
-    argv.push('--input', inputPath, '--header', 'Content-Type: application/json');
+  token: string,
+  options: {
+    timeoutMs: number;
+    maxOutputBytes: number;
+    signal?: AbortSignal;
+    fetchImpl?: GitlabFetch;
+  },
+): Promise<GitlabHttpResult> {
+  let url = gitlabUrl(host, request.endpoint);
+  const timeout = AbortSignal.timeout(options.timeoutMs);
+  const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
+  const doFetch = options.fetchImpl ?? ((input, init) => fetch(input, init));
+  const failed = (httpStatus: number | null, error: string): GitlabHttpResult => ({
+    status: signal.aborted ? 'timed_out' : 'failed',
+    httpStatus,
+    output: '',
+    truncated: false,
+    error,
+  });
+  let response: Response;
+  for (let redirects = 0; ; redirects += 1) {
+    try {
+      signal.throwIfAborted();
+      response = await doFetch(url, {
+        method: request.method,
+        redirect: 'manual',
+        signal,
+        headers: {
+          accept: request.responseKind === 'text' ? 'text/plain' : 'application/json',
+          'private-token': token,
+          ...(request.body !== null ? { 'content-type': 'application/json' } : {}),
+        },
+        ...(request.body !== null ? { body: JSON.stringify(request.body) } : {}),
+      });
+    } catch {
+      return failed(null, 'GitLab could not be reached');
+    }
+    if (![301, 302, 303, 307, 308].includes(response.status)) break;
+    const next = redirectTarget(response, url);
+    await response.body?.cancel().catch(() => {});
+    if (request.method !== 'GET' || next === null || redirects === MAX_REDIRECTS)
+      return failed(response.status, 'GitLab answered with a redirect that is not followed');
+    url = next;
   }
-  argv.push(request.endpoint);
-  return argv;
+  if (!response.ok) {
+    const body = boundedCollector(Math.min(options.maxOutputBytes, MAX_ERROR_BODY_BYTES));
+    try {
+      await readBody(response, body.push);
+    } catch {
+      // The status alone classifies the failure.
+    }
+    return { status: 'failed', httpStatus: response.status, ...body.finish() };
+  }
+  const incomplete = 'GitLab closed the connection before the response was complete';
+  if (request.retain !== null) {
+    const retainer = createTextRetainer(request.retain);
+    let complete = true;
+    try {
+      await readBody(response, (chunk) => retainer.push(chunk) === 'continue');
+    } catch {
+      complete = false;
+    }
+    const { text, meta } = retainer.finish();
+    if (!complete) meta.cut = true;
+    return {
+      ...(complete
+        ? { status: 'completed', httpStatus: response.status }
+        : failed(response.status, incomplete)),
+      output: text,
+      truncated: meta.cut || meta.returnedBytes < meta.totalBytes,
+      textMeta: meta,
+    };
+  }
+  const body = boundedCollector(options.maxOutputBytes);
+  try {
+    await readBody(response, body.push);
+  } catch {
+    return {
+      ...failed(response.status, incomplete),
+      output: body.finish().output,
+      truncated: true,
+    };
+  }
+  return { status: 'completed', httpStatus: response.status, ...body.finish() };
+}
+
+/**
+ * Streaming retention of a text body: counts every byte, keeps only the
+ * first (`head`) or last (`tail`) `retain.bytes`, and reports `cut` once
+ * the count passes `hardCut` (the caller then stops reading). When the
+ * body was larger than the retained part, the partial line at the cut edge
+ * is dropped, so no half token or broken UTF-8 sequence reaches redaction.
+ */
+export function createTextRetainer(
+  retain: GitlabTextRetain,
+  hardCut: number = MAX_TRACE_RAW_BYTES,
+): {
+  push(chunk: Buffer): 'continue' | 'cut';
+  finish(): { text: string; meta: GitlabTextMeta };
+} {
+  const limit = Math.max(1, Math.floor(retain.bytes));
+  let total = 0;
+  let cut = false;
+  let kept = Buffer.alloc(0);
+  return {
+    push(chunk) {
+      if (cut) return 'cut';
+      total += chunk.length;
+      if (retain.part === 'head') {
+        if (kept.length < limit) {
+          kept = Buffer.concat([kept, chunk.subarray(0, limit - kept.length)]);
+        }
+      } else {
+        kept = Buffer.concat([kept, chunk]);
+        // Compact lazily so a stream of small chunks stays linear.
+        if (kept.length > 2 * limit) kept = Buffer.from(kept.subarray(kept.length - limit - 1));
+      }
+      if (total > hardCut) cut = true;
+      return cut ? 'cut' : 'continue';
+    },
+    finish() {
+      let out = retain.part === 'tail' ? kept.subarray(Math.max(0, kept.length - limit)) : kept;
+      if (out.length < total) {
+        if (retain.part === 'tail') {
+          // The byte before the window tells whether it starts at a line.
+          const before = kept.length > out.length ? kept[kept.length - out.length - 1] : undefined;
+          const newline = before === 0x0a ? -1 : out.indexOf(0x0a);
+          if (before !== 0x0a)
+            out = newline >= 0 ? out.subarray(newline + 1) : out.subarray(utf8Start(out));
+        } else {
+          const newline = out.lastIndexOf(0x0a);
+          out = newline >= 0 ? out.subarray(0, newline + 1) : out.subarray(0, utf8End(out));
+        }
+      }
+      return {
+        text: out.toString('utf8'),
+        meta: { totalBytes: total, returnedBytes: out.length, part: retain.part, cut },
+      };
+    },
+  };
+}
+
+/** First index that does not continue a UTF-8 sequence. */
+function utf8Start(buf: Buffer): number {
+  let i = 0;
+  while (i < buf.length && i < 4 && (buf[i]! & 0xc0) === 0x80) i += 1;
+  return i;
+}
+
+/** End index that excludes a trailing incomplete UTF-8 sequence. */
+function utf8End(buf: Buffer): number {
+  for (let back = 1; back <= Math.min(4, buf.length); back += 1) {
+    const byte = buf[buf.length - back]!;
+    if ((byte & 0xc0) === 0x80) continue;
+    const width = byte >= 0xf0 ? 4 : byte >= 0xe0 ? 3 : byte >= 0xc0 ? 2 : 1;
+    return width > back ? buf.length - back : buf.length;
+  }
+  return buf.length;
 }
 
 // --- Result normalization ----------------------------------------------------
@@ -404,23 +651,23 @@ export interface GitlabNormalizedResult {
   /** Short sanitized error for model delivery (no credentials). */
   error?: string;
   /**
-   * Failed CLI exit only: a bounded, credential-scrubbed excerpt of
-   * glab's stderr and stdout, for the action evidence and the runner log.
+   * Failed request only: a bounded, credential-scrubbed excerpt of GitLab's
+   * answer, for the action evidence and the runner log.
    * Never part of the model text, Slack or the feedback trace.
    */
   detail?: string;
 }
 
-/** Bound of a failed call's glab excerpt. */
+/** Bound of a failed request's excerpt. */
 export const MAX_FAILURE_DETAIL = 500;
 
 /**
- * The excerpt of a failed glab call: stderr then stdout, whitespace
- * collapsed, scrubbed of credential shapes (the tool runtime has already
- * removed its own secrets) and bounded.
+ * The excerpt of a failed request: the reason then GitLab's answer,
+ * whitespace collapsed, scrubbed of credential shapes (the tool runtime has
+ * already removed its own secrets) and bounded.
  */
-export function failureDetail(stderr: string, stdout: string): string | undefined {
-  const text = [stderr, stdout]
+export function failureDetail(reason: string, output: string): string | undefined {
+  const text = [reason, output]
     .map((part) =>
       part
         .replace(/([a-z][a-z0-9+.-]*:\/\/)[^/@\s]*@/gi, '$1[redacted]@')
@@ -463,17 +710,18 @@ function truncateCollection(items: unknown[]): { items: unknown[]; truncated: bo
 }
 
 /**
- * Parses glab stdout separately from stderr. A successful exit with malformed
- * or cut-off JSON is a failed result (invalid_response), never an empty
- * success. Normalizes to a stable envelope with explicit truncation markers.
+ * Normalizes one answer to a stable envelope with explicit truncation
+ * markers. A 2xx answer with malformed or cut-off JSON is a failed result
+ * (invalid_response), never an empty success.
  */
 export function normalizeGitlabOutput(args: {
   operation: GitlabTransportOperationName;
   project: string;
-  exitCode: number | null;
   status: 'completed' | 'failed' | 'timed_out';
-  stdout: string;
-  stderr: string;
+  httpStatus: number | null;
+  output: string;
+  /** Transport failure reported by the tool runtime. */
+  error?: string;
   page?: number;
   per_page?: number;
   scope?: string;
@@ -496,29 +744,27 @@ export function normalizeGitlabOutput(args: {
       error: 'GitLab request timed out',
     };
   }
-  // A zero process exit does not imply a complete runtime result (e.g.
-  // output-pipe drain expiration). Never normalize that failure as data.
-  if (args.status === 'failed' && args.exitCode === 0) {
+  if (args.status === 'failed') {
+    // A 2xx status does not imply a complete answer (e.g. the connection
+    // dropped mid-body). Never normalize that failure as data.
+    if (args.httpStatus !== null && args.httpStatus >= 200 && args.httpStatus < 300)
+      return {
+        ...base,
+        ok: false,
+        data: null,
+        errorCategory: 'invalid_response',
+        error: 'GitLab tool runtime failed to complete the response',
+        ...(args.error === undefined ? {} : { detail: args.error.slice(0, 300) }),
+      };
+    const detail = failureDetail(
+      args.error ?? (args.httpStatus === null ? '' : `HTTP ${args.httpStatus}`),
+      args.output,
+    );
     return {
       ...base,
       ok: false,
       data: null,
-      errorCategory: 'invalid_response',
-      error: 'GitLab tool runtime failed to complete the response',
-      ...(args.stderr.trim() ? { detail: args.stderr.trim().slice(0, 300) } : {}),
-    };
-  }
-  const stderrNote = args.stderr.trim();
-  if (stderrNote.length > 0 && args.exitCode === 0) {
-    base.warnings.push(`cli stderr: ${stderrNote.slice(0, 300)}`);
-  }
-  if (args.exitCode !== 0) {
-    const detail = failureDetail(args.stderr, args.stdout);
-    return {
-      ...base,
-      ok: false,
-      data: null,
-      ...classifyCliFailure(`${args.stdout}\n${args.stderr}`, args.exitCode),
+      ...classifyHttpFailure(args.httpStatus, args.output),
       ...(detail === undefined ? {} : { detail }),
     };
   }
@@ -532,7 +778,7 @@ export function normalizeGitlabOutput(args: {
         error: 'the tool runtime did not report the trace retention',
       };
     }
-    const trace = normalizeTrace(args.stdout, args.textMeta);
+    const trace = normalizeTrace(args.output, args.textMeta);
     return {
       ...base,
       ok: true,
@@ -543,7 +789,7 @@ export function normalizeGitlabOutput(args: {
   }
   let parsed: unknown;
   try {
-    parsed = JSON.parse(args.stdout);
+    parsed = JSON.parse(args.output);
   } catch {
     return {
       ...base,
@@ -627,10 +873,10 @@ export function cleanTraceText(raw: string): string {
 }
 
 function normalizeTrace(
-  stdout: string,
+  output: string,
   meta: GitlabTextMeta,
 ): { data: GitlabTraceData; warnings: string[] } {
-  let text = cleanTraceText(stdout);
+  let text = cleanTraceText(output);
   const warnings: string[] = [];
   // Cleanup only shortens; the serialized envelope must still fit the model
   // bound (JSON escapes can grow a line), so trim from the far end.
@@ -667,59 +913,47 @@ function normalizeTrace(
   };
 }
 
-function classifyCliFailure(
+function classifyHttpFailure(
+  httpStatus: number | null,
   output: string,
-  exitCode: number | null,
 ): { errorCategory: GitlabErrorCategory; error: string } {
-  const text = output.slice(0, 4000).toLowerCase();
-  if (/\b401\b|unauthorized|invalid[_ ]?token|authentication/.test(text)) {
+  if (httpStatus === null)
+    return { errorCategory: 'upstream', error: 'GitLab could not be reached' };
+  if (httpStatus === 401)
     return { errorCategory: 'authentication', error: 'GitLab authentication failed' };
-  }
-  if (/\b403\b|forbidden|access denied|insufficient/.test(text)) {
+  if (httpStatus === 403)
     return {
       errorCategory: 'forbidden',
       error: 'GitLab refused the request (forbidden for this token)',
     };
-  }
-  if (/\b404\b|not found/.test(text)) {
+  if (httpStatus === 404)
     return {
       errorCategory: 'not_found',
       error: 'GitLab resource was not found (or is not visible to this token)',
     };
-  }
-  if (/\b409\b|conflict|already exists/.test(text)) {
+  const rejected = httpStatus === 400 || httpStatus === 422;
+  if (httpStatus === 409 || (rejected && /already exists/i.test(output)))
     return {
       errorCategory: 'conflict',
       error: 'GitLab reported a conflict (resource already exists)',
     };
-  }
-  if (/\b(400|422)\b|bad request|unprocessable/.test(text)) {
+  if (rejected) {
     const detail = /"message"\s*:\s*("(?:[^"\\]|\\.)*"|\{[^}]*\}|\[[^\]]*\])/.exec(output);
     return {
       errorCategory: 'invalid_input',
       error: `GitLab rejected the request${detail ? `: ${detail[1]!.slice(0, 200)}` : ''}`,
     };
   }
-  if (/\b429\b|rate.?limit|too many requests/.test(text)) {
+  if (httpStatus === 429)
     return { errorCategory: 'rate_limit', error: 'GitLab rate limit reached; retry later' };
-  }
-  if (
-    /\b501\b|not implemented|unsupported|search.*not.*available|scope.*not.*supported/.test(text)
-  ) {
+  if (httpStatus === 501)
     return {
       errorCategory: 'unsupported',
       error: 'GitLab does not support this operation/scope on this instance',
     };
-  }
-  if (/\b5\d\d\b|internal error|bad gateway|service unavailable|gateway timeout/.test(text)) {
-    return {
-      errorCategory: 'upstream',
-      error: `GitLab upstream error (exit ${exitCode ?? 'unknown'})`,
-    };
-  }
   return {
     errorCategory: 'upstream',
-    error: `GitLab request failed (exit ${exitCode ?? 'unknown'})`,
+    error: `GitLab ${httpStatus >= 500 ? 'upstream error' : 'request failed'} (HTTP ${httpStatus})`,
   };
 }
 
@@ -1032,7 +1266,7 @@ function decodeRepositoryFileContent(encoding: unknown, content: unknown): Recor
  * (`captureBound`, when the capture was cut). Output that is not a JSON
  * object passes unchanged; {@link normalizeGitlabOutput} reports it.
  */
-export function decodeRepositoryFileOutput(stdout: string, captureBound?: number): string {
+export function decodeRepositoryFileOutput(output: string, captureBound?: number): string {
   if (captureBound !== undefined) {
     return JSON.stringify({
       content: null,
@@ -1042,11 +1276,11 @@ export function decodeRepositoryFileOutput(stdout: string, captureBound?: number
   }
   let parsed: unknown;
   try {
-    parsed = JSON.parse(stdout);
+    parsed = JSON.parse(output);
   } catch {
-    return stdout;
+    return output;
   }
-  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return stdout;
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return output;
   const { content, encoding, ...rest } = parsed as Record<string, unknown>;
   return JSON.stringify({ ...rest, ...decodeRepositoryFileContent(encoding, content) });
 }

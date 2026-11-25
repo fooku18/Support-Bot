@@ -213,8 +213,6 @@ async function answer(
         commit_id: '5f1e2d3c4b5a69788796a5b4c3d2e1f0a9b8c7d6',
         last_commit_id: '5f1e2d3c4b5a69788796a5b4c3d2e1f0a9b8c7d6',
       });
-    // The packaged glab reports a usage event after each command.
-    if (method === 'POST' && path === '/api/v4/usage_data/track_event') return send(res, 200, {});
     return send(res, 404, { message: '404 Not Found' });
   }
   if (host === 'api.atlassian.com' && method === 'GET') {

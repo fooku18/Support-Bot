@@ -6,9 +6,10 @@ GitLab assignment. Plain answers and other read tools still work without one.
 
 ## What the agent can do
 
-The tool runtime runs typed operations through the pinned `glab` CLI against
-the GitLab REST API. The model never supplies a URL, host, endpoint or
-credential.
+The tool runtime sends typed operations to the GitLab REST API over HTTPS. The
+model never supplies a URL, host, endpoint or credential. A read follows a
+redirect only within the instance host's API (GitLab redirects reads of a
+renamed project); a write follows none.
 
 Answers, Code Mode scripts and the coding workspace get the same bounded
 results: selected fields, at most 100 items, long texts cut with a marker,
@@ -58,6 +59,10 @@ see and dies with the account.
    - `api`: the write operations and merge request creation. `read_api` is
      not enough.
    - `write_repository`: Git push over HTTPS for publication.
+
+   An answer-only deployment (no coding workspace) offers read operations
+   only: `read_api` and the role Reporter are enough.
+
 5. Create the token and copy it immediately; GitLab shows it once.
 
 Never use a CI job token. The runtime refuses `GITLAB_HOST` and
@@ -186,6 +191,6 @@ checks the published files at the exact commit and a follow-up on the same
 merge request; [`gitlab-discovery.json`](../tests/live/scenarios/gitlab-discovery.json)
 covers the typed reads and a long job trace. Without a model, the T3
 [`tools` suite](testing.md#native-integration-suites-t3) runs a read through
-the packaged `glab`, the CLI runtime and the egress proxy against a synthetic
+the CLI runtime and the egress proxy against a synthetic
 GitLab host. Set the test project in `.env.e2e` (see
 [the GitLab test project](live-test-setup.md#11-the-gitlab-test-project)).

@@ -9,7 +9,7 @@ import {
 } from '../../integrations/tools/tool-runtime-readiness.js';
 import { gitlabViaRuntime } from '../../integrations/tools/runtime-client.js';
 import { operationScopeLabel } from '../../integrations/gitlab/gitlab-operations.js';
-import { normalizeGitlabOutput } from '../../integrations/gitlab/gitlab-cli-adapter.js';
+import { normalizeGitlabOutput } from '../../integrations/gitlab/gitlab-rest-adapter.js';
 import { createStageLogger } from '../../infrastructure/logger.js';
 
 /** Trusted deployment binding for the reviewed native coding tools. The Git
@@ -126,10 +126,10 @@ export function nativeCoding(options: {
           return normalizeGitlabOutput({
             operation: operation.kind,
             project: operationScopeLabel(operation),
-            exitCode: response.exitCode,
             status: response.status,
-            stdout: redact(response.output),
-            stderr: redact(response.stderr ?? ''),
+            httpStatus: response.httpStatus,
+            output: redact(response.output),
+            error: response.error,
             ...('page' in operation ? { page: operation.page } : {}),
             ...('per_page' in operation ? { per_page: operation.per_page } : {}),
             ...(operation.kind === 'search' ? { scope: operation.scope } : {}),

@@ -1120,8 +1120,7 @@ async function toolsSuite() {
     ],
   });
 
-  // The CLI runtime as Compose runs it, plus the run's CA as trusted roots:
-  // NODE_EXTRA_CA_CERTS for its own reads, SSL_CERT_FILE for the packaged glab.
+  // The CLI runtime as Compose runs it, plus the run's CA as a trusted root.
   const runtime = `${prefix}-cli-runtime`;
   const caInImage = '/etc/ssl/certs/support-agent-tools-suite-ca.pem';
   toolsContainer(runtime, runtimeImage, {
@@ -1139,16 +1138,11 @@ async function toolsSuite() {
       DATADOG_SITES: 'datadoghq.eu',
       CLOUDFLARE_HOSTS: 'api.cloudflare.com',
       NODE_EXTRA_CA_CERTS: caInImage,
-      SSL_CERT_FILE: caInImage,
     },
     opts: [
       '--init',
-      '--cap-add',
-      'SYS_ADMIN',
-      '--security-opt',
-      'seccomp=unconfined',
-      '--security-opt',
-      'apparmor=unconfined',
+      '--cap-drop',
+      'ALL',
       '--tmpfs',
       '/tmp:rw,nosuid,nodev,size=64m',
       '--memory',

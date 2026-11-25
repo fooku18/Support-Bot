@@ -25,7 +25,7 @@ import {
   parseProjectRef,
   type ValidatedGitlabArgs,
 } from '../../integrations/gitlab/gitlab-operations.js';
-import type { GitlabNormalizedResult } from '../../integrations/gitlab/gitlab-cli-adapter.js';
+import type { GitlabNormalizedResult } from '../../integrations/gitlab/gitlab-rest-adapter.js';
 import {
   checkoutSlug,
   identityFromProject,
