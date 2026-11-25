@@ -25,7 +25,8 @@ import { assertCodeModeRuntime } from '../mastra/tools/code-mode.js';
 import { loadModelProviders } from '../integrations/providers/access.js';
 import { CostLedger } from '../integrations/providers/ledger.js';
 import { createStageLogger } from '../infrastructure/logger.js';
-import { configureOutbound } from '../infrastructure/outbound.js';
+import { configureOutbound, modelFetch } from '../infrastructure/outbound.js';
+import { webReaderFromEnv } from '../integrations/web/gemini-reader.js';
 
 import { RuntimeConfigurationError } from '../infrastructure/configuration-error.js';
 import { postgresTransport } from '../infrastructure/storage/postgres-connection.js';
@@ -84,6 +85,7 @@ export async function startNativeAnswerProcess(
   const adminToken = required(env, 'ADMIN_INTERNAL_TOKEN');
   const adapterUrl = serviceUrl(required(env, 'NATIVE_ADAPTER_URL'));
   const providers = loadModelProviders(env);
+  const webReader = webReaderFromEnv(env, modelFetch);
   const instance = required(env, 'SUPPORT_AGENT_INSTANCE');
   const admission = { global: 8, perThread: 1 };
   const host = required(env, 'NATIVE_PG_HOST');
@@ -247,14 +249,16 @@ export async function startNativeAnswerProcess(
           configuration,
           cli,
           messages,
-          ...(env.WEB_RUNTIME_URL || env.WEB_RUNTIME_TOKEN
-            ? {
-                web: {
-                  url: serviceUrl(required(env, 'WEB_RUNTIME_URL')),
-                  token: required(env, 'WEB_RUNTIME_TOKEN'),
-                },
-              }
-            : {}),
+          ...(webReader
+            ? { web: { reader: webReader } }
+            : env.WEB_RUNTIME_URL || env.WEB_RUNTIME_TOKEN
+              ? {
+                  web: {
+                    url: serviceUrl(required(env, 'WEB_RUNTIME_URL')),
+                    token: required(env, 'WEB_RUNTIME_TOKEN'),
+                  },
+                }
+              : {}),
         }),
         authority: async (identity) => {
           await adapter('/native-authority/check', identity);

@@ -618,9 +618,10 @@ export function createServiceToolDefinitions(
     definitions.push(
       tool(
         'web_fetch',
-        'Fetch a public web page (bounded result; internal/private addresses are refused). If the call is refused, tell the user and stop; do not retry.',
+        'Read one public web page to answer one specific question (bounded result; internal/private addresses are refused). Never put private data into the URL or the question. NOT_ON_PAGE means the page does not answer it. If the call is refused or the page cannot be retrieved, tell the user and stop; do not retry.',
         {
           url: z.string().describe('Absolute http(s) URL'),
+          question: z.string().describe('What to find out from the page (3 to 500 characters)'),
         },
         async (args) => {
           const result = await broker.webFetch(args);

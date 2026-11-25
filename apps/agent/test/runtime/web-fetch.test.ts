@@ -12,6 +12,7 @@ import { runNativeSegment } from '../../src/mastra/runtime/segment.js';
 import { nativeInstructions } from '../../src/application/instructions.js';
 import { fixture, send, text } from './provider-search-fixture.js';
 import type { IntakeRequest } from '../../src/contracts/dto.js';
+import type { WebReader } from '../../src/integrations/web/gemini-reader.js';
 const require = createRequire(new URL('../../package.json', import.meta.url));
 const { InMemoryStore } = require('@mastra/core/storage') as {
   InMemoryStore: new () => Parameters<typeof createNativeRuntime>[0]['storage'];
@@ -21,7 +22,7 @@ afterEach(async () => {
   for (const close of cleanup.splice(0).reverse()) await close();
 });
 const identity = { teamId: 'TTEAM', channelId: 'CCHAN', userId: 'UTEST' } as IntakeRequest;
-async function setup(assigned = true, configured = true) {
+async function setup(assigned = true, configured = true, reader?: WebReader) {
   const config = deriveCoordinatorConfig(
     compileDocument(1, {
       installations: [
@@ -93,7 +94,11 @@ async function setup(assigned = true, configured = true) {
   const controller = new AbortController();
   const binding = await nativeReadServices({
     configuration: async () => config,
-    ...(configured ? { web: { url, token: 'synthetic-web-transport' } } : {}),
+    ...(reader
+      ? { web: { reader } }
+      : configured
+        ? { web: { url, token: 'synthetic-web-transport' } }
+        : {}),
   })(identity, controller.signal);
   let allowed = true;
   const tools = createReadServiceTools({
@@ -103,9 +108,9 @@ async function setup(assigned = true, configured = true) {
       if (!allowed) throw new Error('fetch revoked');
     },
   });
-  const execute = async (target: string) =>
+  const execute = async (target: string, question = 'What does the page say?') =>
     tools.web_fetch!.execute!(
-      { url: target },
+      { url: target, question },
       {} as Parameters<NonNullable<NonNullable<typeof tools.web_fetch>['execute']>>[1],
     );
   return {
@@ -140,7 +145,10 @@ it('uses actual durable discovery and the isolated fetch transport, with content
           type: 'tool_use',
           id: `fetch-${++serial}`,
           name,
-          input: name === 'web_fetch' ? { url: 'https://example.com/' } : { query: 'web_fetch' },
+          input:
+            name === 'web_fetch'
+              ? { url: 'https://example.com/', question: 'What does the page say?' }
+              : { query: 'web_fetch' },
         },
       ],
       'tool_use',
@@ -226,4 +234,43 @@ it('checks current authority and cancellation before the isolated request', asyn
   c.controller.abort();
   await expect(c.execute('https://example.com/')).rejects.toThrow('canceled');
   expect(c.requests).toEqual([]);
+});
+
+it('reads through the configured reader instead, with the same authority checks', async () => {
+  const f = await setup(true, true, {
+    baseUrl: 'https://models.example.test/v1beta',
+    model: 'gemini-test',
+    apiKey: 'synthetic-reader-key',
+    fetchImpl: (async () =>
+      new Response(
+        JSON.stringify({
+          candidates: [
+            {
+              finishReason: 'STOP',
+              content: { parts: [{ text: 'READER_FACT' }] },
+              urlContextMetadata: {
+                urlMetadata: [
+                  {
+                    retrievedUrl: 'https://example.com/',
+                    urlRetrievalStatus: 'URL_RETRIEVAL_STATUS_SUCCESS',
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+      )) as unknown as typeof fetch,
+  });
+  const { result } = (await f.execute('https://example.com/')) as unknown as {
+    result: { ok: boolean; output: string };
+  };
+  expect(result.ok).toBe(true);
+  expect(result.output).toContain('READER_FACT');
+  // The isolated runtime is not used, and private targets never leave the process.
+  expect(f.requests).toEqual([]);
+  for (const target of ['http://127.0.0.1/', 'http://admin-app/', 'file:///etc/passwd'])
+    await expect(f.execute(target)).rejects.toThrow('web_fetch requires');
+  await expect(f.execute('https://example.com/', ' ')).rejects.toThrow('requires a question');
+  f.revoke();
+  await expect(f.execute('https://example.com/')).rejects.toThrow('fetch revoked');
 });

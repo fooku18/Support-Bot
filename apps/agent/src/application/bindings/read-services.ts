@@ -42,6 +42,14 @@ import {
   readSlackMessage,
   type NativeMessageClient,
 } from '../../integrations/slack/message-client.js';
+import { publicWebUrl, readWebPage, type WebReader } from '../../integrations/web/gemini-reader.js';
+
+function webQuestion(value: unknown): string {
+  const question = typeof value === 'string' ? value.trim() : '';
+  if (question.length < 3 || question.length > 500)
+    throw new Error('web_fetch requires a question of 3 to 500 characters');
+  return question;
+}
 
 /** Typed, credential-free clients over the existing approved tool runtime.
  * Mastra createTool owns invocation. No ToolBroker instance, action journal,
@@ -49,7 +57,8 @@ import {
 export function nativeReadServices(options: {
   configuration(): Promise<CoordinatorConfig>;
   cli?: { url: string; token: string };
-  web?: { url: string; token: string };
+  /** Page reads: Gemini's URL context, or the isolated web runtime. */
+  web?: { reader: WebReader } | { url: string; token: string };
   /** Linked message reads; offered with an assigned, ready Slack instance. */
   messages?: NativeMessageClient;
 }): NativeAgentOptions['services'] {
@@ -127,6 +136,15 @@ export function nativeReadServices(options: {
       services: {
         async webFetch(input) {
           if (!webFetch || !options.web) return unavailable();
+          if ('reader' in options.web) {
+            const output = await readWebPage(
+              options.web.reader,
+              publicWebUrl(input.url),
+              webQuestion(input.question),
+              signal,
+            );
+            return { ok: true, output, operationId: 'native-web-fetch' };
+          }
           const target = new URL(typeof input.url === 'string' ? input.url : '');
           if (
             !['http:', 'https:'].includes(target.protocol) ||

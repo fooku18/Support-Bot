@@ -91,6 +91,18 @@ assignment/actor checks surround each read; the transport honors cancellation
 and refuses redirects of its authenticated internal request. Without transport
 configuration or a ready assignment the tool is absent.
 
+Alternatively, `NATIVE_WEB_FETCH_MODEL`, `NATIVE_WEB_FETCH_API_KEY` (or
+`_FILE`) and optionally `NATIVE_WEB_FETCH_BASE_URL` read pages with Gemini's URL
+context tool. Google retrieves the page, so nothing in this network does, and
+no web runtime is needed. The base is the Gemini API's
+`https://generativelanguage.googleapis.com/v1beta` by default; a gateway must
+serve `POST /models/<model>:generateContent` with `x-goog-api-key`. Use a Flash
+model: the request turns thinking off. `web_fetch(url, question)` then returns
+the reader model's answer to one question, not the page. It fails unless the
+API itself reports the requested page as retrieved. The URL and the question go
+to Google; pages behind a login or in a private network cannot be read. Reader
+requests are not in the cost ledger. Configure either this or the web runtime.
+
 The pinned Mastra built-in fetch tool cannot use this transport: it owns raw
 Node HTTP requests and DNS lookup with no proxy injection. The retained exception
 is the existing typed fetch transport, not a second agent loop. Native fetch
