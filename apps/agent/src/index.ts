@@ -11,5 +11,9 @@ export {
   createNativeInputClient,
   type NativeInputClient,
 } from './integrations/slack/input-client.js';
+export {
+  createNativeMessageClient,
+  type NativeMessageClient,
+} from './integrations/slack/message-client.js';
 export { provisionNativeAgents } from './infrastructure/storage/agent-storage.js';
 export type { NativeAgentOptions, NativeAgentInput } from './application/agent-options.js';

@@ -17,6 +17,7 @@ import { sendAnswerFile } from './long-answer.js';
 import { SLACK_MARKDOWN_CHARS } from './generated/long-answer.js';
 import { assertPrivateWorkspaceChannel } from './file-upload.js';
 import { isChannelMember } from './membership.js';
+import { readLinkedMessage, readThreadRoot } from './message-reads.js';
 import { fetchRepliesPage, postEphemeral, addReaction } from './slackclient.js';
 import { buildTaskKey, parseTaskKey, type TaskIdentity } from './taskkey.js';
 import { ChannelCommandHandler, CommandClient } from './channel-commands.js';
@@ -243,6 +244,16 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
       if (req.url === '/native-authority/check') {
         await authority(body);
         result = { ok: true };
+      } else if (req.url === '/native-messages/linked' || req.url === '/native-messages/root') {
+        // The origin thread's authority first: it names the requester, whose
+        // membership the read checks for the channel it reads.
+        const identity = body.identity;
+        if (typeof identity?.messageTs !== 'string') throw new Error('message read origin refused');
+        const installation = await authority(identity);
+        result = req.url.endsWith('/linked')
+          ? await readLinkedMessage(installation, identity, body.link)
+          : { message: await readThreadRoot(installation, identity) };
+        if (resolve(identity) !== installation) throw new Error('installation replaced');
       } else if (req.url === '/native-delivery') {
         const identity = parseTaskKey(body.taskKey);
         if (

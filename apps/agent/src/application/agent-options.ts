@@ -6,6 +6,7 @@ import type { NativeCodingOptions } from '../mastra/tools/coding.js';
 import type { createReadServiceTools } from '../mastra/tools/read-services.js';
 import type { IntakeRequest } from '../contracts/dto.js';
 import type { NativeInputClient } from '../integrations/slack/input-client.js';
+import type { NativeMessageClient } from '../integrations/slack/message-client.js';
 import type { CoordinatorConfig } from './configuration/config.js';
 import type { NativeExport, NativeExportReceipt } from '../domain/delivery/native-exports.js';
 import type { AnswerFileReceipt, NativeAnswerFile } from '../domain/delivery/long-answer.js';
@@ -15,6 +16,8 @@ type ServiceBinding = Parameters<typeof createReadServiceTools>[0];
 export interface NativeAgentOptions {
   /** Credential-owning adapter closure. No model-driven fetch. */
   inputs?: NativeInputClient;
+  /** Reads the first message of a request's thread through the adapter. */
+  messages?: Pick<NativeMessageClient, 'root'>;
   /** Trusted workspace and publication binding. The binding is absent when GitLab is unavailable. */
   coding?: {
     version: string;

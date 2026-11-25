@@ -25,7 +25,7 @@ export function createReadServiceTools(options: {
     | 'slackLookupUserByEmail'
     | 'slackSearchMessages'
   > &
-    Partial<Pick<ServiceToolHandlers, 'webFetch'>>;
+    Partial<Pick<ServiceToolHandlers, 'webFetch' | 'slackReadMessage'>>;
   enabled: ReadonlySet<EffectiveToolName>;
   catalog: BrokerToolCatalogOptions;
   authorize(capability: string): Promise<void>;
@@ -40,12 +40,17 @@ export function createReadServiceTools(options: {
     'slack_get_user',
     'slack_lookup_user_by_email',
     'web_fetch',
+    ...(options.catalog.slackMessages ? ['slack_read_message'] : []),
     ...(options.catalog.slackSearch ? ['slack_search_messages'] : []),
   ]);
   // The shared catalog closes over method references; unselected workspace/write
   // handlers are never exposed or executed. No new schema facade or transport.
   const definitions = createServiceToolDefinitions(
-    { ...options.services, webFetch: options.services.webFetch ?? unavailable },
+    {
+      ...options.services,
+      webFetch: options.services.webFetch ?? unavailable,
+      slackReadMessage: options.services.slackReadMessage ?? unavailable,
+    },
     options.enabled,
     options.catalog,
   ).filter((d) => allowed.has(d.name));
@@ -70,5 +75,5 @@ export function createReadServiceTools(options: {
 }
 
 async function unavailable(): Promise<never> {
-  throw new Error('Direct page fetching is not configured');
+  throw new Error('This read is not configured');
 }
