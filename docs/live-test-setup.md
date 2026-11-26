@@ -31,7 +31,8 @@ You choose the model mode when you start the stack:
 The default is `gateway`. One instance runs both modes.
 
 - **`gateway`**: direct model connections from `.env.testing`. This is the
-  harness mode for live acceptance (T5).
+  harness mode for live acceptance (T5). To use an Anthropic-compatible
+  gateway, set `NATIVE_ANTHROPIC_BASE_URL` there.
 - **`stub`**: the fixed Messages stub replaces the configured models for
   this start (T4). Use it to qualify the
   stack cheaply. Everything else is real: the Slack test app, the settings

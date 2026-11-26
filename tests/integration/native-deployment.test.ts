@@ -152,6 +152,10 @@ describe('native deployment conversion', () => {
         expect(name.endsWith('_FILE')).toBe(false);
       }
     }
+    for (const service of ['native-answer', 'egress'])
+      expect(base.services[service].environment.NATIVE_ANTHROPIC_BASE_URL).toBe(
+        '${NATIVE_ANTHROPIC_BASE_URL:-}',
+      );
   });
 
   it('requires complete isolated fetch transport configuration and selects its private overlay', () => {
