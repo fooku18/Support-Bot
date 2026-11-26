@@ -65,31 +65,83 @@ describe('admin store startup', () => {
   });
 });
 
+const configure = async (store: AdminStore): Promise<void> => {
+  await store.saveInstallation('test', {
+    teamId: 'T0TEAM1',
+    teamName: 'Team',
+    botUserId: 'U0BOT',
+    botId: 'B0BOT',
+    botToken: 'xoxb-test',
+    scopes: '',
+  });
+  await store.updateInstallation('test', 'T0TEAM1', { status: 'whitelisted' });
+  await store.setChannel('test', {
+    teamId: 'T0TEAM1',
+    channelId: 'C0CHAN1',
+    name: 'general',
+    isPrivate: false,
+    botMember: true,
+    enabled: true,
+  });
+};
+
+describe('admin store channel settings', () => {
+  const fingerprint = async (store: AdminStore): Promise<string> =>
+    (await store.channelSettings('T0TEAM1', 'C0CHAN1')).fingerprint;
+
+  it('saves other settings while the stored model key is no longer in the catalog', async () => {
+    const store = await AdminStore.open({ path: ':memory:' }, KEY);
+    await configure(store);
+    await store.setChannelSettings(
+      'test',
+      'T0TEAM1',
+      'C0CHAN1',
+      await fingerprint(store),
+      { model: 'retired' },
+      ['retired'],
+    );
+    for (const allowed of [['opus'], null]) {
+      const result = await store.setChannelSettings(
+        'test',
+        'T0TEAM1',
+        'C0CHAN1',
+        await fingerprint(store),
+        { autoReplies: !(await store.autoReplies('T0TEAM1', 'C0CHAN1')), model: 'retired' },
+        allowed,
+      );
+      expect(result.changed).toBe(true);
+    }
+    await store.setChannelSettings(
+      'test',
+      'T0TEAM1',
+      'C0CHAN1',
+      await fingerprint(store),
+      { prompt: 'Be brief.' },
+      ['opus'],
+    );
+    expect(await store.channelSettings('T0TEAM1', 'C0CHAN1')).toMatchObject({
+      model: 'retired',
+      prompt: 'Be brief.',
+    });
+    await expect(
+      store.setChannelSettings(
+        'test',
+        'T0TEAM1',
+        'C0CHAN1',
+        await fingerprint(store),
+        { model: 'sonnet' },
+        ['opus'],
+      ),
+    ).rejects.toThrow(/unknown model sonnet/);
+    await store.close();
+  });
+});
+
 describe('admin store channel blocklist', () => {
   const dirs: string[] = [];
   afterEach(() => {
     for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
   });
-
-  const configure = async (store: AdminStore): Promise<void> => {
-    await store.saveInstallation('test', {
-      teamId: 'T0TEAM1',
-      teamName: 'Team',
-      botUserId: 'U0BOT',
-      botId: 'B0BOT',
-      botToken: 'xoxb-test',
-      scopes: '',
-    });
-    await store.updateInstallation('test', 'T0TEAM1', { status: 'whitelisted' });
-    await store.setChannel('test', {
-      teamId: 'T0TEAM1',
-      channelId: 'C0CHAN1',
-      name: 'general',
-      isPrivate: false,
-      botMember: true,
-      enabled: true,
-    });
-  };
 
   it('leaves an old channel_users table behind: its people are neither read nor bound', async () => {
     const dir = mkdtempSync(path.join(os.tmpdir(), 'admin-store-'));
