@@ -5,7 +5,7 @@
  * matched by hostname, never by resolved address; they are the sets the
  * retired host firewall pinned.
  *
- *   frontend: Slack, the operations webhook host, extra hosts (443)
+ *   frontend: Slack, the operations webhook and reply decider hosts, extra hosts (443)
  *   tools:    the frontend set plus model endpoints, GitLab hosts, api.atlassian.com (when a
  *             site is admitted), mcp.<site> per Datadog site, api.cloudflare.com
  *             (when admitted) and the executor's package registries (443)
@@ -119,6 +119,8 @@ export function policyFromEnv(get: PolicyEnv): Policy {
   const frontend = new Set<string>(SLACK_HOSTS);
   const webhook = urlHost(get('OPERATIONS_WEBHOOK_URL'), 'OPERATIONS_WEBHOOK_URL', problems);
   if (webhook !== null) frontend.add(webhook);
+  const decider = urlHost(get('THREAD_REPLY_DECIDER_URL'), 'THREAD_REPLY_DECIDER_URL', problems);
+  if (decider !== null) frontend.add(decider);
   for (const host of list(get('SUPPORT_AGENT_EGRESS_EXTRA_HOSTS'))) {
     if (isHostName(host)) frontend.add(host);
     else

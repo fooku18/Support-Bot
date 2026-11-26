@@ -37,7 +37,7 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-async function setup() {
+async function setup(env: Record<string, string> = {}) {
   const postEphemeral = vi.fn().mockResolvedValue({ ok: true });
   const open = vi.fn().mockResolvedValue({ ok: true });
   const installation = testInstallation(
@@ -64,7 +64,7 @@ async function setup() {
             ? { session: 'session', model: null, prompt: null, autoReplies: true, keys: ['sonnet'] }
             : path.endsWith('/claim-receipt')
               ? null
-              : { runId: 'synthetic-run', owner: 'U1' },
+              : { runId: 'synthetic-run', owner: 'U1', autoReplies: true, delivered: true },
       );
     }),
   );
@@ -76,6 +76,7 @@ async function setup() {
     SLACK_APP_TOKEN: 'synthetic-app',
     NATIVE_ADAPTER_PORT: '0',
     NATIVE_BIND_HOST: '127.0.0.1',
+    ...env,
   });
   const ack = vi.fn();
   const send = (text: string, changes: Partial<MentionEvent> = {}) =>
@@ -251,6 +252,47 @@ describe('native startup command routing at the Socket Mode call site', () => {
     await send('Please explain more', { type: 'message', thread_ts: '1792940000.000001' });
     expect(calls.filter((c) => c.path === '/agents/followup')).toHaveLength(1);
     expect(calls.filter((c) => c.path.endsWith('/execute'))).toEqual([]);
+  });
+
+  it('starts an unmentioned follow-up only when the reply decider says it is meant for the bot', async () => {
+    const { send, calls, responses, ack } = await setup({
+      THREAD_REPLY_DECIDER_URL: 'https://decider/v1/systemone',
+      THREAD_REPLY_DECIDER_MODEL: 'clef-flash',
+    });
+    let choice = 'silent';
+    responses.set('/v1/systemone', () =>
+      Response.json({ answers: { reply: { type: 'choice', choice, probabilities: {} } } }),
+    );
+    const reply = (text: string) => send(text, { type: 'message', thread_ts: '1792940000.000001' });
+    await reply('thanks!');
+    expect(calls.filter((c) => c.path === '/v1/systemone')).toHaveLength(1);
+    expect(calls.filter((c) => c.path === '/agents/followup')).toEqual([]);
+    expect(ack).toHaveBeenCalledOnce();
+    choice = 'reply';
+    await reply('and for yesterday?');
+    expect(calls.filter((c) => c.path === '/agents/followup')).toHaveLength(1);
+    await reply('<@U2> can you look?');
+    expect(calls.filter((c) => c.path === '/v1/systemone')).toHaveLength(2);
+    expect(calls.filter((c) => c.path === '/agents/followup')).toHaveLength(1);
+    await reply('cancel');
+    expect(calls.filter((c) => c.path === '/v1/systemone')).toHaveLength(2);
+    expect(calls.filter((c) => c.path === '/agents/cancel')).toHaveLength(1);
+  });
+
+  it.each([
+    ['replies are disabled', { autoReplies: false, delivered: true }],
+    ['the answer is not delivered yet', { autoReplies: true, delivered: false }],
+  ])('never sends the message to the reply decider when %s', async (_name, thread) => {
+    const { send, calls, responses } = await setup({
+      THREAD_REPLY_DECIDER_URL: 'https://decider/v1/systemone',
+      THREAD_REPLY_DECIDER_MODEL: 'clef-flash',
+    });
+    responses.set('/agents/thread', () =>
+      Response.json({ runId: 'synthetic-run', owner: 'U1', ...thread }),
+    );
+    await send('and for yesterday?', { type: 'message', thread_ts: '1792940000.000001' });
+    expect(calls.filter((c) => c.path === '/v1/systemone')).toEqual([]);
+    expect(calls.filter((c) => c.path === '/agents/followup')).toHaveLength(1);
   });
 
   it('silently acknowledges automatic replies disabled by current service config while mentions and controls keep their routes', async () => {

@@ -496,8 +496,18 @@ export function createNativeAgentService(options: NativeAgentOptions) {
       (found.accepted.authorBotId ?? null) !== (identity.authorBotId ?? null)
     )
       fail('thread_owner_required');
-    await authorize(found, 'task.read');
-    return { runId: found.run_id, owner: found.owner };
+    const cfg = await authorize(found, 'task.read');
+    const delivered = await options.pool.query(
+      "SELECT 1 FROM native_agents.deliveries WHERE run_id=$1 AND outcome='delivered'",
+      [found.run_id],
+    );
+    return {
+      runId: found.run_id,
+      owner: found.owner,
+      autoReplies: coordinatorRunConfiguration(cfg, identity.teamId, identity.channelId).channel
+        .autoReplies,
+      delivered: Boolean(delivered.rowCount),
+    };
   }
   async function start(accepted: NativeAgentInput, expectedOwner?: string) {
     if ('inputFiles' in accepted || ('files' in accepted && !options.inputs))

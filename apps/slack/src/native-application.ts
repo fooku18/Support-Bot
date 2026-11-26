@@ -21,6 +21,9 @@ import { readLinkedMessage, readThreadRoot } from './message-reads.js';
 import { fetchRepliesPage, postEphemeral, addReaction } from './slackclient.js';
 import { buildTaskKey, parseTaskKey, type TaskIdentity } from './taskkey.js';
 import { ChannelCommandHandler, CommandClient } from './channel-commands.js';
+import { createReplyDecider } from './reply-decider.js';
+
+const REQUEST_CONTROL = /^(continue(?:\s|$)|cancel$|status$)/i;
 
 class NativeTransportRefusal extends Error {
   constructor(readonly code: string) {
@@ -51,6 +54,7 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
   const token = required(env, 'SERVICE_TOKEN');
   const baseUrl = privateUrl(required(env, 'NATIVE_APPLICATION_URL'));
   const log = createStageLogger('native-adapter');
+  const decideReply = createReplyDecider(env);
   configureOutbound(env.EGRESS_PROXY_URL);
   const agent = createOutboundAgent(env.EGRESS_PROXY_URL);
   const installations = new InstallationRegistry({
@@ -375,12 +379,9 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
             if (decision.kind !== 'accept') return;
             // Silence unrelated threads and other participants. The service rechecks
             // current authorization and the owner atomically at admission.
-            let current: { runId: string; owner: string };
+            let current: { runId: string; owner: string; autoReplies: boolean; delivered: boolean };
             try {
-              current = (await transport('/agents/thread', decision.request)) as {
-                runId: string;
-                owner: string;
-              };
+              current = (await transport('/agents/thread', decision.request)) as typeof current;
             } catch (error) {
               if (
                 error instanceof NativeTransportRefusal &&
@@ -390,6 +391,22 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
               )
                 return;
               throw error;
+            }
+            if (
+              decideReply &&
+              current.autoReplies &&
+              current.delivered &&
+              !REQUEST_CONTROL.test(decision.request.canonicalText.trim())
+            ) {
+              const verdict = await decideReply(
+                decision.request.canonicalText,
+                Boolean(event.files?.length),
+              );
+              const detail = `reason=${verdict.reason}${verdict.failure ? ` failure=${verdict.failure}` : ''}${verdict.probability === undefined ? '' : ` p=${verdict.probability.toFixed(3)}`} channel=${event.channel} message_ts=${event.ts}`;
+              if (verdict.reason === 'decider_unavailable')
+                log.warn(`thread reply decider unavailable; automatic reply skipped ${detail}`);
+              else log.info(`automatic reply ${verdict.reply ? 'accepted' : 'skipped'} ${detail}`);
+              if (!verdict.reply) return;
             }
             await intake(normalized, eventId, installation, current.owner);
           })(),
@@ -435,7 +452,7 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
       .replace(new RegExp(`<@${installation.identity.botUserId}>`, 'g'), '')
       .trim();
     try {
-      if (/^(continue(?:\s|$)|cancel$|status$)/i.test(command)) {
+      if (REQUEST_CONTROL.test(command)) {
         if (event.files?.length) throw new Error('native controls do not accept attachments');
         const current = (await transport('/agents/thread', decision.request)) as {
           runId: string;
