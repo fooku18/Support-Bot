@@ -481,6 +481,7 @@ export class AdminStore {
         await this.run('DELETE FROM channel_tools WHERE team_id = ?', teamId);
         await this.run('DELETE FROM model_assignments WHERE team_id = ?', teamId);
         await this.run('DELETE FROM prompt_assignments WHERE team_id = ?', teamId);
+        await this.run('DELETE FROM channel_reply_settings WHERE team_id = ?', teamId);
         await this.run(
           'DELETE FROM tool_instance_status WHERE instance_id IN (SELECT id FROM tool_instances WHERE team_id = ?)',
           teamId,
