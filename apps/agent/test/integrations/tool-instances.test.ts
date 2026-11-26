@@ -432,6 +432,16 @@ describe('fetchToolSecret', () => {
     }
   });
 
+  it('raises a fixed error for a non-JSON or null credential answer', async () => {
+    for (const text of ['glpat-synthetic-secret is not json', 'null', '[]']) {
+      const admin = fakeAdmin(() => new Response(text, { status: 200 }));
+      const failure = fetchToolSecret(endpoint(admin.fetchImpl), GITLAB.id);
+      await expect(failure).rejects.toBeInstanceOf(ToolInstanceError);
+      await expect(failure).rejects.toThrow(/returned an invalid credential/);
+      await expect(failure).rejects.not.toThrow(/glpat-synthetic-secret/);
+    }
+  });
+
   it('is what ToolInstanceSync.secret uses', async () => {
     const admin = fakeAdmin(() =>
       Response.json({

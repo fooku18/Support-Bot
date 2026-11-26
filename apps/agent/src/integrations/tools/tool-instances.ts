@@ -91,8 +91,18 @@ export async function fetchToolSecret(
     throw new ToolInstanceError(`tool instance ${instanceId} has no usable credential`);
   if (!response.ok)
     throw new ToolInstanceError(`admin service answered HTTP ${response.status} for ${instanceId}`);
-  const body = (await response.json()) as Record<string, unknown>;
+  const invalid = new ToolInstanceError(
+    `admin service returned an invalid credential for ${instanceId}`,
+  );
+  let body: Record<string, unknown> | null;
+  try {
+    body = (await response.json()) as Record<string, unknown> | null;
+  } catch {
+    throw invalid;
+  }
   if (
+    body === null ||
+    typeof body !== 'object' ||
     body.id !== instanceId ||
     typeof body.credential !== 'string' ||
     body.credential.length === 0 ||
@@ -100,7 +110,7 @@ export async function fetchToolSecret(
     typeof body.teamId !== 'string' ||
     !isToolKind(body.kind)
   )
-    throw new ToolInstanceError(`admin service returned an invalid credential for ${instanceId}`);
+    throw invalid;
   return {
     credential: body.credential,
     credentialVersion: Number(body.credentialVersion),
