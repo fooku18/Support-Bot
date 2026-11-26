@@ -266,6 +266,9 @@ describe('cli-runtime environment', () => {
     expect(() => assertCliRuntimeEnvClean({ ...base, SUPPORT_AGENT_SERVICE_TOKEN: 'x' })).toThrow(
       /must not receive controller credentials \(SUPPORT_AGENT_SERVICE_TOKEN\)/,
     );
+    expect(() => assertCliRuntimeEnvClean({ ...base, NATIVE_WEB_FETCH_API_KEY: 'x' })).toThrow(
+      /controller credentials \(NATIVE_WEB_FETCH_API_KEY\)/,
+    );
     expect(() => assertCliRuntimeEnvClean({ ...base, SLACK_BOT_TOKEN: 'xoxb-1' })).toThrow(
       /controller credentials/,
     );

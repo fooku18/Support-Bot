@@ -39,7 +39,7 @@ import {
 } from '../slack/slack-api-adapter.js';
 import { TOOL_KIND_TITLES } from '../../contracts/tool-kinds.js';
 
-/** Adapter id of the brokered web fetch tool (isolated web runtime). */
+/** Adapter id of the web fetch tool. */
 export const WEB_RUNTIME_ADAPTER = 'web-runtime-v1';
 
 /** Adapter ID of provider-hosted web search. */
@@ -384,7 +384,7 @@ export function describeEffectiveTools(
         break;
       case 'webFetch':
         lines.push(
-          '- web_fetch(url): bounded fetch of public web pages through the isolated web runtime; internal/private network addresses are refused.',
+          '- web_fetch(url, question): bounded read of one public web page for one question; internal/private network addresses are refused.',
         );
         break;
     }

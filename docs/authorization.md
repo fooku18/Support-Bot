@@ -65,7 +65,7 @@ outside model context and coding workspaces.
 | [Cloudflare](cloudflare.md)         | Use an account or zone-scoped Read token.                                     |
 | [Slack](slack-tool.md)              | Reuse the installed workspace bot token for linked messages and lookup.       |
 | Web search                          | Assign the provider search tool. Requests use the selected model connection.  |
-| Web fetch                           | Assign the read tool and enable the isolated web runtime.                     |
+| Web fetch                           | Assign the read tool and enable the isolated web runtime or the page reader.  |
 | Code Mode                           | Assign it next to read tools. With a coding workspace it is always available. |
 | Coding and files                    | Use the isolated workspace and explicit export or publication tools.          |
 
