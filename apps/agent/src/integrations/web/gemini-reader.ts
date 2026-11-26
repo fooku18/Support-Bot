@@ -145,6 +145,10 @@ export async function readWebPage(
   question: string,
   signal: AbortSignal,
 ): Promise<string> {
+  if (/https?:\/\/|\bwww\./i.test(question))
+    throw new WebReadError(
+      'the question must not contain a URL; pass the one page as url and ask about it without links',
+    );
   const deadline = AbortSignal.timeout(TIMEOUT_MS);
   let text: string;
   let status: number;
