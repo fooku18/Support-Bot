@@ -138,23 +138,6 @@ const FORBIDDEN_CLI_RUNTIME_ENV = [
   'CLI_RUNTIME_TOKEN_SENDER',
 ];
 
-/** Tool configuration that moved into admin-managed tool instances (D14). */
-const REMOVED_TOOL_ENV = [
-  'GITLAB_HOST',
-  'GITLAB_TOKEN',
-  'ATLASSIAN_ENABLED',
-  'ATLASSIAN_SITE',
-  'ATLASSIAN_CLOUD_ID',
-  'ATLASSIAN_EMAIL',
-  'ATLASSIAN_JIRA_API_TOKEN',
-  'ATLASSIAN_CONFLUENCE_API_TOKEN',
-  'ATLASSIAN_API_TOKEN',
-  'DATADOG_ENABLED',
-  'DATADOG_SITE',
-  'DATADOG_ACCESS_TOKEN',
-  'DATADOG_TOOLSETS',
-];
-
 function cliRuntimeToken(): string {
   return (process.env.CLI_RUNTIME_TOKEN ?? '').trim();
 }
@@ -179,18 +162,6 @@ export function assertCliRuntimeEnvClean(env: NodeJS.ProcessEnv = process.env): 
   if ((env.CLI_RUNTIME_TOKEN ?? '').trim().length === 0) {
     throw new Error('CLI_RUNTIME_TOKEN is required');
   }
-  const removed = [
-    ...REMOVED_TOOL_ENV,
-    'CLI_ACLI_ENABLED',
-    'MCP_ATLASSIAN_ENABLED',
-    'ATLASSIAN_MCP_API_KEY',
-    'TOOL_ACLI_BIN',
-    'CLI_RUNTIME_AUTH_DIR',
-  ].filter((name) => env[name] !== undefined);
-  if (removed.length)
-    throw new Error(
-      `obsolete tool variables (tools are admin-managed instances now): ${removed.join(', ')}`,
-    );
 }
 
 function timingSafeEqual(a: string, b: string): boolean {

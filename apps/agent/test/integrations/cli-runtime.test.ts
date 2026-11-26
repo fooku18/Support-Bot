@@ -250,7 +250,7 @@ afterEach(() => {
 });
 
 describe('cli-runtime environment', () => {
-  it('refuses controller credentials, requires its token and refuses the removed tool variables', () => {
+  it('refuses controller credentials and requires its token', () => {
     const base = { CLI_RUNTIME_TOKEN: 'runtime-token' };
     assertCliRuntimeEnvClean(base);
     // The egress allowlists and the admin endpoint are the new configuration.
@@ -276,39 +276,6 @@ describe('cli-runtime environment', () => {
     expect(() => assertCliRuntimeEnvClean({ CLI_RUNTIME_TOKEN: '  ' })).toThrow(
       /CLI_RUNTIME_TOKEN is required/,
     );
-    for (const name of [
-      'GITLAB_HOST',
-      'GITLAB_TOKEN',
-      'ATLASSIAN_ENABLED',
-      'ATLASSIAN_SITE',
-      'ATLASSIAN_CLOUD_ID',
-      'ATLASSIAN_EMAIL',
-      'ATLASSIAN_JIRA_API_TOKEN',
-      'ATLASSIAN_CONFLUENCE_API_TOKEN',
-      'ATLASSIAN_API_TOKEN',
-      'DATADOG_ENABLED',
-      'DATADOG_SITE',
-      'DATADOG_ACCESS_TOKEN',
-      'DATADOG_TOOLSETS',
-      'CLI_ACLI_ENABLED',
-      'MCP_ATLASSIAN_ENABLED',
-      'ATLASSIAN_MCP_API_KEY',
-      'TOOL_ACLI_BIN',
-      'CLI_RUNTIME_AUTH_DIR',
-    ]) {
-      // Even an empty value is refused: the variable must be gone.
-      for (const value of ['', 'value-that-must-not-leak'])
-        expect(() => assertCliRuntimeEnvClean({ ...base, [name]: value })).toThrow(
-          new RegExp(
-            `obsolete tool variables \\(tools are admin-managed instances now\\): ${name}$`,
-          ),
-        );
-    }
-    try {
-      assertCliRuntimeEnvClean({ ...base, GITLAB_TOKEN: 'value-that-must-not-leak' });
-    } catch (err) {
-      expect(String(err)).not.toContain('value-that-must-not-leak');
-    }
   });
 
   it('derives the pre-probe GitLab state', () => {

@@ -35,8 +35,8 @@ Jira and Confluence permissions match what the bot's users may read.
 | `ATLASSIAN_SITES` | The site, in the env file (egress allowlist)             | [Step 5](#5-admit-the-site)                                                         |
 
 Do **not** use an unscoped API token ("Create API token" without scopes) or
-an "Atlassian MCP" token. There are no `ATLASSIAN_*` credential variables any
-more; the cli-runtime refuses to start while one is set.
+an "Atlassian MCP" token. There are no `ATLASSIAN_*` credential variables;
+the tokens belong only in the admin form.
 
 ## 1. Create the Jira read token
 
@@ -149,7 +149,6 @@ history and workspace are kept.
 | `You don't have permission to connect via API token` | You used an Atlassian MCP token; the org blocks API-token access through MCP | Use Jira/Confluence scoped tokens instead                                                 |
 | Instance not ready: `site_mismatch`                  | The cloud ID belongs to another site                                         | Look it up again (step 3)                                                                 |
 | Instance `blocked: host not admitted`                | The site is not in `ATLASSIAN_SITES`                                         | Admit it, recreate `egress` and `cli-runtime` (step 5)                                    |
-| Runtime refuses to start: obsolete variable          | A removed variable (e.g. `ATLASSIAN_JIRA_API_TOKEN`) is still set            | Remove it from the env file                                                               |
 | Timeouts / network errors                            | The egress proxy does not admit `api.atlassian.com`                          | Check `ATLASSIAN_SITES` and the proxy's `denied` lines (step 5)                           |
 | Search finds nothing                                 | Keyword search, not semantic; or the user lacks permission                   | Ask with other words or name the project/space; check the account's access in the browser |
 | `rate_limit`                                         | Atlassian rate limit                                                         | Wait and ask again                                                                        |
