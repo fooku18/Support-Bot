@@ -57,6 +57,7 @@ import {
 } from './store.js';
 import {
   ATLASSIAN_READ_OPERATIONS,
+  CLI_RUNTIME_KINDS,
   isToolKind,
   TOOL_INSTANCE_ID,
   TOOL_KINDS,
@@ -103,7 +104,7 @@ const BOT_ID = /^B[A-Z0-9]{1,31}$/;
  */
 const SECRET_KINDS_BY_CALLER: Record<string, readonly string[]> = {
   runner: ['gitlab'],
-  'cli-runtime': ['gitlab', 'atlassian', 'datadog', 'cloudflare', 'slack'],
+  'cli-runtime': CLI_RUNTIME_KINDS,
 };
 const STATUS_REPORTERS = ['cli-runtime', 'web-runtime'];
 const MAX_STATUS_REPORTS = 256;

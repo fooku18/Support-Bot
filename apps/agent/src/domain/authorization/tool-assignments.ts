@@ -9,22 +9,14 @@
 
 import type { ChannelToolDto } from '../../contracts/dto.js';
 import { MAX_CHANNEL_PROMPT_CHARS, MODEL_KEY_PATTERN } from '../../contracts/protocol.js';
-
-export interface ChannelToolAssignment {
-  teamId: string;
-  channelId: string;
-  /** Admin-chosen model key (channel, else workspace default); null: deployment default. */
-  modelKey: string | null;
-  /** Admin system prompt (channel, else workspace); null: the runner's fixed prompt alone. */
-  systemPrompt: string | null;
-  /**
-   * "Automatic thread replies": after the bot was mentioned in a
-   * thread it may answer clear follow-ups without a mention. On unless the
-   * channel saved it off.
-   */
-  autoReplies: boolean;
-  tools: ChannelToolDto[];
-}
+import {
+  CLOUDFLARE_ID,
+  MAX_CLOUDFLARE_ZONES,
+  MAX_LABEL_CHARS,
+  TOOL_INSTANCE_ID,
+  TOOL_KINDS,
+  type ChannelToolAssignment,
+} from '../../contracts/tool-kinds.js';
 
 export class ToolAssignmentsError extends Error {
   constructor(message: string) {
@@ -33,29 +25,13 @@ export class ToolAssignmentsError extends Error {
   }
 }
 
-const TOOL_KINDS: readonly ChannelToolDto['kind'][] = [
-  'gitlab',
-  'atlassian',
-  'datadog',
-  'cloudflare',
-  'slack',
-  'webSearch',
-  'webFetch',
-  'codeMode',
-  'files',
-  'localExec',
-];
 const TEAM_ID = /^T[A-Z0-9]{1,31}$/;
 const CHANNEL_ID = /^[CG][A-Z0-9]{1,31}$/;
-const INSTANCE_ID = /^ti_[a-f0-9]{16}$/;
 const HOST_NAME = /^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?(?::[0-9]{1,5})?$/;
 const LIST_ENTRY = /^[A-Za-z][A-Za-z0-9_-]{0,79}$/;
-const CLOUDFLARE_ID = /^[0-9a-f]{32}$/;
 const ZONE_NAME = /^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$/;
-const MAX_ZONES = 200;
 /** Upper bound on assigned channels in one document (the policy caps its size at 64 KB anyway). */
 export const MAX_TOOL_ASSIGNMENTS = 2_000;
-const MAX_LABEL_CHARS = 64;
 const MAX_DETAIL_CHARS = 500;
 const MAX_LIST_ENTRIES = 100;
 /** Control characters other than `\n` and `\t` (C0, DEL and C1); the admin refuses them too. */
@@ -86,7 +62,7 @@ function parseTool(value: unknown, where: string): ChannelToolDto {
   const kind = input.kind;
   if (typeof kind !== 'string' || !(TOOL_KINDS as readonly string[]).includes(kind))
     fail(`${where}.kind is not a known tool kind`);
-  if (typeof input.instanceId !== 'string' || !INSTANCE_ID.test(input.instanceId))
+  if (typeof input.instanceId !== 'string' || !TOOL_INSTANCE_ID.test(input.instanceId))
     fail(`${where}.instanceId is invalid`);
   if (
     typeof input.label !== 'string' ||
@@ -133,8 +109,10 @@ function parseTool(value: unknown, where: string): ChannelToolDto {
   if (input.zones !== undefined) {
     if (input.zones === null) tool.zones = null;
     else {
-      if (!Array.isArray(input.zones) || input.zones.length > MAX_ZONES)
-        fail(`${where}.zones must be null or an array of at most ${MAX_ZONES} zone names`);
+      if (!Array.isArray(input.zones) || input.zones.length > MAX_CLOUDFLARE_ZONES)
+        fail(
+          `${where}.zones must be null or an array of at most ${MAX_CLOUDFLARE_ZONES} zone names`,
+        );
       tool.zones = input.zones.map((entry) => {
         if (typeof entry !== 'string' || !ZONE_NAME.test(entry))
           fail(`${where}.zones has an invalid zone name`);

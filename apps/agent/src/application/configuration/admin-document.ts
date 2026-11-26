@@ -1,9 +1,7 @@
 import { createHash } from 'node:crypto';
 import { parseAuthorizationPolicy } from '../../domain/authorization/policy.js';
-import {
-  parseToolAssignments,
-  type ChannelToolAssignment,
-} from '../../domain/authorization/tool-assignments.js';
+import type { ChannelToolAssignment } from '../../contracts/tool-kinds.js';
+import { parseToolAssignments } from '../../domain/authorization/tool-assignments.js';
 
 interface Installation {
   teamId: string;
