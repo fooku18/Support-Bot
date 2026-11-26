@@ -1097,7 +1097,7 @@ export class AdminStore {
       const autoReplies = change.autoReplies ?? before.autoReplies;
       if (typeof autoReplies !== 'boolean')
         throw new StoreError('Automatic thread replies must be on or off.');
-      checkModelKey(model, allowed);
+      if (model !== before.model) checkModelKey(model, allowed);
       if (model === before.model && prompt === before.prompt && autoReplies === before.autoReplies)
         return { document: (await this.currentDocument())!, changed: false };
       if (model !== before.model) await this.storeModelAssignment(teamId, channelId, model);
