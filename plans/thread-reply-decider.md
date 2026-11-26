@@ -1,6 +1,6 @@
 # Thread reply decider
 
-Status: In progress
+Status: Done
 
 ## Summary
 
@@ -108,6 +108,11 @@ mention rule. Latency was about 170 ms per call from the office network and
     check in the deployment's test channel after rollout: a mention, then
     "thanks!" (silent, `automatic reply skipped` in the adapter log), then
     a follow-up question (answered).
+  - Passed on 2026-11-26 after deployment `5bcdb8b` (upstream `6f90d07`):
+    a mention was answered, "thanks!" stayed silent (`automatic reply
+skipped reason=decider p=0.106`), and the next unmentioned question was
+    answered in 7 s (`automatic reply accepted reason=decider p=0.866`).
+    Three model requests since the deploy, all 200.
 
 ## Rollout
 
@@ -115,10 +120,16 @@ Deploy agent and adapter from the same image. Set the three variables on
 the adapter and restart it; in Compose recreate `egress` too. Rollback:
 unset `THREAD_REPLY_DECIDER_URL`.
 
+Deployed to the Kubernetes staging deployment, which serves the productive
+Slack app, on 2026-11-26: image `4364d0c` with the decider settings
+(deployment MR !6, `52d4493`, 22:30 UTC), then `6f90d07` (MR !7, `5bcdb8b`,
+22:47 UTC). Database backups were taken before each rollout. Rollback: pin
+the earlier image digest or unset the three variables.
+
 ## Open items
 
-- [ ] Live check in the deployment's test channel after rollout. First
+- [x] Live check in the deployment's test channel after rollout. First
       attempt (2026-11-26, deployment `52d4493`): both unmentioned replies
       stayed silent with `reason=mentions_others`. The test sender posts
       through Claude's Slack app, which appends `*Sent using* <@U…>` to
-      every message. The attribution no longer counts as a mention.
+      every message. Fixed in #9; see Live.
