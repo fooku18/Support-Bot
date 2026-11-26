@@ -27,7 +27,9 @@ With a decision model configured, the requester's unmentioned message
 starts a follow-up only when the model judges it meant for the bot: a
 request, a question, a correction or an answer. Thanks, reactions, remarks
 and small talk stay silent. A message that mentions someone else, a user
-group, `@channel`, `@here` or `@everyone` stays silent without a model call.
+group, `@channel`, `@here` or `@everyone` stays silent without a model call;
+the "Sent using @app" attribution of a Slack app posting for the person does
+not count.
 Files without text and the request controls above skip the model, and so
 does a message that would not start a follow-up anyway (replies disabled, or
 the current answer not yet delivered). When the
