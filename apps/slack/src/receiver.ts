@@ -88,7 +88,8 @@ export function createSocketModeReceiver(deps: ReceiverDeps): ReceiverHandle {
     logLevel: LogLevel.INFO,
     ...(deps.clientOptions !== undefined ? { clientOptions: deps.clientOptions } : {}),
   });
-  const lifecycle = createLifecycleLogger(deps.log);
+  let stopping = false;
+  const lifecycle = createLifecycleLogger(deps.log, { isShuttingDown: () => stopping });
   client.on('connected', () => {
     deps.connection?.transitioned('connected');
     lifecycle.connected();
@@ -112,6 +113,7 @@ export function createSocketModeReceiver(deps: ReceiverDeps): ReceiverHandle {
     client,
     start: () => client.start(),
     stop: async () => {
+      stopping = true;
       await client.disconnect();
     },
   };
