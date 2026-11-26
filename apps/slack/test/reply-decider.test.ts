@@ -41,6 +41,14 @@ it('asks one choice question with the bounded message and the client id', async 
   expect(body.state.length).toBeLessThan(2300);
 });
 
+it('ignores the "Sent using" attribution of a Slack app posting for the person', async () => {
+  const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(answer('silent', 0.1));
+  await expect(
+    createReplyDecider(env)!('thanks! *Sent using* <@U0ABE2UQ8N4>', false),
+  ).resolves.toMatchObject({ reply: false, reason: 'decider' });
+  expect(JSON.parse(String(fetch.mock.calls[0]![1]?.body)).state).not.toContain('Sent using');
+});
+
 it('stays silent when the model says so', async () => {
   vi.spyOn(globalThis, 'fetch').mockResolvedValue(answer('silent', 0.1));
   await expect(createReplyDecider(env)!('thanks!', false)).resolves.toEqual({

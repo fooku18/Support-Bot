@@ -10,6 +10,7 @@ export type ReplyDecision =
 
 export type ReplyDecider = (text: string, hasFiles: boolean) => Promise<ReplyDecision>;
 
+const APP_ATTRIBUTION = /\*?Sent using\*?\s*<@[UW][A-Z0-9]+(\|[^>]*)?>/gi;
 const MENTIONS_OTHERS = /<@[UW][A-Z0-9]+(\|[^>]*)?>|<!subteam\^|<!(channel|here|everyone)\b/;
 const MAX_TEXT = 2000;
 const TIMEOUT_MS = 2000;
@@ -42,7 +43,7 @@ export function createReplyDecider(env: NodeJS.ProcessEnv): ReplyDecider | null 
   if (!model) throw new Error('THREAD_REPLY_DECIDER_MODEL required');
   const clientId = env.THREAD_REPLY_DECIDER_CLIENT_ID?.trim();
   return async (text, hasFiles) => {
-    const message = text.trim();
+    const message = text.replace(APP_ATTRIBUTION, '').trim();
     if (MENTIONS_OTHERS.test(message)) return { reply: false, reason: 'mentions_others' };
     if (!message)
       return hasFiles ? { reply: true, reason: 'files_only' } : { reply: false, reason: 'empty' };

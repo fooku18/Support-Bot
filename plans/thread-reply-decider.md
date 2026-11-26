@@ -117,4 +117,8 @@ unset `THREAD_REPLY_DECIDER_URL`.
 
 ## Open items
 
-- [ ] Live check in the deployment's test channel after rollout
+- [ ] Live check in the deployment's test channel after rollout. First
+      attempt (2026-11-26, deployment `52d4493`): both unmentioned replies
+      stayed silent with `reason=mentions_others`. The test sender posts
+      through Claude's Slack app, which appends `*Sent using* <@U…>` to
+      every message. The attribution no longer counts as a mention.
