@@ -15,9 +15,9 @@ import { parseForwards, startForwards } from './forward.js';
 import { createProxyServer } from './proxy.js';
 import { policyFromEnv } from './policy.js';
 
-function intOr(raw: string | undefined, fallback: number): number {
+function positiveIntOr(raw: string | undefined, fallback: number, max: number): number {
   const parsed = Number.parseInt((raw ?? '').trim(), 10);
-  return Number.isFinite(parsed) && parsed > 0 && parsed < 65536 ? parsed : fallback;
+  return Number.isFinite(parsed) && parsed > 0 && parsed <= max ? parsed : fallback;
 }
 
 function main(): void {
@@ -28,10 +28,10 @@ function main(): void {
   const proxy = createProxyServer({
     policy,
     log,
-    idleTimeoutMs: intOr(process.env.EGRESS_IDLE_TIMEOUT_MS, 600_000),
+    idleTimeoutMs: positiveIntOr(process.env.EGRESS_IDLE_TIMEOUT_MS, 600_000, 2 ** 31 - 1),
   });
-  const port = intOr(process.env.EGRESS_PROXY_PORT, 3128);
-  const statusPort = intOr(process.env.EGRESS_STATUS_PORT, 3129);
+  const port = positiveIntOr(process.env.EGRESS_PROXY_PORT, 3128, 65535);
+  const statusPort = positiveIntOr(process.env.EGRESS_STATUS_PORT, 3129, 65535);
 
   const status = http.createServer((req, res) => {
     if (req.url === '/healthz') {
