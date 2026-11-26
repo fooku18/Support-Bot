@@ -436,6 +436,7 @@ export function createNativeAgentService(options: NativeAgentOptions) {
       // An admitted segment is never re-started, including on an unknown snapshot
       // outcome. Inspection exposes its admission receipt, not invented success.
       if (error instanceof CoordinatorError) throw error;
+      options.log.warn(`native segment failed run_id=${r.run_id} reason=${reason(error)}`);
       if (error instanceof NativeInputEncodingError)
         return {
           runId: r.run_id,

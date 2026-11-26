@@ -603,6 +603,7 @@ const app = startNativeAgentServer({
   port: 0,
   token: 'synthetic-app',
   send: nativeAgentSender(slack),
+  log: { info() {}, warn() {}, error() {} },
 });
 await app.ready;
 const adapter = createNativeAgentAdapter({

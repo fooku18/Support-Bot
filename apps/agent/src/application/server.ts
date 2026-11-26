@@ -1,6 +1,8 @@
 import http from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import { CoordinatorError } from './errors.js';
+import { reason } from './agent-support.js';
+import type { StageLogger } from '../infrastructure/logger.js';
 import type { NativeAgentService } from './agent-service.js';
 import type { NativeAgentInput } from './agent-options.js';
 
@@ -14,6 +16,7 @@ export function startNativeAgentServer(options: {
   port: number;
   readiness?: () => Promise<void>;
   send: Parameters<NativeAgentService['deliver']>[3];
+  log: StageLogger;
 }) {
   if (!options.token) throw new Error('native answer ingress requires authentication');
   const expected = Buffer.from(`Bearer ${options.token}`);
@@ -116,6 +119,10 @@ export function startNativeAgentServer(options: {
       res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(result));
     } catch (error) {
       const known = error instanceof CoordinatorError;
+      if (!known)
+        options.log.error(
+          `native ingress failed route=${(req.url ?? '').split('?')[0]} reason=${reason(error)}`,
+        );
       res
         .writeHead(known ? error.status : 503, { 'content-type': 'application/json' })
         .end(JSON.stringify({ error: known ? error.code : 'native_agent_unavailable' }));
@@ -153,12 +160,12 @@ export function startNativeAgentServer(options: {
  * discovery inside the agent or a second coordinator execution owner. */
 export async function startNativeApplication(options: {
   service: import('./agent-options.js').NativeAgentOptions;
-  transport: Omit<Parameters<typeof startNativeAgentServer>[0], 'agents'>;
+  transport: Omit<Parameters<typeof startNativeAgentServer>[0], 'agents' | 'log'>;
 }) {
   const { createNativeAgentService } = await import('./agent-service.js');
   await options.transport.readiness?.();
   const agents = createNativeAgentService(options.service);
-  const server = startNativeAgentServer({ ...options.transport, agents });
+  const server = startNativeAgentServer({ ...options.transport, agents, log: options.service.log });
   try {
     await server.ready;
   } catch (error) {
