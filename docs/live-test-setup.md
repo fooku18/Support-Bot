@@ -101,6 +101,10 @@ cp .env.e2e.example "$D/.env.e2e"
 chmod 0600 "$D"/.env*
 ```
 
+On Windows, Node cannot report POSIX modes, so the driver skips its check
+that `.env.e2e` is private. Restrict both env files to your account with an
+ACL instead, for example `icacls <file> /inheritance:r /grant:r "${env:USERNAME}:F"`.
+
 `.env.testing` must carry the same variable names as `.env.example`.
 `npm run env:parity -- --instance-dir "$D"` checks this.
 

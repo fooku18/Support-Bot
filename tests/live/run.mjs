@@ -460,7 +460,8 @@ export function loadLive(root) {
   const mode = readModelMode(root) ?? fail('model_mode_unknown_start_with_test_stack_up');
   const d = deployment(path.join(root, '.env.testing'), { modelMode: mode });
   const file = path.join(root, '.env.e2e');
-  if ((fs.statSync(file).mode & 0o077) !== 0) fail('harness_env_must_be_private');
+  if (process.platform !== 'win32' && (fs.statSync(file).mode & 0o077) !== 0)
+    fail('harness_env_must_be_private');
   const env = readEnvFile(file);
   for (const [key, pattern] of [
     ['E2E_SLACK_TEAM_ID', /^T[A-Z0-9]+$/],
