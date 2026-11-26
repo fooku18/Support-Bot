@@ -92,11 +92,8 @@ const DAY_MS = 86_400_000;
 const TEAM_ID = /^T[A-Z0-9]{1,31}$/;
 const CHANNEL_ID = /^[CG][A-Z0-9]{1,31}$/;
 const USER_ID = /^[UW][A-Z0-9]{1,31}$/;
-/** Block entries use Slack user IDs, including Enterprise Grid identities. */
-const PERSON_ID = /^[UW][A-Z0-9]{1,31}$/;
-const PERSON_ID_ERROR = 'use an exact Slack user ID starting with U or W';
+const USER_ID_ERROR = 'use an exact Slack user ID starting with U or W';
 const BOT_ID = /^B[A-Z0-9]{1,31}$/;
-/** Internal callers that may read a tool secret; anything else is audited as `internal`. */
 /**
  * Who may read which credentials. All internal callers share
  * ADMIN_INTERNAL_TOKEN, so this is defense in depth against a confused
@@ -1024,7 +1021,7 @@ export function createApp(deps: AppDeps): AdminApp {
         const teamId = (await requireTeam(parts[1] as string)).teamId;
         const [channelId, userId] = [parts[3] as string, parts[5] as string];
         if (!CHANNEL_ID.test(channelId)) throw new HttpError(400, 'invalid channel ID');
-        if (!PERSON_ID.test(userId)) throw new HttpError(400, PERSON_ID_ERROR);
+        if (!USER_ID.test(userId)) throw new HttpError(400, USER_ID_ERROR);
         let document;
         if (req.method === 'DELETE') {
           document = await store.unblockMember(actor, { teamId, channelId, userId });
@@ -1439,7 +1436,7 @@ export function createApp(deps: AppDeps): AdminApp {
         }
         if (req.method === 'POST' && parts[4] === 'blocked-members' && parts.length === 5) {
           const userId = String(req.body.userId ?? '').trim();
-          if (!PERSON_ID.test(userId)) throw new HttpError(400, PERSON_ID_ERROR);
+          if (!USER_ID.test(userId)) throw new HttpError(400, USER_ID_ERROR);
           let displayName = '';
           const botToken = await store.botToken(teamId);
           if (botToken !== null) {
@@ -1470,7 +1467,7 @@ export function createApp(deps: AppDeps): AdminApp {
           parts.length === 7
         ) {
           const userId = parts[5] as string;
-          if (!PERSON_ID.test(userId)) throw new HttpError(400, PERSON_ID_ERROR);
+          if (!USER_ID.test(userId)) throw new HttpError(400, USER_ID_ERROR);
           const document = await store.unblockMember(actor, { teamId, channelId, userId });
           back(blockedPath, 'ok', `Unblocked (config v${document.version}).`);
           return;
