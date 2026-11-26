@@ -701,7 +701,10 @@ describe('native live driver', () => {
       true,
     );
     fs.chmodSync(root + '/.env.e2e', 0o644);
-    if (keepsPermissionBits(root)) expect(() => loadLive(root)).toThrow('private');
+    const kept = (fs.statSync(root + '/.env.e2e').mode & 0o777) === 0o644;
+    expect(keepsPermissionBits(root)).toBe(kept);
+    expect(fs.readdirSync(root).filter((name) => name.startsWith('.mode-probe-'))).toEqual([]);
+    if (kept) expect(() => loadLive(root)).toThrow('private');
     else expect(() => loadLive(root)).not.toThrow('private');
     fs.chmodSync(root + '/.env.e2e', 0o600);
     write('.env.testing', { ...env, SLACK_APP_TOKEN: 'synthetic-sender' });

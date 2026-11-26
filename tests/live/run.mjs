@@ -458,7 +458,11 @@ export function inToolScope(needs, scope) {
 export function keepsPermissionBits(dir) {
   const probe = path.join(dir, `.mode-probe-${randomUUID()}`);
   try {
-    fs.writeFileSync(probe, '', { flag: 'wx', mode: 0o600 });
+    try {
+      fs.writeFileSync(probe, '', { flag: 'wx', mode: 0o600 });
+    } catch {
+      return true;
+    }
     fs.chmodSync(probe, 0o600);
     return (fs.statSync(probe).mode & 0o777) === 0o600;
   } finally {
@@ -470,7 +474,10 @@ export function loadLive(root) {
   const mode = readModelMode(root) ?? fail('model_mode_unknown_start_with_test_stack_up');
   const d = deployment(path.join(root, '.env.testing'), { modelMode: mode });
   const file = path.join(root, '.env.e2e');
-  if (keepsPermissionBits(root) && (fs.statSync(file).mode & 0o077) !== 0)
+  if (
+    keepsPermissionBits(path.dirname(fs.realpathSync(file))) &&
+    (fs.statSync(file).mode & 0o077) !== 0
+  )
     fail('harness_env_must_be_private');
   const env = readEnvFile(file);
   for (const [key, pattern] of [

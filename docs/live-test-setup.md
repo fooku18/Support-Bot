@@ -227,6 +227,7 @@ separate value for each.
 | `NATIVE_ANTHROPIC_API_KEY_FILE`                                                     | Host path to the test Anthropic key file when Anthropic is active                         |
 | `NATIVE_OPENAI_API_KEY_FILE`                                                        | Host path to the test OpenAI key file when GPT is active                                  |
 | `NATIVE_VERTEX_CREDENTIALS_FILE`, `NATIVE_VERTEX_PROJECT`, `NATIVE_VERTEX_LOCATION` | Test service-account JSON, project and location such as `global` when Vertex is active    |
+| `NATIVE_ANTHROPIC_BASE_URL`                                                         | Optional Anthropic-compatible gateway URL; empty calls `api.anthropic.com`                |
 | `SUPPORT_AGENT_SERVICE_TOKEN`, `ADMIN_INTERNAL_TOKEN`, `CLI_RUNTIME_TOKEN`          | Random tokens                                                                             |
 | `SLACK_APP_TOKEN`                                                                   | Test app's `xapp-…` token                                                                 |
 | `MODEL_CATALOG`                                                                     | One JSON array, e.g. `[{"key":"sonnet","route":"anthropic","model":"claude-sonnet-5-5"}]` |

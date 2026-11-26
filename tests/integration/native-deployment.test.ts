@@ -91,6 +91,8 @@ if(a.includes('up')&&fs.existsSync(root+'/up-stderr.txt')){process.stderr.write(
         NATIVE_IMAGE_TAG: 'ambient-wrong',
         SUPPORT_AGENT_SERVICE_TOKEN: 'ambient-private',
         Compose_File: 'ambient-compose',
+        native_model_stub: '1',
+        SERVICE_TOKEN: 'ambient-passthrough',
         HOST_TOOLING_DIR: 'ambient-host',
       },
       encoding: 'utf8',
@@ -318,6 +320,8 @@ describe('native deployment conversion', () => {
             !c.env.includes('SUPPORT_AGENT_SERVICE_TOKEN') &&
             !c.env.includes('NATIVE_IMAGE_TAG') &&
             !c.env.includes('Compose_File') &&
+            !c.env.includes('native_model_stub') &&
+            !c.env.includes('SERVICE_TOKEN') &&
             c.env.includes('HOST_TOOLING_DIR'),
         ),
     ).toBe(true);
