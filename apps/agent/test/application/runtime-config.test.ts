@@ -120,7 +120,7 @@ it('logs idle connection failures and exits on purpose when the execution lease 
     'error',
     Object.assign(new Error('terminating connection host=secret'), { code: '57P01' }),
   );
-  expect(lines).toEqual(['idle database connection failed reason=Error']);
+  expect(lines).toEqual(['idle database connection failed reason=Error:57P01']);
 
   lines.length = 0;
   const exits: number[] = [];

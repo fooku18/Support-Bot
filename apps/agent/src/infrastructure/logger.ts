@@ -15,7 +15,7 @@ export function createStageLogger(scope: string): StageLogger {
   };
   return {
     info: (message) => write('info', message, console.log),
-    warn: (message) => write('warn', message, console.log),
+    warn: (message) => write('warn', message, console.warn),
     error: (message) => write('error', message, console.error),
   };
 }
