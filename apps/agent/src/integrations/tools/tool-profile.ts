@@ -6,11 +6,9 @@
  * tool.
  *
  * The profile carries instance IDs, labels, non-secret settings and
- * credential versions (never a credential). Its hash is persisted per run
- * before any side effect so recovery refuses a changed grant (D11).
+ * credential versions (never a credential).
  */
 
-import { createHash } from 'node:crypto';
 import type { ChannelToolDto, ChannelToolsDto } from '../../contracts/dto.js';
 import {
   ATLASSIAN_ADAPTER,
@@ -212,51 +210,4 @@ export function resolveChannelTools(
     if (entry !== null) profile.tools.push(entry);
   }
   return { profile, unavailable, teamId: channel?.teamId ?? '' };
-}
-
-/**
- * Stable content hash of the effective capability profile (no credentials). Persisted per run before side effects
- * so recovery cannot expand the saved grant.
- */
-export function computePolicyHash(profile: EffectiveToolProfile): string {
-  return createHash('sha256').update(JSON.stringify(profile)).digest('hex').slice(0, 32);
-}
-
-/** Skill identity bound into the policy hash (IDs + content hashes, never content). */
-export interface SkillPolicyEntry {
-  key: string;
-  hash: string;
-}
-
-/**
- * Stable content hash of the effective capability profile plus the resolved
- * skill set. Empty skills return exactly `computePolicyHash(profile)` so
- * zero-skill runs stay byte-identical. Any skill change (added, removed, or
- * content hash moved) changes the hash, and recovery compares it fail-closed.
- */
-export function computePolicyHashWithSkills(
-  profile: EffectiveToolProfile,
-  skills: ReadonlyArray<SkillPolicyEntry>,
-): string {
-  if (skills.length === 0) {
-    return computePolicyHash(profile);
-  }
-  const ordered = [...skills].sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
-  return createHash('sha256')
-    .update(JSON.stringify({ profile, skills: ordered }))
-    .digest('hex')
-    .slice(0, 32);
-}
-
-/**
- * Stable hash for skill-only runs (zero-tool profile with skills). Used when
- * no tool profile is enabled but skills are resolved, so revocation still
- * fails closed without changing the zero-tool grant.
- */
-export function computeSkillsOnlyHash(skills: ReadonlyArray<SkillPolicyEntry>): string {
-  const ordered = [...skills].sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
-  return createHash('sha256')
-    .update(JSON.stringify({ skills: ordered }))
-    .digest('hex')
-    .slice(0, 32);
 }
