@@ -160,6 +160,13 @@ export function createProxyServer(options: ProxyOptions): ProxyServer {
       refuse(clientSocket, 503, source, { reason: 'limit', host, port, client: clientAddress });
       return;
     }
+    stats.active[source] += 1;
+    let held = true;
+    const release = (): void => {
+      if (!held) return;
+      held = false;
+      stats.active[source] -= 1;
+    };
 
     void (async () => {
       // A temporary resolver failure (EAI_AGAIN, typical right after boot)
@@ -176,9 +183,13 @@ export function createProxyServer(options: ProxyOptions): ProxyServer {
         }
         if (addresses.length > 0 || code !== 'EAI_AGAIN' || attempt > 0) break;
         await new Promise((r) => setTimeout(r, resolveRetryMs));
-        if (clientSocket.destroyed) return;
+        if (clientSocket.destroyed) {
+          release();
+          return;
+        }
       }
       if (addresses.length === 0) {
+        release();
         refuse(clientSocket, 502, source, { reason: 'unresolved', code, host, port });
         return;
       }
@@ -186,13 +197,17 @@ export function createProxyServer(options: ProxyOptions): ProxyServer {
         (decision.mode === 'public' && addresses.some(isPrivateAddress)) ||
         (options.policy.modelHosts.has(host) && addresses.some(refusedModelAddress))
       ) {
+        release();
         refuse(clientSocket, 403, source, { reason: 'private-address', host, port });
         return;
       }
       let upstream: net.Socket | null = null;
       let lastError = 'connect failed';
       for (const address of addresses) {
-        if (clientSocket.destroyed) return;
+        if (clientSocket.destroyed) {
+          release();
+          return;
+        }
         try {
           upstream = await dial(address, port, connectTimeoutMs);
           break;
@@ -201,6 +216,7 @@ export function createProxyServer(options: ProxyOptions): ProxyServer {
         }
       }
       if (upstream === null) {
+        release();
         refuse(clientSocket, lastError.includes('timeout') ? 504 : 502, source, {
           reason: 'upstream',
           host,
@@ -209,10 +225,10 @@ export function createProxyServer(options: ProxyOptions): ProxyServer {
         return;
       }
       if (clientSocket.destroyed) {
+        release();
         upstream.destroy();
         return;
       }
-      stats.active[source] += 1;
       stats.tunnels[source] += 1;
       // Long-lived tunnels (Socket Mode, keep-alive pools) end hours later;
       // the open line makes them visible while they run.
@@ -224,7 +240,7 @@ export function createProxyServer(options: ProxyOptions): ProxyServer {
       const finish = (why: string): void => {
         if (finished) return;
         finished = true;
-        stats.active[source] -= 1;
+        release();
         sockets.delete(clientSocket);
         sockets.delete(established);
         log({
