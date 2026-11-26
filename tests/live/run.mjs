@@ -455,12 +455,22 @@ export function inToolScope(needs, scope) {
   if (scope === 'all') return true;
   return needs.every((k) => scope !== 'none' && scope.includes(k));
 }
+export function keepsPermissionBits(dir) {
+  const probe = path.join(dir, `.mode-probe-${randomUUID()}`);
+  try {
+    fs.writeFileSync(probe, '', { flag: 'wx', mode: 0o600 });
+    fs.chmodSync(probe, 0o600);
+    return (fs.statSync(probe).mode & 0o777) === 0o600;
+  } finally {
+    fs.rmSync(probe, { force: true });
+  }
+}
 export function loadLive(root) {
   // `test:stack:up` records the mode; before the first start it is unknown.
   const mode = readModelMode(root) ?? fail('model_mode_unknown_start_with_test_stack_up');
   const d = deployment(path.join(root, '.env.testing'), { modelMode: mode });
   const file = path.join(root, '.env.e2e');
-  if (process.platform !== 'win32' && (fs.statSync(file).mode & 0o077) !== 0)
+  if (keepsPermissionBits(root) && (fs.statSync(file).mode & 0o077) !== 0)
     fail('harness_env_must_be_private');
   const env = readEnvFile(file);
   for (const [key, pattern] of [

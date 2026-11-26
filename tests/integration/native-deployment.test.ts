@@ -90,6 +90,8 @@ if(a.includes('up')&&fs.existsSync(root+'/up-stderr.txt')){process.stderr.write(
         PATH: path.join(dir, 'bin') + ':' + process.env.PATH,
         NATIVE_IMAGE_TAG: 'ambient-wrong',
         SUPPORT_AGENT_SERVICE_TOKEN: 'ambient-private',
+        Compose_File: 'ambient-compose',
+        HOST_TOOLING_DIR: 'ambient-host',
       },
       encoding: 'utf8',
     });
@@ -313,7 +315,10 @@ describe('native deployment conversion', () => {
         .calls()
         .every(
           (c) =>
-            !c.env.includes('SUPPORT_AGENT_SERVICE_TOKEN') && !c.env.includes('NATIVE_IMAGE_TAG'),
+            !c.env.includes('SUPPORT_AGENT_SERVICE_TOKEN') &&
+            !c.env.includes('NATIVE_IMAGE_TAG') &&
+            !c.env.includes('Compose_File') &&
+            c.env.includes('HOST_TOOLING_DIR'),
         ),
     ).toBe(true);
   });

@@ -13,6 +13,7 @@ import {
   threadMessages,
   runScenario,
   loadLive,
+  keepsPermissionBits,
   main,
   nativeRead,
   assertPublication,
@@ -699,11 +700,10 @@ describe('native live driver', () => {
     expect(reports.some((r) => r.reason === 'gateway_availability_confirmation_required')).toBe(
       true,
     );
-    if (process.platform !== 'win32') {
-      fs.chmodSync(root + '/.env.e2e', 0o644);
-      expect(() => loadLive(root)).toThrow('private');
-      fs.chmodSync(root + '/.env.e2e', 0o600);
-    }
+    fs.chmodSync(root + '/.env.e2e', 0o644);
+    if (keepsPermissionBits(root)) expect(() => loadLive(root)).toThrow('private');
+    else expect(() => loadLive(root)).not.toThrow('private');
+    fs.chmodSync(root + '/.env.e2e', 0o600);
     write('.env.testing', { ...env, SLACK_APP_TOKEN: 'synthetic-sender' });
     expect(() => loadLive(root)).toThrow('sender_credential_not_harness_only');
   });

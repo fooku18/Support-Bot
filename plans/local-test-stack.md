@@ -8,13 +8,14 @@ Three defects kept the Compose test stack from running on a Windows host
 with Docker Desktop, or from reaching models through an
 Anthropic-compatible gateway:
 
-- `composeHostEnvironment` passed Docker only `PATH`, `HOME` and the
-  `DOCKER_*` variables. On Windows the Docker CLI finds its compose plugin
-  under `%ProgramFiles%`, so every compose call failed, which surfaced only
-  as "Docker operation failed".
-- The live harness requires `.env.e2e` to have POSIX mode `0600`. Node
-  reports `0666` for every file on Windows whatever its ACL, so every
-  scenario was refused with `harness_env_must_be_private`.
+- `composeHostEnvironment` passed Docker only an allowlist of POSIX
+  variables (`PATH`, `HOME`, `DOCKER_*`, ...). On Windows the Docker CLI
+  finds its compose plugin under `%ProgramFiles%`, so every compose call
+  failed, which surfaced only as "Docker operation failed".
+- The live harness requires `.env.e2e` to have POSIX mode `0600`. NTFS
+  keeps no POSIX permission bits, and Node reports `0666` for every file
+  whatever its ACL, so every scenario was refused with
+  `harness_env_must_be_private`.
 - `deploy/compose.yaml` forwarded `MODEL_CATALOG` but not
   `NATIVE_ANTHROPIC_BASE_URL`. A gateway-mode instance therefore always
   called `api.anthropic.com`, and the egress proxy admitted only that host.
@@ -23,13 +24,22 @@ Application code and images are unchanged.
 
 ## Decisions and approach
 
-- **Only `ProgramFiles`.** With `PATH` plus `ProgramFiles`,
-  `docker compose version`, `ps`, `test:stack:down` and `test:stack:up`
-  all work, with or without `HOME`. `USERPROFILE` and `SystemRoot` were not needed.
-- **Skip the mode check on Windows instead of reading ACLs.** The POSIX
-  check cannot pass there. `docs/live-test-setup.md` tells Windows
-  operators to restrict the env files with an ACL. The integration test
-  keeps the check on other platforms.
+- **Inherit the host environment minus application names, not a
+  per-platform allowlist.** The allowlist exists so that Compose
+  interpolates application values only from the designated env file.
+  `composeHostEnvironment` now enforces exactly that: it passes the host
+  environment without any name from `.env.example`, any variable the
+  `deploy/compose*.yaml` files interpolate, and any `COMPOSE_*` setting,
+  compared case-insensitively because Windows names are. Docker then finds
+  its plugins, contexts and credential helpers on every platform without
+  the code naming one. Every `docker run -e` passes an explicit
+  `KEY=value`, so no other host value reaches a container.
+- **Probe the file system instead of naming the OS.** `keepsPermissionBits`
+  creates a `0600` probe in the instance directory and reads its mode back.
+  Where the bits survive (Linux, macOS), the `.env.e2e` check is enforced.
+  Where they do not (NTFS, drvfs mounts without metadata), it is skipped
+  and `docs/live-test-setup.md` tells operators to use an ACL. The
+  integration test asserts whichever behaviour the file system calls for.
 - **Only the Anthropic base URL.** It is what a deployment behind an AI
   gateway uses. It is empty by default, which the agent and the egress
   policy treat as unset. The other gateway settings in
@@ -41,8 +51,9 @@ Application code and images are unchanged.
 
 ## Work
 
-- [x] Pass `ProgramFiles` to Docker.
-- [x] Skip the `.env.e2e` mode check on win32 and document the ACL.
+- [x] Inherit the host environment without application or Compose names.
+- [x] Enforce the `.env.e2e` mode check where the file system keeps
+      permission bits, and document the ACL elsewhere.
 - [x] Forward `NATIVE_ANTHROPIC_BASE_URL` to `native-answer` and `egress`.
 
 ## Verification
