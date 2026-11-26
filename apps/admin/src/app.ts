@@ -33,6 +33,7 @@ import {
 import { CompileError, toolReadiness, type TrustedBotSender } from './compile.js';
 import {
   buildCostsView,
+  COST_GROUPS,
   CostInputError,
   costsCsv,
   isCostGroup,
@@ -1061,7 +1062,7 @@ export function createApp(deps: AppDeps): AdminApp {
   const costsView = async (query: URLSearchParams, fallback: CostGroup): Promise<CostsView> => {
     const group = query.get('group') ?? fallback;
     if (!isCostGroup(group)) {
-      throw new HttpError(400, 'group must be day, channel, requester, mode, model or key');
+      throw new HttpError(400, `group must be one of ${Object.keys(COST_GROUPS).join(', ')}`);
     }
     return buildCostsView(store, parseCostRange(query), group, config.costRetentionDays);
   };
