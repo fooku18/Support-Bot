@@ -73,10 +73,10 @@ it.each([
   ['an HTTP error', () => Promise.resolve(new Response('busy', { status: 503 }))],
   ['a network error', () => Promise.reject(new TypeError('fetch failed'))],
   ['a malformed answer', () => Promise.resolve(Response.json({ answers: {} }))],
-])('replies when the model is unavailable: %s', async (_name, result) => {
+])('stays silent when the model is unavailable: %s', async (_name, result) => {
   vi.spyOn(globalThis, 'fetch').mockImplementation(result);
   await expect(createReplyDecider(env)!('and for yesterday?', false)).resolves.toEqual({
-    reply: true,
+    reply: false,
     reason: 'decider_unavailable',
   });
 });

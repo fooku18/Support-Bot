@@ -401,13 +401,10 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
                 Boolean(event.files?.length),
               );
               const detail = `reason=${verdict.reason}${verdict.probability === undefined ? '' : ` p=${verdict.probability.toFixed(3)}`} channel=${event.channel} message_ts=${event.ts}`;
-              if (!verdict.reply) {
-                log.info(`automatic reply skipped ${detail}`);
-                return;
-              }
               if (verdict.reason === 'decider_unavailable')
-                log.warn(`thread reply decider unavailable; replying ${detail}`);
-              else log.info(`automatic reply accepted ${detail}`);
+                log.warn(`thread reply decider unavailable; automatic reply skipped ${detail}`);
+              else log.info(`automatic reply ${verdict.reply ? 'accepted' : 'skipped'} ${detail}`);
+              if (!verdict.reply) return;
             }
             await intake(normalized, eventId, installation, current.owner);
           })(),

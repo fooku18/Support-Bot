@@ -20,8 +20,8 @@ request, a question, a correction or an answer. Thanks, reactions, remarks
 and small talk stay silent. A message that mentions someone else, a user
 group, `@channel`, `@here` or `@everyone` stays silent without a model call.
 Files without text and the request controls below skip the model. When the
-model fails or takes longer than 2 seconds, the bot replies as it would
-without a decider.
+model fails or takes longer than 2 seconds, the message stays silent; a
+mention still starts a run.
 
 The decider is any model that serves the Jev API (`POST /v1/systemone`),
 such as Jev or a self-hosted clone like clef-flash. Configure it on the

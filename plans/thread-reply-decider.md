@@ -31,9 +31,12 @@ the current behaviour.
   messages as requests.
 - **Files without text** (a screenshot) start the follow-up without calling the model.
 - **Failure:** on a timeout (2 s), an HTTP error or a malformed answer,
-  the bot replies (fail open) and logs a warning. Silence would hide real
-  follow-ups whenever the model is down. The self-hosted pilot can be off
-  outside office hours.
+  the message stays silent (fail closed) and the adapter logs a warning.
+  The operator asked that the bot answer an unmentioned message only when
+  the model confirmed it (2026-11-26). A mention always works. The
+  self-hosted clef-flash pilot is documented for weekdays 8:00–20:00
+  Berlin time; outside those hours unmentioned follow-ups stay silent
+  if it is off.
 - **Socket Mode:** the reply handler runs before the Slack acknowledgement.
   The 2 s bound keeps it within Slack's 3 s window in the normal case.
   A late acknowledgement is already safe: the agent deduplicates redelivered
