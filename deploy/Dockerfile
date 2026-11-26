@@ -55,7 +55,7 @@ ENTRYPOINT ["node", "apps/slack/dist/index.js"]
 # --------------------------------------------------------------------------
 FROM node-build AS egress-build
 RUN --mount=type=cache,target=/root/.npm npm ci --workspace @support-agent/egress --include-workspace-root=false --ignore-scripts --no-audit --no-fund
-COPY apps/egress/tsconfig.json ./apps/egress/
+COPY apps/egress/tsconfig.json apps/egress/tsconfig.build.json ./apps/egress/
 COPY apps/egress/src ./apps/egress/src
 RUN npm run build --workspace @support-agent/egress
 
@@ -94,7 +94,7 @@ ENTRYPOINT ["node", "apps/model-stub/dist/index.js"]
 # --------------------------------------------------------------------------
 FROM node-build AS admin-build
 RUN --mount=type=cache,target=/root/.npm npm ci --workspace @support-agent/admin --include-workspace-root=false --ignore-scripts --no-audit --no-fund
-COPY apps/admin/tsconfig.json ./apps/admin/
+COPY apps/admin/tsconfig.json apps/admin/tsconfig.build.json ./apps/admin/
 COPY apps/admin/src ./apps/admin/src
 RUN npm run build --workspace @support-agent/admin
 

@@ -86,7 +86,10 @@ describe('startForwards', () => {
     await refusing.close();
     cleanup.pop();
 
-    const openEnv = { ...policyEnv, SUPPORT_AGENT_TOOLS_SUBNET: '10.255.1.0/24' };
+    const openEnv: Record<string, string> = {
+      ...policyEnv,
+      SUPPORT_AGENT_TOOLS_SUBNET: '10.255.1.0/24',
+    };
     const admitting = await startForwards(
       [{ listenPort, targetHost: '127.0.0.1', targetPort: target }],
       { host: '127.0.0.1', policy: policyFromEnv((n) => openEnv[n]), log: (l) => lines.push(l) },

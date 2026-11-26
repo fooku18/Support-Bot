@@ -33,7 +33,6 @@ async function setup(dbPath = ':memory:') {
     teamId: 'T1',
     channelId: 'C1',
     userId: 'U1',
-    displayName: 'User',
   });
   let now = Date.now() + 1000;
   const commands = new ChannelCommands(
@@ -264,7 +263,7 @@ describe('atomic shared configuration', () => {
         draft.session,
         'T1',
         'U1',
-        { model: 'opus', part1: 'x'.repeat(3000), part2: 'x'.repeat(1001) },
+        { model: 'opus', part1: 'x'.repeat(3000), part2: 'x'.repeat(1001), autoReplies: true },
         Date.now() + 10000,
       ),
     ).rejects.toThrow(/4000/);
@@ -287,7 +286,6 @@ describe('atomic shared configuration', () => {
       teamId: 'T1',
       channelId: 'C1',
       userId: 'U2',
-      displayName: 'Other',
     });
     await expect(commands.open(grant, 'T1', 'C1', 'U2')).rejects.toThrow(/requester/);
     const draft = await open();
@@ -371,7 +369,6 @@ it('rechecks People on invocation, open and save, and invalidates editors across
     teamId: 'T1',
     channelId: 'C1',
     userId: 'U1',
-    displayName: 'User',
   });
   // A later installation epoch models the durable OAuth re-pair transaction.
   await store.run('UPDATE installations SET installed_at=installed_at+10000 WHERE team_id=?', 'T1');
