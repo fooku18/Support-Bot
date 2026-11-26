@@ -405,6 +405,19 @@ describe('typed GitLab operations (contract v5)', () => {
       output: '{"id":',
     });
     expect(malformed).toMatchObject({ ok: false, errorCategory: 'invalid_response' });
+    const cut = normalizeGitlabOutput({
+      operation: 'list_merge_requests',
+      project: 'group/project',
+      httpStatus: 200,
+      status: 'completed',
+      output: '[{"id":1,"title":"a"},{"id":2,\n[output truncated]',
+      truncated: true,
+      per_page: 100,
+    });
+    expect(cut).toMatchObject({ ok: false, errorCategory: 'invalid_response' });
+    expect(cut.error).not.toMatch(/malformed/);
+    expect(cut.error).toMatch(/exceeded the size limit/);
+    expect(cut.error).toMatch(/per_page/);
     for (const [httpStatus, category, output] of [
       [404, 'not_found'],
       [401, 'authentication'],

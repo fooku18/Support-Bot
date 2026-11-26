@@ -732,6 +732,7 @@ export function normalizeGitlabOutput(args: {
   status: 'completed' | 'failed' | 'timed_out';
   httpStatus: number | null;
   output: string;
+  truncated?: boolean;
   /** Transport failure reported by the tool runtime. */
   error?: string;
   page?: number;
@@ -808,7 +809,9 @@ export function normalizeGitlabOutput(args: {
       ok: false,
       data: null,
       errorCategory: 'invalid_response',
-      error: 'GitLab returned malformed JSON',
+      error: args.truncated
+        ? 'the GitLab response exceeded the size limit; lower per_page or narrow the query and try again'
+        : 'GitLab returned malformed JSON',
     };
   }
   try {
