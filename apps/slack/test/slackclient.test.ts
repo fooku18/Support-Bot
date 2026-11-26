@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import { once } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';
-import type { WebClient } from '@slack/web-api';
+import { ErrorCode, type WebClient } from '@slack/web-api';
 import {
   createSlackClient,
   postMessage,
@@ -238,6 +238,30 @@ describe('addReaction (intake acknowledgment hint)', () => {
     ).catch((err) => err);
     expect(definiteErr).toBeInstanceOf(SlackPostError);
     expect((definiteErr as SlackPostError).failure.kind).toBe('definite');
+
+    for (const failure of [
+      Object.assign(new Error('A request error occurred: socket hang up'), {
+        code: ErrorCode.RequestError,
+      }),
+      Object.assign(new Error('An HTTP protocol error occurred: statusCode = 503'), {
+        code: ErrorCode.HTTPError,
+        statusCode: 503,
+      }),
+    ]) {
+      const transport = {
+        reactions: {
+          add: vi.fn(async () => {
+            throw failure;
+          }),
+        },
+      } as unknown as WebClient;
+      const transportErr = await addReaction(
+        { webClient: transport, botUserId: undefined },
+        { channel: 'C1', timestamp: '1.0', name: 'eyes' },
+      ).catch((err) => err);
+      expect(transportErr).toBeInstanceOf(SlackPostError);
+      expect((transportErr as SlackPostError).failure.kind).toBe('ambiguous');
+    }
   });
 });
 

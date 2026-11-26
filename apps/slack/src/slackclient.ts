@@ -367,9 +367,9 @@ function rateLimitedFailure(err: unknown): SlackFailure | null {
 }
 
 /**
- * A network-level failure (no HTTP response at all, or a timeout) leaves the
- * outcome unknown: Slack may have accepted the post. Slack API errors that
- * carry an error code are definite rejections.
+ * A network-level failure (no HTTP response at all, a non-200 HTTP response,
+ * or a timeout) leaves the outcome unknown: Slack may have accepted the post.
+ * Slack API errors that carry an error code are definite rejections.
  */
 function isAmbiguousNetworkError(err: unknown): boolean {
   if (typeof err !== 'object' || err === null) {
@@ -379,6 +379,9 @@ function isAmbiguousNetworkError(err: unknown): boolean {
   const dataError = (err as { data?: { error?: unknown } }).data?.error;
   if (typeof dataError === 'string') {
     return false;
+  }
+  if (code === 'slack_webapi_request_error' || code === 'slack_webapi_http_error') {
+    return true;
   }
   return (
     code === undefined &&
