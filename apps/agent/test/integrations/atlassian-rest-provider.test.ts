@@ -210,4 +210,29 @@ describe('Atlassian REST provider', () => {
       expect(secrets).toContain(Buffer.from(`bot@example.com:${token}`).toString('base64'));
     }
   });
+
+  it('reads an upstream body larger than the model output bound and bounds the projection', async () => {
+    const base = fakeAtlassian().fetchImpl;
+    const storage = `<p>${'synthetic page text '.repeat(6000)}</p>`;
+    const fetchImpl: AtlassianFetch = async (url, init) =>
+      url.pathname.endsWith('/wiki/api/v2/pages/12345')
+        ? new Response(
+            JSON.stringify({
+              id: '12345',
+              title: 'Big page',
+              status: 'current',
+              spaceId: '99',
+              body: { storage: { value: storage, representation: 'storage' } },
+            }),
+            { status: 200 },
+          )
+        : base(url, init);
+    const provider = new AtlassianRestProvider(CONFIG, fetchImpl);
+    await provider.refresh();
+    const result = await provider.read({ kind: 'getConfluencePage', pageId: '12345' }, 5000, 48000);
+    expect(result.status).toBe('completed');
+    expect(result.truncated).toBe(true);
+    expect(Buffer.byteLength(result.output)).toBeLessThanOrEqual(12000);
+    expect(result.output).toContain('Big page');
+  });
 });
