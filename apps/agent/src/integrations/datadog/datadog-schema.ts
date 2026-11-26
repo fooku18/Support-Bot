@@ -20,6 +20,8 @@ function validatorFor(schema: Record<string, unknown>): ValidateFunction {
       entry = ajv.compile(schema);
     } catch {
       entry = new Error('the pinned upstream schema cannot be compiled');
+    } finally {
+      ajv.removeSchema(schema);
     }
     compiled.set(schema, entry);
   }
