@@ -1,10 +1,16 @@
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { EventEmitter } from 'node:events';
+import type { Pool, PoolClient } from 'pg';
 import { expect, it } from 'vitest';
 import { readSecret } from '../../src/infrastructure/secret.js';
 import { maintenanceConnection } from '../../src/bootstrap/maintenance.js';
-import { startNativeAnswerProcess } from '../../src/bootstrap/application.js';
+import {
+  holdExecutionLease,
+  startNativeAnswerProcess,
+  watchIdleConnections,
+} from '../../src/bootstrap/application.js';
 
 it('resolves one secret source and reports only variable names on failure', () => {
   const root = mkdtempSync(join(tmpdir(), 'runtime-config-'));
@@ -103,4 +109,36 @@ it('defaults blank TCP settings and validates the port and TLS policy', () => {
   } finally {
     rmSync(dir, { recursive: true });
   }
+});
+
+it('logs idle connection failures and exits on purpose when the execution lease is lost', () => {
+  const lines: string[] = [];
+  const log = { info: () => undefined, warn: () => undefined, error: (m: string) => lines.push(m) };
+  const pool = new EventEmitter();
+  watchIdleConnections(pool as unknown as Pool, log);
+  pool.emit(
+    'error',
+    Object.assign(new Error('terminating connection host=secret'), { code: '57P01' }),
+  );
+  expect(lines).toEqual(['idle database connection failed reason=Error']);
+
+  lines.length = 0;
+  const exits: number[] = [];
+  let closing = false;
+  const lease = new EventEmitter();
+  holdExecutionLease(
+    lease as unknown as PoolClient,
+    log,
+    () => closing,
+    (code) => exits.push(code),
+  );
+  lease.emit('error', new Error('Connection terminated unexpectedly'));
+  expect(lines).toEqual(['execution lease lost reason=Error']);
+  expect(exits).toEqual([1]);
+
+  lines.length = 0;
+  closing = true;
+  lease.emit('error', new Error('Connection terminated unexpectedly'));
+  expect(lines).toEqual([]);
+  expect(exits).toEqual([1]);
 });

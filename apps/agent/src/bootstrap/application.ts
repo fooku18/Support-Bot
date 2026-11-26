@@ -24,7 +24,8 @@ import { checkNativeCodingSandbox } from '../mastra/tools/coding.js';
 import { assertCodeModeRuntime } from '../mastra/tools/code-mode.js';
 import { loadModelProviders } from '../integrations/providers/access.js';
 import { CostLedger } from '../integrations/providers/ledger.js';
-import { createStageLogger } from '../infrastructure/logger.js';
+import { createStageLogger, type StageLogger } from '../infrastructure/logger.js';
+import { reason } from '../application/agent-support.js';
 import { configureOutbound, modelFetch } from '../infrastructure/outbound.js';
 import { webReaderFromEnv } from '../integrations/web/gemini-reader.js';
 
@@ -49,6 +50,21 @@ function serviceUrl(value: string) {
   )
     throw new Error('invalid trusted service URL');
   return url.origin;
+}
+export function watchIdleConnections(pool: Pool, log: StageLogger) {
+  pool.on('error', (error) => log.error(`idle database connection failed reason=${reason(error)}`));
+}
+export function holdExecutionLease(
+  lease: PoolClient,
+  log: StageLogger,
+  closing: () => boolean,
+  exit: (code: number) => void = (code) => process.exit(code),
+) {
+  lease.on('error', (error) => {
+    if (closing()) return;
+    log.error(`execution lease lost reason=${reason(error)}`);
+    exit(1);
+  });
 }
 /** Concrete executable native application. All credentials are process/secret
  * owned closures. No generic coordinator, runner claims or automatic recovery. */
@@ -99,7 +115,10 @@ export async function startNativeAnswerProcess(
     // storage/authority work. Task admission reserves this headroom too.
     max: admission.global + 3,
     connectionTimeoutMillis: 5000,
+    keepAlive: true,
   });
+  const log = createStageLogger('native-answer');
+  watchIdleConnections(pool, log);
   let telemetry: Pool | undefined;
   let lease: PoolClient | undefined;
   const ledger = new CostLedger({
@@ -134,6 +153,7 @@ export async function startNativeAnswerProcess(
     if (telemetry) await checkTelemetryStorage(telemetry);
     stage = 'execution-lease';
     lease = await pool.connect();
+    holdExecutionLease(lease, log, () => closing !== undefined);
     if (!(await lease.query('SELECT pg_try_advisory_lock(115,11513) AS held')).rows[0].held)
       throw new Error('native execution authority already active');
     stage = 'configuration';
@@ -204,7 +224,7 @@ export async function startNativeAnswerProcess(
     application = await serve({
       service: {
         pool,
-        log: createStageLogger('native-answer'),
+        log,
         storage: telemetry
           ? withTelemetryStore(nativeStore(pool), pool, telemetry)
           : nativeStore(pool),
