@@ -153,10 +153,6 @@ export function coordinatorRunConfiguration(
   };
 }
 
-/** Exact channel identity for deployment-owned reply enablement epochs. */
-export const coordinatorReplyChannelKey = (teamId: string, channelId: string) =>
-  JSON.stringify([teamId, channelId]);
-
 export function resolveChannelModel(config: CoordinatorConfig, teamId: string, channelId: string) {
   const { channel } = coordinatorRunConfiguration(config, teamId, channelId);
   return config.modelPolicy.models.find(

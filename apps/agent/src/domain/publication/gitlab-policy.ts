@@ -101,9 +101,3 @@ export function taskBranchName(workspaceId: string): string {
 export function checkoutSlug(canonicalPath: string): string {
   return canonicalPath.split('/').join('__');
 }
-
-/** Sanitizes policy diagnostics (never includes tokens or full URLs). */
-export function sanitizePolicyError(err: unknown): string {
-  const message = err instanceof Error ? err.message : 'GitLab policy violation';
-  return message.slice(0, 300);
-}

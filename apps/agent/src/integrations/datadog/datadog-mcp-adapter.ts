@@ -17,8 +17,6 @@ import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
 
 export const DATADOG_ADAPTER = 'datadog-mcp-v1';
 export const DATADOG_CONTRACT_VERSION = 'datadog-read-v1';
-/** Model-facing names are `datadog_<upstream tool name>`. */
-export const DATADOG_TOOL_PREFIX = 'datadog_';
 /** Upstream tool names this runner dispatches (Datadog uses snake_case and kebab-case). */
 export const DATADOG_UPSTREAM_NAME_PATTERN = /^[a-z][a-z0-9_-]{0,79}$/;
 /** Commercial Datadog sites; gov sites are refused (the MCP server does not serve them). */

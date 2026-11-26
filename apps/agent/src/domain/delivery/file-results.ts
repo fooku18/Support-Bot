@@ -42,9 +42,3 @@ export function resultPreview(text: string, budget = RESULT_PREVIEW_CHARS): stri
     ? text.slice(0, boundary).trimEnd()
     : 'The result is available as a downloadable file.';
 }
-
-export function wantsMarkdownReport(prompt: string): boolean {
-  return /\b(downloadable|download|export|attach)\b[\s\S]{0,80}\b(report|markdown|\.md)\b|\b(report|markdown)\b[\s\S]{0,80}\b(download|export|attach)\b/i.test(
-    prompt,
-  );
-}

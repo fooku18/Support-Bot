@@ -12,8 +12,6 @@ import {
   classifySlackError,
   normalizeSlackUserId,
   sendSlackRequest,
-  slackArgumentFingerprint,
-  slackArgumentProblem,
   slackCredentialFingerprint,
   validateSlackRequest,
 } from '../../src/integrations/slack/slack-api-adapter.js';
@@ -56,18 +54,6 @@ describe('Slack argument validation', () => {
     expect(() =>
       validateSlackRequest('lookupByEmail', { email: `${'a'.repeat(120)}@${'b'.repeat(140)}.com` }),
     ).toThrow(/e-mail address/);
-    expect(slackArgumentProblem('slack_get_user', { user: 'U1' })).toBeNull();
-    expect(slackArgumentProblem('slack_get_user', { user: 'U1', cursor: 'x' })).toMatch(
-      /unknown argument cursor/,
-    );
-    expect(slackArgumentProblem('slack_list_users', {})).toMatch(/unknown Slack tool/);
-  });
-
-  it('fingerprints arguments per run without revealing them', () => {
-    const a = slackArgumentFingerprint('run-1', { email: 'A@example.com' });
-    expect(a).toMatch(/^[a-f0-9]{16}$/);
-    expect(a).toBe(slackArgumentFingerprint('run-1', { email: 'a@example.com' }));
-    expect(a).not.toBe(slackArgumentFingerprint('run-2', { email: 'a@example.com' }));
   });
 });
 

@@ -267,4 +267,3 @@ export async function createNativeCodingBinding(parent: NativeCodingOptions, rea
 function quote(value: string) {
   return `'${value.replaceAll("'", "'\\''")}'`;
 }
-export type NativeCodingBinding = Awaited<ReturnType<typeof createNativeCodingBinding>>;

@@ -16,8 +16,6 @@ import {
   SlackRequestError,
   classifySlackError,
   sendSlackRequest,
-  slackArgumentFingerprint,
-  slackArgumentProblem,
   slackPermalink,
   validateSlackRequest,
 } from '../../src/integrations/slack/slack-api-adapter.js';
@@ -67,18 +65,6 @@ describe('Slack search validation', () => {
       { query: 'party', action_token: 'x' },
     ])
       expect(() => validateSlackRequest('searchMessages', bad)).toThrow(SlackRequestError);
-    expect(slackArgumentProblem('slack_search_messages', { query: 'x', page: 2 })).toBeNull();
-    expect(slackArgumentProblem('slack_search_messages', { query: 'x', cursor: 'c' })).toMatch(
-      /unknown argument cursor/,
-    );
-  });
-
-  it('fingerprints page and query per run; the journal never holds the query', () => {
-    const a = slackArgumentFingerprint('run-1', { query: 'company party', page: 1 });
-    expect(a).toMatch(/^[a-f0-9]{16}$/);
-    expect(a).not.toBe(slackArgumentFingerprint('run-1', { query: 'company party', page: 2 }));
-    expect(a).not.toBe(slackArgumentFingerprint('run-2', { query: 'company party', page: 1 }));
-    expect(a).not.toContain('party');
   });
 });
 
