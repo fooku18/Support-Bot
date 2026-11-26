@@ -391,6 +391,37 @@ describe('CONNECT proxy', () => {
     expect(await read(second)).toMatch(/^HTTP\/1\.1 503 /);
     first.destroy();
   });
+
+  it('counts a CONNECT against the limit while it is still resolving', async () => {
+    const target = await echoServer();
+    let started!: () => void;
+    const resolving = new Promise<void>((r) => (started = r));
+    let answer!: (addresses: string[]) => void;
+    const { port, proxy: p } = await proxy({
+      resolve: (host) => {
+        if (host === 'api.extra.example.net') return Promise.resolve([]);
+        started();
+        return new Promise((r) => (answer = r));
+      },
+      dial: (address, _port, timeout) => defaultDial(address, target, timeout),
+      maxTunnelsPerSource: 1,
+    });
+    const first = await connect(port);
+    first.write('CONNECT slack.com:443 HTTP/1.1\r\n\r\n');
+    await resolving;
+    const second = await connect(port);
+    second.write('CONNECT slack.com:443 HTTP/1.1\r\n\r\n');
+    expect(await read(second)).toMatch(/^HTTP\/1\.1 503 /);
+    answer(['127.0.0.1']);
+    expect(await read(first)).toMatch(/^HTTP\/1\.1 200 /);
+    first.destroy();
+    await closed(first);
+    await expect.poll(() => p.stats().active.frontend).toBe(0);
+    const unresolved = await connect(port);
+    unresolved.write('CONNECT api.extra.example.net:443 HTTP/1.1\r\n\r\n');
+    expect(await read(unresolved)).toMatch(/^HTTP\/1\.1 502 /);
+    expect(p.stats().active.frontend).toBe(0);
+  });
 });
 
 function defaultDial(address: string, port: number, timeoutMs: number): Promise<net.Socket> {
