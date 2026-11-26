@@ -57,7 +57,12 @@ export function startNativeAgentServer(options: {
         if (bytes > 256000) throw new CoordinatorError(413, 'body_too_large');
         chunks.push(Buffer.from(chunk));
       }
-      const b = JSON.parse(Buffer.concat(chunks).toString());
+      let b;
+      try {
+        b = JSON.parse(Buffer.concat(chunks).toString());
+      } catch {
+        throw new CoordinatorError(400, 'invalid_body');
+      }
       if (!b || typeof b !== 'object' || Array.isArray(b))
         throw new CoordinatorError(400, 'invalid_body');
       let result: unknown;

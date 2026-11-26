@@ -37,3 +37,11 @@ it('logs the route and error class of an unexpected failure, never its message',
   expect(await response.json()).toEqual({ error: 'native_agent_unavailable' });
   expect(errors).toEqual(['native ingress failed route=/agents/thread reason=TypeError']);
 });
+
+it('answers a malformed body with 400 invalid_body', async () => {
+  const { post, errors } = await serve(async () => ({}));
+  const response = await post('{"runId":');
+  expect(response.status).toBe(400);
+  expect(await response.json()).toEqual({ error: 'invalid_body' });
+  expect(errors).toEqual([]);
+});
