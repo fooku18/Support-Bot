@@ -225,10 +225,6 @@ export function resolveChannelTools(
       };
       continue;
     }
-    if (tool.kind === 'codeMode') {
-      unavailable.push({ kind: tool.kind, label: tool.label, reason: 'retired script sandbox' });
-      continue;
-    }
     const entry = effectiveTool(tool);
     if (entry !== null) profile.tools.push(entry);
   }

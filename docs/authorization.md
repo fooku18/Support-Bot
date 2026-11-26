@@ -57,16 +57,17 @@ Create instances in the workspace's **Tools** page, check readiness and
 assign them per channel. The settings and CLI runtime hold credentials
 outside model context and coding workspaces.
 
-| Integration                         | Channel configuration                                                        |
-| ----------------------------------- | ---------------------------------------------------------------------------- |
-| [GitLab](gitlab.md)                 | Scope the token to the projects the channel may use; there is no allowlist.  |
-| [Jira and Confluence](atlassian.md) | Set the site and cloud ID and use scoped read-only credentials.              |
-| [Datadog](datadog.md)               | Use a PAT or SAT with `mcp_read` and required read scopes.                   |
-| [Cloudflare](cloudflare.md)         | Use an account or zone-scoped Read token.                                    |
-| [Slack](slack-tool.md)              | Reuse the installed workspace bot token for linked messages and lookup.      |
-| Web search                          | Assign the provider search tool. Requests use the selected model connection. |
-| Web fetch                           | Assign the read tool and enable the isolated web runtime.                    |
-| Coding and files                    | Use the isolated workspace and explicit export or publication tools.         |
+| Integration                         | Channel configuration                                                         |
+| ----------------------------------- | ----------------------------------------------------------------------------- |
+| [GitLab](gitlab.md)                 | Scope the token to the projects the channel may use; there is no allowlist.   |
+| [Jira and Confluence](atlassian.md) | Set the site and cloud ID and use scoped read-only credentials.               |
+| [Datadog](datadog.md)               | Use a PAT or SAT with `mcp_read` and required read scopes.                    |
+| [Cloudflare](cloudflare.md)         | Use an account or zone-scoped Read token.                                     |
+| [Slack](slack-tool.md)              | Reuse the installed workspace bot token for linked messages and lookup.       |
+| Web search                          | Assign the provider search tool. Requests use the selected model connection.  |
+| Web fetch                           | Assign the read tool and enable the isolated web runtime.                     |
+| Code Mode                           | Assign it next to read tools. With a coding workspace it is always available. |
+| Coding and files                    | Use the isolated workspace and explicit export or publication tools.          |
 
 Service endpoints and allowed names are bounded by the deployment
 configuration. A ready tool in another workspace or channel does not grant

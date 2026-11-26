@@ -100,7 +100,7 @@ fixture URL on both questions and refuses search substitution or publication.
 Studio uses the same binding and optional private network.
 
 The shared agent uses Mastra's `ToolSearchProcessor`. Only the bound read tools
-enter its catalog, along with Code Mode when the coding workspace is available.
+enter its catalog, along with Code Mode when it is assigned or the coding workspace is available.
 Code Mode's generated signatures load with its tool. Clarification, provider
 search and workspace tools stay directly available when configured. Native keyword search auto-loads at most three matches for the next
 model turn. Full service schemas are withheld initially; there is no injected

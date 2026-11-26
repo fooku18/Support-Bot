@@ -2,6 +2,8 @@ import { registerNativeExport } from '../domain/delivery/register-export.js';
 import { publicationLine } from '../domain/delivery/long-answer.js';
 import { providerSearchEnabled } from '../mastra/tools/provider-search.js';
 import { createNativeCodingBinding } from '../mastra/tools/coding.js';
+import { nativeCodeModeTools } from '../mastra/tools/code-mode.js';
+import { channelToolGranted } from './tool-grant.js';
 import { createHash, randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { nativeAgentOperations, readNativeRun } from '../mastra/runtime/inspection.js';
@@ -184,6 +186,12 @@ export function createNativeAgentService(options: NativeAgentOptions) {
           reads,
         )
       : undefined;
+    // The workspace brings Code Mode along. Without one, it is the channel's assignment.
+    const codeMode =
+      coding?.codeMode ??
+      (Object.keys(reads).length > 0 && channelToolGranted(cfg, r.accepted, 'codeMode')
+        ? nativeCodeModeTools(reads, () => guard('codeMode'))
+        : undefined);
     const modelBinding = options.bindModel(model, r.accepted, {
       runId: r.run_id,
       runSeq: await sequence(r),
@@ -211,6 +219,7 @@ export function createNativeAgentService(options: NativeAgentOptions) {
       instructions,
       tools: reads,
       coding,
+      codeMode,
       nativeInputs: !!options.inputs,
       ...options.limits,
     });

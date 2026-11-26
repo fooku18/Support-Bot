@@ -59,7 +59,12 @@ function setup() {
 
 describe('Code Mode in isolated-vm', () => {
   it('uses the agreed limits', () => {
-    expect(CODE_MODE_LIMITS).toEqual({ timeoutMs: 15_000, memoryLimitMb: 64 });
+    expect(CODE_MODE_LIMITS).toEqual({
+      timeoutMs: 15_000,
+      memoryLimitMb: 64,
+      maxReads: 50,
+      maxOutputBytes: 48_000,
+    });
   });
 
   it('refuses to build without --no-node-snapshot', () => {
@@ -167,6 +172,37 @@ describe('Code Mode in isolated-vm', () => {
       result: { project: true, refused: 'service_binding_revoked' },
     });
     expect(f.calls.map((c) => c.operation)).toEqual(['get_project']);
+  });
+
+  it('caps the read calls of one script; the next script starts fresh', async () => {
+    const f = setup();
+    const many = `
+      const out = await Promise.allSettled(
+        Array.from({ length: 60 }, () => external_get_project({ project: 'g/p' })));
+      const refused = out.filter((o) => o.status === 'rejected');
+      return { refused: refused.length, why: String((refused[0] as any).reason.message) };`;
+    expect(await f.run(many)).toMatchObject({
+      success: true,
+      result: { refused: 10, why: 'a script may make at most 50 read calls' },
+    });
+    expect(f.calls).toHaveLength(50);
+    expect(
+      await f.run(`return (await external_get_project({ project: 'g/p' })).result.ok;`),
+    ).toEqual(expect.objectContaining({ success: true, result: true }));
+  });
+
+  it('refuses a result or log output beyond the bound without returning any of it', async () => {
+    const f = setup();
+    expect(await f.run(`return 'x'.repeat(40_000).length;`)).toMatchObject({ result: 40_000 });
+    for (const script of [
+      `return 'x'.repeat(60_000);`,
+      `for (let i = 0; i < 100; i++) console.log('x'.repeat(1_000)); return 1;`,
+      `throw new Error('x'.repeat(60_000));`,
+    ]) {
+      const out = await f.run(script);
+      expect(out).toMatchObject({ success: false, error: { name: 'OutputLimitError' } });
+      expect(JSON.stringify(out).length).toBeLessThan(500);
+    }
   });
 
   it('stops runaway recursion with the stack limit', async () => {

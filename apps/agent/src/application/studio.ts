@@ -11,6 +11,8 @@ import {
   NATIVE_AGENT_VERSION,
 } from '../mastra/agents/coding.js';
 import { createNativeCodingBinding } from '../mastra/tools/coding.js';
+import { nativeCodeModeTools } from '../mastra/tools/code-mode.js';
+import { channelToolGranted } from './tool-grant.js';
 import { createReadServiceTools } from '../mastra/tools/read-services.js';
 import { evaluateAuthorization, parseAuthorizationPolicy } from '../domain/authorization/policy.js';
 import { coordinatorAdminSnapshot, coordinatorRunConfiguration } from './configuration/config.js';
@@ -289,6 +291,11 @@ export async function createNativeStudio(options: {
         reads,
       )
     : undefined;
+  const codeMode =
+    coding?.codeMode ??
+    (Object.keys(reads).length > 0 && channelToolGranted(initial, identity, 'codeMode')
+      ? nativeCodeModeTools(reads, () => guard('codeMode'))
+      : undefined);
   const modelBinding = service.bindModel(model, identity);
   const agent = createNativeAgent({
     storage: service.storage,
@@ -300,6 +307,7 @@ export async function createNativeStudio(options: {
       : {}),
     tools: reads,
     coding,
+    codeMode,
     instructions: [
       nativeInstructions,
       current.channel.systemPrompt ?? '',

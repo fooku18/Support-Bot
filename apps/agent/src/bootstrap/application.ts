@@ -76,10 +76,9 @@ export async function startNativeAnswerProcess(
         token: required(env, 'CLI_RUNTIME_TOKEN'),
       }
     : undefined;
-  if (storageDir) {
-    assertCodeModeRuntime();
-    await checkNativeCodingSandbox(storageDir);
-  }
+  // Any channel can be assigned Code Mode, with or without a coding store.
+  assertCodeModeRuntime();
+  if (storageDir) await checkNativeCodingSandbox(storageDir);
   const token = required(env, 'SERVICE_TOKEN');
   const adminUrl = serviceUrl(required(env, 'ADMIN_URL'));
   const adminToken = required(env, 'ADMIN_INTERNAL_TOKEN');
