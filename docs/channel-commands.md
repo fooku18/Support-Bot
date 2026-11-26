@@ -21,10 +21,13 @@ start an answer or coding run. Keep a space after the mention so Slack sends its
 mention event. An unmentioned thread reply starting with `!` stays silent;
 mention the bot directly to invoke a command or receive usage.
 
-The channel's current **People** list authorizes commands. Membership,
-channel enablement and workspace enablement are checked against the admin
-store on invocation, opening an editor and saving. The internal service
-credential authenticates the controller; it does not replace these checks.
+Commands follow the same access as answers. On invocation, opening an
+editor and saving, the settings service checks that the requester is a
+current member of the Slack channel, that the workspace is enabled and
+paired, that the channel is enabled, and that the compiled authorization
+policy lets the requester start a task there, so a member on the channel's
+**Blocked members** list is refused. The internal service credential
+authenticates the controller; it does not replace these checks.
 
 ## Configure
 
@@ -72,7 +75,7 @@ Limits are 50 active notes, 1,000 UTF-16 units per note, 12,000 total raw units
 and 24,000 rendered units. Writes exceeding a limit are refused, never
 truncated or pruned. Lists show at most ten notes per page in a native Slack table with ID, note
 and last-confirmed columns. Note text stays literal and wraps; confirmation
-shows a UTC time and the stored People display name (or user ID). Lists label
+shows a UTC time and the Slack user ID of the last writer. Lists label
 their revision and page and split long pages into bounded receipt parts.
 
 A real inference run pins an authoritative snapshot at its first claim.
@@ -91,8 +94,9 @@ runs do not require the memory service.
 ## Persistence and receipts
 
 Memory, command deduplication, grants, sessions and public receipt intents
-live in `admin.sqlite`, outside execution-state purge and thread expiry.
-Existing admin SQLite backups include them. Disabling a workspace/channel
+live in the settings store (PostgreSQL in production, SQLite in the Compose
+stack), outside execution-state purge and thread expiry. Backups of the
+settings store include them. Disabling a workspace/channel
 retains notes and holds receipts. Re-pairing retains notes but invalidates
 old grants/editors. Explicit workspace deletion removes these records.
 
