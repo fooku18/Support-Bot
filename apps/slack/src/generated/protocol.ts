@@ -9,11 +9,11 @@
  */
 
 /**
- * Version of the coordinator DTO/client contract (dto.ts plus the status
- * types in this file). The adapter and runner vendor this contract into
- * `src/generated/protocol.ts` via `npm run generate:protocol`; the
- * contract test fails when the generated mirrors drift. Bump together with
- * any incompatible DTO change and regenerate.
+ * Version of the agent's service contract (dto.ts plus the types in this
+ * file). The Slack adapter vendors it into `src/generated/protocol.ts` via
+ * `npm run generate:protocol`; the contract test fails when the generated
+ * mirrors drift. Bump together with any incompatible DTO change and
+ * regenerate.
  */
 export const PROTOCOL_VERSION = 30;
 

@@ -7,9 +7,9 @@
 
 /**
  * Tool instance kinds: the one definition of what an admin-managed tool
- * instance is, shared by the admin service (validation before storing) and
- * the runner/runtimes (a generated verbatim copy in
- * apps/agent/src/integrations/tools validates what it receives).
+ * instance is, shared by the admin service (validation before storing,
+ * through its generated verbatim copy apps/admin/src/generated/tool-kinds.ts)
+ * and the agent and tool runtime (validation of what they receive).
  *
  * A tool instance belongs to one workspace and has one kind. Settings are
  * non-secret; the credential is stored encrypted by the admin service and is
