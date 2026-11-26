@@ -77,9 +77,7 @@ see and dies with the account.
 
 5. Create the token and copy it immediately; GitLab shows it once.
 
-Never use a CI job token. The runtime refuses `GITLAB_HOST` and
-`GITLAB_TOKEN` in its environment; the credential belongs only in the admin
-form.
+Never use a CI job token. The credential belongs only in the admin form.
 
 The readiness probe calls `GET /user` only. **It does not check scopes or
 expiry.** A successful probe does not establish push access. For the test group or project token, select both scopes above when creating it. For personal tokens, GitLab also includes Git-over-HTTP write access in `api`. [GitLab access token scopes](https://docs.gitlab.com/security/tokens/access_token_scopes/)
@@ -180,18 +178,17 @@ branch, project ID and merge request IID and URL.
 
 ## Troubleshooting
 
-| Symptom                                          | Cause                                                             | Fix                                                                |
-| ------------------------------------------------ | ----------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `blocked: host not admitted`                     | The host is not in `GITLAB_HOSTS`                                 | Admit it, recreate `egress` and `cli-runtime` (step 4)             |
-| Form: "host must be a bare hostname … (no port)" | The host has a port or scheme                                     | Enter the bare hostname; GitLab must be served on port 443         |
-| Not ready: `invalid_auth`                        | Token wrong, expired or revoked                                   | Check it by hand (step 2); create a new one                        |
-| Not ready: `forbidden`                           | The token's user is blocked or lacks API access                   | Check the user and token in GitLab                                 |
-| Not ready: `unreachable`                         | The egress proxy refuses the host, or GitLab is not on port 443   | Check the proxy's `denied` lines and the host                      |
-| Runtime refuses to start: obsolete variable      | `GITLAB_HOST` or `GITLAB_TOKEN` is set in the runtime environment | Remove it from the env file                                        |
-| Publication: "has no usable e-mail address"      | `GET /user` returns no e-mail for the token's user                | Give the user an e-mail address, or use another token (step 2)     |
-| Publication: push refused (`403`)                | Token lacks `write_repository`, or the role cannot push           | Recreate the token with the scopes and role from step 1            |
-| Publication: "operator decision required"        | The task's merge request was merged, closed or retargeted         | Inspect the merge request; start a new request for further changes |
-| Verification fails installing packages           | The sandbox has no network                                        | Vendor the dependencies, or use a test command that needs none     |
+| Symptom                                          | Cause                                                           | Fix                                                                |
+| ------------------------------------------------ | --------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `blocked: host not admitted`                     | The host is not in `GITLAB_HOSTS`                               | Admit it, recreate `egress` and `cli-runtime` (step 4)             |
+| Form: "host must be a bare hostname … (no port)" | The host has a port or scheme                                   | Enter the bare hostname; GitLab must be served on port 443         |
+| Not ready: `invalid_auth`                        | Token wrong, expired or revoked                                 | Check it by hand (step 2); create a new one                        |
+| Not ready: `forbidden`                           | The token's user is blocked or lacks API access                 | Check the user and token in GitLab                                 |
+| Not ready: `unreachable`                         | The egress proxy refuses the host, or GitLab is not on port 443 | Check the proxy's `denied` lines and the host                      |
+| Publication: "has no usable e-mail address"      | `GET /user` returns no e-mail for the token's user              | Give the user an e-mail address, or use another token (step 2)     |
+| Publication: push refused (`403`)                | Token lacks `write_repository`, or the role cannot push         | Recreate the token with the scopes and role from step 1            |
+| Publication: "operator decision required"        | The task's merge request was merged, closed or retargeted       | Inspect the merge request; start a new request for further changes |
+| Verification fails installing packages           | The sandbox has no network                                      | Vendor the dependencies, or use a test command that needs none     |
 
 ## Verification
 

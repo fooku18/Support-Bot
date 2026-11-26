@@ -243,8 +243,8 @@ function connectionCode(err: unknown): string {
 
 /**
  * Sends a typed GitLab request to the credential-owning tool runtime's
- * /gitlab route. The runtime holds GITLAB_TOKEN and pins GITLAB_HOST; the
- * controller sends neither. `transportTimeoutMs` bounds the whole exchange
+ * /gitlab route. The runtime holds the GitLab instance credential; the
+ * controller sends none. `transportTimeoutMs` bounds the whole exchange
  * and must exceed the request's own execution deadline (`timeoutMs`). A
  * timed-out fetch is an UncertainOutcomeError, a connection that failed
  * before any response a RuntimeConnectionError (e.g. a pooled
