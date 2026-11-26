@@ -1134,6 +1134,13 @@ describe('job trace streaming retention (get_job_trace)', () => {
     expect(redacted).toContain('no secret: tokenizer=fast, https://gitlab.example.test/g/p');
   });
 
+  it('redacts a whole base64 Basic or Bearer credential and keeps the scheme', () => {
+    expect(redactRuntimeOutput('sent Basic dXNl+cjpw/YXNz== to h')).toBe(
+      'sent Basic [redacted] to h',
+    );
+    expect(redactRuntimeOutput('sent bearer ab+cd/ef= to h')).toBe('sent bearer [redacted] to h');
+  });
+
   it('streams a trace: tail by default, head on request, redacted', async () => {
     // About 120 000 bytes: a token line at the top, numbered lines, a summary.
     const trace = [
