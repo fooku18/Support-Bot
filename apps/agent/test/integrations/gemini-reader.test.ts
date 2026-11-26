@@ -235,6 +235,26 @@ describe('page reads', () => {
     }
   });
 
+  it('refuses a question that carries its own URL before any request', async () => {
+    const f = reader(() => json(answer('never')));
+    for (const question of [
+      'Compare with https://other.example.com/page',
+      'What does http://10.0.0.1/admin say?',
+      'Also read www.other.example.com please',
+      'And HTTPS://OTHER.EXAMPLE.COM?',
+    ]) {
+      const error = await readWebPage(
+        f.value,
+        TARGET,
+        question,
+        new AbortController().signal,
+      ).catch((e: Error) => e);
+      expect(error).toBeInstanceOf(WebReadError);
+      expect((error as Error).message).toMatch(/question must not contain a URL/);
+    }
+    expect(f.seen).toHaveLength(0);
+  });
+
   it('stops when the run is cancelled', async () => {
     const controller = new AbortController();
     const f = reader(
