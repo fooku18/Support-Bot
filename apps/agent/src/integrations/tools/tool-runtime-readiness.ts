@@ -245,30 +245,42 @@ export async function fetchCliRuntimeReadiness(
 ): Promise<CliRuntimeReadiness> {
   let lastError: unknown = null;
   for (let attempt = 1; attempt <= READINESS_ATTEMPTS; attempt += 1) {
+    if (attempt > 1) await new Promise((resolve) => setTimeout(resolve, 1_000));
+    let response: Response;
     try {
-      const response = await fetch(new URL('/readyz', cliRuntimeUrl), {
+      response = await fetch(new URL('/readyz', cliRuntimeUrl), {
         headers: { authorization: `Bearer ${cliRuntimeToken}` },
         signal: AbortSignal.timeout(timeoutMs),
       });
-      if (response.status === 401 || response.status === 403) {
-        throw new Error(
-          'CLI runtime rejected the runner readiness request (CLI_RUNTIME_TOKEN mismatch)',
-        );
-      }
-      if (!response.ok) throw new Error(`CLI runtime /readyz returned HTTP ${response.status}`);
-      const parsed = (await response.json()) as Partial<CliRuntimeReadiness>;
-      if (parsed === null || typeof parsed !== 'object' || !Array.isArray(parsed.instances))
-        throw new Error('CLI runtime /readyz returned an invalid readiness report');
-      return {
-        service: String(parsed.service ?? 'cli-runtime'),
-        configVersion: typeof parsed.configVersion === 'number' ? parsed.configVersion : null,
-        syncError: typeof parsed.syncError === 'string' ? parsed.syncError : null,
-        instances: parsed.instances,
-      };
     } catch (err) {
       lastError = err;
-      if (attempt < READINESS_ATTEMPTS) await new Promise((resolve) => setTimeout(resolve, 1_000));
+      continue;
     }
+    if (response.status === 401 || response.status === 403) {
+      throw new Error(
+        'CLI runtime rejected the runner readiness request (CLI_RUNTIME_TOKEN mismatch)',
+      );
+    }
+    if (!response.ok) {
+      lastError = new Error(`CLI runtime /readyz returned HTTP ${response.status}`);
+      if (response.status >= 500) continue;
+      throw lastError;
+    }
+    let parsed: Partial<CliRuntimeReadiness>;
+    try {
+      parsed = (await response.json()) as Partial<CliRuntimeReadiness>;
+    } catch (err) {
+      lastError = err;
+      continue;
+    }
+    if (parsed === null || typeof parsed !== 'object' || !Array.isArray(parsed.instances))
+      throw new Error('CLI runtime /readyz returned an invalid readiness report');
+    return {
+      service: String(parsed.service ?? 'cli-runtime'),
+      configVersion: typeof parsed.configVersion === 'number' ? parsed.configVersion : null,
+      syncError: typeof parsed.syncError === 'string' ? parsed.syncError : null,
+      instances: parsed.instances,
+    };
   }
   throw lastError instanceof Error ? lastError : new Error('CLI runtime /readyz request failed');
 }
