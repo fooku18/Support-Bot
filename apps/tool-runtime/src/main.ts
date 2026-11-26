@@ -25,6 +25,7 @@ import {
   configureOutbound,
   egressProxyUrlFromEnv,
 } from '../../agent/src/infrastructure/outbound.js';
+import { timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import {
   GITLAB_CONTRACT_VERSION,
@@ -164,13 +165,10 @@ export function assertCliRuntimeEnvClean(env: NodeJS.ProcessEnv = process.env): 
   }
 }
 
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i += 1) {
-    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  }
-  return diff === 0;
+function sameToken(given: string, expected: string): boolean {
+  const a = Buffer.from(given);
+  const b = Buffer.from(expected);
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 function json(res: ServerResponse, status: number, body: unknown): void {
@@ -1260,7 +1258,7 @@ export async function startCliRuntimeServer(): Promise<void> {
       }
       const header = req.headers.authorization ?? '';
       const match = /^Bearer (.+)$/.exec(header);
-      if (match === null || !timingSafeEqual(match[1] ?? '', cliRuntimeToken())) {
+      if (match === null || !sameToken(match[1] ?? '', cliRuntimeToken())) {
         json(res, 401, { error: 'unauthorized' });
         return;
       }
