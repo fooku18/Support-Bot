@@ -203,6 +203,7 @@ export function nativeReadServices(options: {
               status: response.status,
               httpStatus: response.httpStatus,
               output: response.output,
+              truncated: response.truncated,
               error: response.error,
               ...('page' in validated ? { page: validated.page } : {}),
               ...('per_page' in validated ? { per_page: validated.per_page } : {}),
