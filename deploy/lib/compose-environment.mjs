@@ -11,6 +11,7 @@ export function composeHostEnvironment(source = process.env) {
     'DOCKER_CONFIG',
     'XDG_RUNTIME_DIR',
     'SSH_AUTH_SOCK',
+    'ProgramFiles',
   ])
     if (source[key]) env[key] = source[key];
   return env;
