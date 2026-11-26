@@ -85,8 +85,29 @@ mention rule. Latency was about 170 ms per call from the office network and
 
 ## Verification
 
-- Deterministic: <pending>
-- Live: <pending>
+- Deterministic, Windows 11, Node 26.13.1, Docker Desktop 29.9.3:
+  - T0 on `1b33a18`: pass.
+  - T1 and T2 on `1b33a18`: the Slack package (163 tests, 19 new) and
+    egress pass. No failure beyond those of `origin/main` (`9ebe4d3`) on
+    the same machine: 55 in the agent package (publication, Code Mode) and
+    31 in T2 (backup and GC scripts, agent hooks), all Windows-specific.
+  - T3 `application` on `1b33a18` and on `9ebe4d3`: both stop at the same
+    check, `input-context-tripwire-is-explicit-failure-without-delivery`
+    (`inputs-corrections`), after the same 69 passing checks. The later
+    checks of the suite did not run on either revision.
+  - T3 `tools`: not run; the egress change is one host rule, covered by its
+    unit test.
+  - T4 stub suite on `62b090d` images, decider unset: 8 of 8 passed. With the
+    decider set, the stub scenario's follow-up (`STUB_HOLD 5…`, a stub
+    directive, not a message) scores 0.46 and would stay silent.
+- Live:
+  - The adapter pod on the Kubernetes staging cluster reaches clef-flash
+    (`POST /v1/systemone` returned 200 in 1.5 s, 2026-11-26).
+  - T5: not applicable as is. The driver cannot assert that the bot stayed
+    silent, so no gateway scenario covers the decider. Live acceptance is a
+    check in the deployment's test channel after rollout: a mention, then
+    "thanks!" (silent, `automatic reply skipped` in the adapter log), then
+    a follow-up question (answered).
 
 ## Rollout
 
@@ -96,4 +117,4 @@ unset `THREAD_REPLY_DECIDER_URL`.
 
 ## Open items
 
-- [ ] T5 on the test instance
+- [ ] Live check in the deployment's test channel after rollout
