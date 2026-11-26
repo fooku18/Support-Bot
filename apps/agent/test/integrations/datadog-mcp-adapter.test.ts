@@ -332,6 +332,26 @@ describe('Datadog MCP session', () => {
     expect(blocked.output).toContain('blocked this MCP tool');
   });
 
+  it('keeps an isError text that only mentions refusal words as a tool error', async () => {
+    const texts = [
+      'invalid query: unknown facet @scope',
+      'status:401 is not allowed in this field; check the permission facet',
+      'read-only attribute quota cannot be filtered with 429 values',
+    ];
+    const fake = fakeDatadog({
+      call: (_name, args) => ({
+        isError: true,
+        content: [{ type: 'text', text: texts[Number(args.index)] }],
+      }),
+    });
+    const s = session(fake);
+    for (const [index, text] of texts.entries()) {
+      const result = await s.callTool('search_datadog_logs', { index }, bounds);
+      expect(result).toMatchObject({ status: 'failed', errorCategory: 'tool_error' });
+      expect(result.output).toContain(text);
+    }
+  });
+
   it('bounds tiny limits sensibly', () => {
     expect(boundDatadogOutput('short', 1_000)).toEqual({ output: 'short', truncated: false });
   });
