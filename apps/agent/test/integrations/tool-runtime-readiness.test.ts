@@ -133,13 +133,23 @@ describe('tool runtime readiness report', () => {
     });
   });
 
-  it('retries a bounded number of times and fails visibly', async () => {
+  it('retries network errors and 5xx a bounded number of times and fails visibly', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout'] });
-    for (const [answer, pattern] of [
-      [() => new Response('no', { status: 401 }), /CLI_RUNTIME_TOKEN mismatch/],
-      [() => new Response('no', { status: 503 }), /returned HTTP 503/],
+    for (const [answer, pattern, calls] of [
+      [() => new Response('no', { status: 401 }), /CLI_RUNTIME_TOKEN mismatch/, 1],
+      [() => new Response('no', { status: 403 }), /CLI_RUNTIME_TOKEN mismatch/, 1],
+      [() => new Response('no', { status: 404 }), /returned HTTP 404/, 1],
+      [() => new Response('no', { status: 503 }), /returned HTTP 503/, 3],
+      [() => new Response('<html>', { status: 200 }), /JSON/, 3],
+      [
+        () => {
+          throw new TypeError('fetch failed');
+        },
+        /fetch failed/,
+        3,
+      ],
       // The pre-instance report shape (global gitlab/atlassian) is refused.
-      [() => Response.json({ gitlab: null, atlassian: null }), /invalid readiness report/],
+      [() => Response.json({ gitlab: null, atlassian: null }), /invalid readiness report/, 1],
     ] as const) {
       const fetchMock = vi.fn(async () => answer());
       vi.stubGlobal('fetch', fetchMock);
@@ -148,7 +158,7 @@ describe('tool runtime readiness report', () => {
       );
       await vi.advanceTimersByTimeAsync(2_000);
       await failure;
-      expect(fetchMock).toHaveBeenCalledTimes(3);
+      expect(fetchMock).toHaveBeenCalledTimes(calls);
     }
   });
 });
