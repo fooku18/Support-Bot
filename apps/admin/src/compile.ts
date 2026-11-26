@@ -207,11 +207,6 @@ export const DENY_ALL_BINDING = {
   roles: [BASE_ROLE],
 };
 
-/**
- * Readiness of one instance as the document and the UI show it: kinds
- * without a runtime probe are ready when enabled; the others need a
- * credential and a `ready` report for the current credential version.
- */
 /** Readiness detail of a stored web search row of the retired provider shape (plan D9). */
 export const LEGACY_WEB_SEARCH_DETAIL = 'legacy search-provider instance: delete and recreate it';
 
@@ -232,6 +227,11 @@ export function isLegacyWebSearch(
   );
 }
 
+/**
+ * Readiness of one instance as the document and the UI show it: kinds
+ * without a runtime probe are ready when enabled; the others need a
+ * credential and a `ready` report for the current credential version.
+ */
 export function toolReadiness(
   instance: Pick<
     ToolInstanceRow,

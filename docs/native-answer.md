@@ -30,7 +30,6 @@ when the [shared telemetry store](#shared-telemetry) is enabled. Exporters
 omit prompts, answers, tool payloads and arbitrary metadata. Application publication and
 delivery receipts remain authoritative.
 
-Inert inspection uses framework storage and exported durable step constants.
 One small version-specific suspension decoder remains in `mastra/runtime/inspection.ts`:
 the pinned public observation API does not recover a cold question when its
 replay cache is empty. Keep the cold-inspection regression when upgrading Mastra.
@@ -38,8 +37,7 @@ replay cache is empty. Keep the cold-inspection regression when upgrading Mastra
 Mastra's pinned Agent/createDurableAgent, Memory/PostgresStore, top-level
 `ask_user`, native resume/abort, processors and workflow inspection own execution.
 Automatic durable/workflow recovery stays off. The six `native_agents` tables
-retain identity, admission/input provenance and external-effect receipts; there
-is no second transcript or execution snapshot journal. Answer attachments use
+retain identity, admission/input provenance and external-effect receipts. Answer attachments use
 `nativeInputHandler` and `createNativeInputClient`, then native inline messages.
 No file sandbox or FileUploadProcessor is created.
 
@@ -53,9 +51,7 @@ token usage to admin, with billed USD marked unavailable.
 
 Startup uses validated admin synchronization/ETag transport directly,
 refusing unavailable, regressing or conflicting config. The existing authenticated
-channel-memory proxy/client runs on loopback, with admin as the source. No seed
-policy, default authorization, credentials in framework context, or config table
-copy is introduced.
+channel-memory proxy/client runs on loopback, with admin as the source.
 
 Read tools reuse Mastra `createTool`, typed catalogs, validators, and the
 credential-owning CLI runtime clients. GitLab reads, Atlassian reads, Datadog
@@ -104,8 +100,7 @@ to Google; pages behind a login or in a private network cannot be read. Reader
 requests are not in the cost ledger. Configure either this or the web runtime.
 
 The pinned Mastra built-in fetch tool cannot use this transport: it owns raw
-Node HTTP requests and DNS lookup with no proxy injection. The retained exception
-is the existing typed fetch transport, not a second agent loop. Native fetch
+Node HTTP requests and DNS lookup with no proxy injection. Native fetch
 receipts retain hashed call/URL/content identities and byte counts, never page
 bodies. `tests/live/scenarios/web-fetch.json` requires fresh direct reads of the
 fixture URL on both questions and refuses search substitution or publication.
@@ -120,8 +115,7 @@ catalog or separate load turn. Loaded tools derive from framework conversation
 context (`storage: 'context'`), survive restart while the discovery result is
 retained, and disappear when that context is trimmed. The model can search again.
 Search adds one inference before a first read; a retained loaded tool can be
-called directly on a follow-up. This does not qualify live model selection or
-latency.
+called directly on a follow-up.
 
 The discovery filter checks current policy before exposing tools. Provider
 dispatch and service execution also check their own authority. A tool
