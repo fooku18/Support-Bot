@@ -267,7 +267,7 @@ function serviceFixture() {
     instructions: '',
     services,
     channelInstructions: async () => '',
-    limits: { contextTokens: 1000, outputTokens: 100, maxSteps: 1, timeoutMs: 1000 },
+    limits: { outputTokens: 100, maxSteps: 1, timeoutMs: 1000 },
   };
   return {
     service: createNativeAgentService(options),

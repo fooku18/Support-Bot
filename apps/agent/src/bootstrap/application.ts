@@ -195,7 +195,6 @@ export async function startNativeAnswerProcess(
       await adapter('/native-authority/ready');
     };
     const limits = {
-      contextTokens: 24000,
       outputTokens: 6000,
       maxSteps: storageDir ? 40 : 12,
       timeoutMs: storageDir ? 600000 : 120000,

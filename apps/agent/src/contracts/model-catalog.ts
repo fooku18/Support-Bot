@@ -6,6 +6,8 @@ export interface CatalogEntry {
   route: ModelRoute;
   model: string;
   webSearch: boolean;
+  /** Estimated prompt tokens a request keeps before older context is shrunk. */
+  contextTokens: number;
 }
 
 export interface ModelCatalog {
@@ -18,6 +20,11 @@ export interface ResolvedModel extends CatalogEntry {
 }
 
 export type ModelConnection = 'anthropic' | 'openai' | 'vertex';
+
+/** Leaves room for tool schemas, output and estimation error in a 200k window. */
+export const DEFAULT_CONTEXT_TOKENS = 64_000;
+export const MIN_CONTEXT_TOKENS = 8_000;
+export const MAX_CONTEXT_TOKENS = 1_000_000;
 
 export const MODEL_KEY_PATTERN = /^[a-z][a-z0-9-]{0,23}$/;
 export const MODEL_SETTING_NAMES = [
@@ -73,8 +80,12 @@ export function parseModelCatalog(
   const entries: CatalogEntry[] = models.map((entry: unknown) => {
     if (!entry || typeof entry !== 'object' || Array.isArray(entry))
       throw new Error('MODEL_CATALOG entries must be objects');
-    const { key, route, model, webSearch } = entry as Record<string, unknown>;
-    if (Object.keys(entry).some((name) => !['key', 'route', 'model', 'webSearch'].includes(name)))
+    const { key, route, model, webSearch, contextTokens } = entry as Record<string, unknown>;
+    if (
+      Object.keys(entry).some(
+        (name) => !['key', 'route', 'model', 'webSearch', 'contextTokens'].includes(name),
+      )
+    )
       throw new Error('MODEL_CATALOG entry has an unknown field');
     if (!validModelKey(key) || keys.has(key))
       throw new Error('MODEL_CATALOG entry has an invalid or duplicate key');
@@ -92,8 +103,21 @@ export function parseModelCatalog(
       (route === 'vertex-gemini' && webSearch === true)
     )
       throw new Error('MODEL_CATALOG entry has an invalid webSearch capability');
+    if (
+      Object.hasOwn(entry, 'contextTokens') &&
+      (!Number.isSafeInteger(contextTokens) ||
+        (contextTokens as number) < MIN_CONTEXT_TOKENS ||
+        (contextTokens as number) > MAX_CONTEXT_TOKENS)
+    )
+      throw new Error('MODEL_CATALOG entry has an invalid contextTokens budget');
     keys.add(key);
-    return { key, route, model, webSearch: webSearch === true };
+    return {
+      key,
+      route,
+      model,
+      webSearch: webSearch === true,
+      contextTokens: (contextTokens as number | undefined) ?? DEFAULT_CONTEXT_TOKENS,
+    };
   });
   if (!validModelKey(defaultKey) || !keys.has(defaultKey))
     throw new Error('MODEL_DEFAULT_KEY must name a key in MODEL_CATALOG');

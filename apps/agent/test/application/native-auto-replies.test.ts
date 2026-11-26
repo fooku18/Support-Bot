@@ -53,7 +53,7 @@ function setup() {
     instructions: 'Synthetic',
     services,
     channelInstructions: async () => '',
-    limits: { contextTokens: 1000, outputTokens: 100, maxSteps: 2, timeoutMs: 1000 },
+    limits: { outputTokens: 100, maxSteps: 2, timeoutMs: 1000 },
   });
   const input = {
     installationId: 'UBOT',
