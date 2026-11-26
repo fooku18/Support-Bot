@@ -31,7 +31,8 @@ You choose the model mode when you start the stack:
 The default is `gateway`. One instance runs both modes.
 
 - **`gateway`**: direct model connections from `.env.testing`. This is the
-  harness mode for live acceptance (T5).
+  harness mode for live acceptance (T5). To use an Anthropic-compatible
+  gateway, set `NATIVE_ANTHROPIC_BASE_URL` there.
 - **`stub`**: the fixed Messages stub replaces the configured models for
   this start (T4). Use it to qualify the
   stack cheaply. Everything else is real: the Slack test app, the settings
@@ -100,6 +101,12 @@ cp .env.example "$D/.env.testing"
 cp .env.e2e.example "$D/.env.e2e"
 chmod 0600 "$D"/.env*
 ```
+
+The driver refuses a `.env.e2e` that others can read. It checks this only
+where the instance directory's file system keeps POSIX permission bits; it
+probes for them, and NTFS on Windows does not keep them. There, restrict
+both env files to your account with an ACL, for example
+`icacls <file> /inheritance:r /grant:r "${env:USERNAME}:F"`.
 
 `.env.testing` must carry the same variable names as `.env.example`.
 `npm run env:parity -- --instance-dir "$D"` checks this.
@@ -220,6 +227,7 @@ separate value for each.
 | `NATIVE_ANTHROPIC_API_KEY_FILE`                                                     | Host path to the test Anthropic key file when Anthropic is active                         |
 | `NATIVE_OPENAI_API_KEY_FILE`                                                        | Host path to the test OpenAI key file when GPT is active                                  |
 | `NATIVE_VERTEX_CREDENTIALS_FILE`, `NATIVE_VERTEX_PROJECT`, `NATIVE_VERTEX_LOCATION` | Test service-account JSON, project and location such as `global` when Vertex is active    |
+| `NATIVE_ANTHROPIC_BASE_URL`                                                         | Optional Anthropic-compatible gateway URL; empty calls `api.anthropic.com`                |
 | `SUPPORT_AGENT_SERVICE_TOKEN`, `ADMIN_INTERNAL_TOKEN`, `CLI_RUNTIME_TOKEN`          | Random tokens                                                                             |
 | `SLACK_APP_TOKEN`                                                                   | Test app's `xapp-…` token                                                                 |
 | `MODEL_CATALOG`                                                                     | One JSON array, e.g. `[{"key":"sonnet","route":"anthropic","model":"claude-sonnet-5-5"}]` |

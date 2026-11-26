@@ -56,6 +56,7 @@ services:
       MODEL_CATALOG: ${MODEL_CATALOG:?trusted models required}
       MODEL_DEFAULT_KEY: ${MODEL_DEFAULT_KEY:?trusted default model required}
       NATIVE_MODEL_STUB: ${NATIVE_MODEL_STUB:-}
+      NATIVE_ANTHROPIC_BASE_URL: ${NATIVE_ANTHROPIC_BASE_URL:-}
       SUPPORT_AGENT_INSTANCE: ${SUPPORT_AGENT_INSTANCE:?instance required}
     volumes:
       - native-coding-data:/var/lib/native-coding
@@ -222,6 +223,7 @@ services:
       MODEL_CATALOG: ${MODEL_CATALOG:?trusted models required}
       MODEL_DEFAULT_KEY: ${MODEL_DEFAULT_KEY:?trusted default model required}
       NATIVE_MODEL_STUB: ${NATIVE_MODEL_STUB:-}
+      NATIVE_ANTHROPIC_BASE_URL: ${NATIVE_ANTHROPIC_BASE_URL:-}
       NATIVE_VERTEX_PROJECT: ${NATIVE_VERTEX_PROJECT:-}
       NATIVE_VERTEX_LOCATION: ${NATIVE_VERTEX_LOCATION:-}
       GITLAB_HOSTS: ${GITLAB_HOSTS:?approved GitLab hosts required}
