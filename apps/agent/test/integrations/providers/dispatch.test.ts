@@ -428,6 +428,111 @@ it('accounts once for success, failure and cancellation and refuses unexpected d
   ]);
 });
 
+describe('connection failures before a response', () => {
+  const endpoint = 'https://api.anthropic.com/v1/messages';
+  const socketClosed = () =>
+    new TypeError('fetch failed', {
+      cause: Object.assign(new Error('other side closed https://private.test/detail'), {
+        code: 'UND_ERR_SOCKET',
+      }),
+    });
+  function setup() {
+    const selection = testSelection('claude', 'claude-fixture', true);
+    const recordRequest = vi.fn();
+    const beforeDispatch = vi.fn();
+    const authorizeSearch = vi.fn();
+    const warn = vi.fn();
+    const fetchImpl = vi.fn<typeof fetch>();
+    const dispatch = guardedModelFetch({
+      ...options,
+      endpoint: (url) => url.href === endpoint,
+      beforeDispatch,
+      authorizeSearch,
+      log: { info: vi.fn(), warn, error: vi.fn() },
+      binding: {
+        selection,
+        access: { connection: 'anthropic', apiKey: 'synthetic-anthropic' },
+        fetchImpl,
+        accounting: {
+          sink: { recordRequest, recordRun: vi.fn() },
+          run: {
+            instance: 'fixture',
+            teamId: 'TTEAM',
+            channelId: 'CTEST',
+            rootTs: '1716234567.1',
+            requesterUserId: 'UOWNER',
+            runId: 'fixture-run',
+            runSeq: 1,
+            attempt: 1,
+            model: selection,
+            mode: 'answer',
+          },
+        },
+      },
+    });
+    const body = JSON.stringify({
+      model: selection.model,
+      tools: [{ type: 'web_search_20250305', max_uses: 1 }],
+    });
+    const send = () => dispatch(endpoint, { method: 'POST', body });
+    const rows = () => recordRequest.mock.calls.map(([, observation]) => observation);
+    return { fetchImpl, beforeDispatch, authorizeSearch, warn, send, rows };
+  }
+
+  it('reconnects once, re-authorizes the dispatch and accounts both attempts', async () => {
+    const { fetchImpl, beforeDispatch, authorizeSearch, warn, send, rows } = setup();
+    fetchImpl
+      .mockRejectedValueOnce(socketClosed())
+      .mockResolvedValueOnce(Response.json({ usage: { input_tokens: 7, output_tokens: 3 } }));
+    await (await send()).json();
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(beforeDispatch).toHaveBeenCalledTimes(2);
+    expect(authorizeSearch).toHaveBeenCalledTimes(2);
+    expect(rows()).toMatchObject([
+      { status: 0, outcome: 'failed' },
+      { status: 200, outcome: 'completed', inputTokens: 7, outputTokens: 3 },
+    ]);
+    expect(warn).toHaveBeenCalledOnce();
+    const line = warn.mock.calls[0]![0] as string;
+    expect(line).toMatch(
+      /^model dispatch failed run_id=fixture-run attempt=1 status=0 error=TypeError code=UND_ERR_SOCKET elapsed_ms=\d+ reconnect=true$/,
+    );
+    expect(line).not.toContain('private.test');
+  });
+
+  it('gives up after one reconnect and does not reconnect unknown failures', async () => {
+    const first = setup();
+    first.fetchImpl.mockRejectedValueOnce(socketClosed()).mockRejectedValueOnce(socketClosed());
+    await expect(first.send()).rejects.toThrow('Model provider request failed');
+    expect(first.fetchImpl).toHaveBeenCalledTimes(2);
+    expect(first.warn.mock.calls[1]![0]).toContain('attempt=2 status=0');
+    expect(first.warn.mock.calls[1]![0]).toContain('reconnect=false');
+
+    const second = setup();
+    second.fetchImpl.mockRejectedValueOnce(new TypeError('fetch failed'));
+    await expect(second.send()).rejects.toThrow('Model provider request failed');
+    expect(second.fetchImpl).toHaveBeenCalledOnce();
+    expect(second.warn.mock.calls[0]![0]).toContain('code=unknown');
+    expect(second.warn.mock.calls[0]![0]).toContain('reconnect=false');
+  });
+
+  it('logs HTTP failures without reconnecting and stops when authority is revoked', async () => {
+    const http = setup();
+    http.fetchImpl.mockResolvedValueOnce(new Response('private provider detail', { status: 503 }));
+    await expect(http.send()).rejects.toThrow('Model provider request failed');
+    expect(http.fetchImpl).toHaveBeenCalledOnce();
+    expect(http.warn.mock.calls[0]![0]).toMatch(/attempt=1 status=503 redirected=false/);
+
+    const revoked = setup();
+    revoked.fetchImpl.mockRejectedValueOnce(socketClosed());
+    revoked.beforeDispatch
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('revoked'));
+    await expect(revoked.send()).rejects.toThrow('revoked');
+    expect(revoked.fetchImpl).toHaveBeenCalledOnce();
+  });
+});
+
 it('refuses unsupported hosted tools and missing search caps before dispatch', async () => {
   const fetchImpl = vi.fn<typeof fetch>();
   const base = { ...options, endpoint: () => true, authorizeSearch: vi.fn() };

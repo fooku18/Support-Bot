@@ -1,11 +1,48 @@
+import { setTimeout as sleep } from 'node:timers/promises';
 import type { ModelBinding } from './access.js';
 import { ModelRequestAdmissionError, admitModelRequest } from './request-budget.js';
 import type { RequestObservation } from './ledger.js';
 import { ExecutorError } from './error.js';
 import { answerFailure, providerHttpFailure } from '../../mastra/runtime/failure.js';
+import { createStageLogger, type StageLogger } from '../../infrastructure/logger.js';
 
 type Usage = Pick<RequestObservation, 'inputTokens' | 'outputTokens'>;
 const MAX_ACCOUNTING_LINE = 256 * 1024;
+const defaultLog = createStageLogger('model-transport');
+
+/**
+ * Connection failures that end a dispatch before any response arrives, such
+ * as a pooled connection the gateway already closed. Each one gets one
+ * re-authorized dispatch; HTTP failures and timeouts never do.
+ */
+const RECONNECTABLE = new Set([
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'EPIPE',
+  'EAI_AGAIN',
+  'UND_ERR_SOCKET',
+  'UND_ERR_CLOSED',
+  'UND_ERR_CONNECT_TIMEOUT',
+]);
+const MAX_RECONNECTS = 1;
+const RECONNECT_DELAY_MS = 250;
+
+/**
+ * Error class name and system or undici code of a failed fetch, searched
+ * through its cause chain. Only fixed identifiers are returned; messages can
+ * carry URLs or reflected text and are never logged.
+ */
+export function fetchFailure(error: unknown) {
+  const name =
+    error instanceof Error && /^[A-Za-z]{1,40}$/.test(error.name) ? error.name : 'unknown';
+  let current: unknown = error;
+  for (let depth = 0; depth < 4 && current && typeof current === 'object'; depth++) {
+    const code = (current as { code?: unknown }).code;
+    if (typeof code === 'string' && /^[A-Z][A-Z0-9_]{1,40}$/.test(code)) return { name, code };
+    current = (current as { cause?: unknown }).cause;
+  }
+  return { name, code: 'unknown' };
+}
 
 function hostedTools(body: Record<string, unknown>, route: ModelBinding['selection']['route']) {
   if (body.tools === undefined) return [];
@@ -123,9 +160,12 @@ export function guardedModelFetch(options: {
   authorizeSearch?: () => void | Promise<void>;
   nativeTextDocuments: boolean;
   timeoutMs: number;
+  log?: StageLogger;
 }): typeof fetch {
   const { binding, endpoint, beforeDispatch, authorizeSearch, nativeTextDocuments, timeoutMs } =
     options;
+  const log = options.log ?? defaultLog;
+  const runId = binding.accounting?.run.runId ?? 'none';
   return async (input, init) => {
     const url = URL.parse(input instanceof Request ? input.url : String(input));
     if (
@@ -169,45 +209,66 @@ export function guardedModelFetch(options: {
       throw answerFailure('authorization_denied');
     const timeout = AbortSignal.timeout(timeoutMs);
     const signal = init.signal ? AbortSignal.any([init.signal, timeout]) : timeout;
-    signal.throwIfAborted();
-    await beforeDispatch?.();
-    if (searches.length) await authorizeSearch?.();
-    signal.throwIfAborted();
-    const started = performance.now();
-    let status = 0;
-    let recorded = false;
-    const finish = (
-      outcome: RequestObservation['outcome'],
-      usage: Usage = { inputTokens: null, outputTokens: null },
-    ) => {
-      if (recorded) return;
-      recorded = true;
-      binding.accounting?.sink.recordRequest(binding.accounting.run, {
-        completedAt: Date.now(),
-        durationMs: Math.round(performance.now() - started),
-        status,
-        outcome,
-        ...usage,
-      });
-    };
-    try {
-      const response = await (binding.fetchImpl ?? fetch)(url, {
-        ...init,
-        signal,
-        redirect: 'error',
-      });
-      status = response.status;
-      if (response.redirected || !response.ok) {
-        finish('failed');
-        await response.body?.cancel().catch(() => {});
-        throw response.redirected ? answerFailure('invalid_response') : providerHttpFailure(status);
+    for (let attempt = 1; ; attempt++) {
+      // A reconnect is a new dispatch: current authority and the search grant
+      // are checked again, and the ledger records each attempt on its own.
+      signal.throwIfAborted();
+      await beforeDispatch?.();
+      if (searches.length) await authorizeSearch?.();
+      signal.throwIfAborted();
+      const started = performance.now();
+      let status = 0;
+      let recorded = false;
+      const elapsed = () => Math.round(performance.now() - started);
+      const finish = (
+        outcome: RequestObservation['outcome'],
+        usage: Usage = { inputTokens: null, outputTokens: null },
+      ) => {
+        if (recorded) return;
+        recorded = true;
+        binding.accounting?.sink.recordRequest(binding.accounting.run, {
+          completedAt: Date.now(),
+          durationMs: elapsed(),
+          status,
+          outcome,
+          ...usage,
+        });
+      };
+      try {
+        const response = await (binding.fetchImpl ?? fetch)(url, {
+          ...init,
+          signal,
+          redirect: 'error',
+        });
+        status = response.status;
+        if (response.redirected || !response.ok) {
+          finish('failed');
+          await response.body?.cancel().catch(() => {});
+          log.warn(
+            `model dispatch failed run_id=${runId} attempt=${attempt} status=${status} redirected=${response.redirected} elapsed_ms=${elapsed()}`,
+          );
+          throw response.redirected
+            ? answerFailure('invalid_response')
+            : providerHttpFailure(status);
+        }
+        if (!binding.accounting) return response;
+        return observeResponse(response, signal, finish);
+      } catch (error) {
+        finish(signal.aborted ? 'interrupted' : 'failed');
+        if (error instanceof ExecutorError) throw error;
+        if (signal.aborted) throw answerFailure('timeout');
+        const failure = fetchFailure(error);
+        const reconnect = attempt <= MAX_RECONNECTS && RECONNECTABLE.has(failure.code);
+        log.warn(
+          `model dispatch failed run_id=${runId} attempt=${attempt} status=0 error=${failure.name} code=${failure.code} elapsed_ms=${elapsed()} reconnect=${reconnect}`,
+        );
+        if (!reconnect) throw answerFailure('transient');
       }
-      if (!binding.accounting) return response;
-      return observeResponse(response, signal, finish);
-    } catch (error) {
-      finish(signal.aborted ? 'interrupted' : 'failed');
-      if (error instanceof ExecutorError) throw error;
-      throw answerFailure(signal.aborted ? 'timeout' : 'transient');
+      try {
+        await sleep(RECONNECT_DELAY_MS, undefined, { signal });
+      } catch {
+        throw answerFailure('timeout');
+      }
     }
   };
 }
