@@ -13,6 +13,7 @@ import {
 } from './atlassian-operations.js';
 
 export const ATLASSIAN_API_ORIGIN = 'https://api.atlassian.com';
+export const ATLASSIAN_RESPONSE_MAX_BYTES = 2_000_000;
 export const CLOUD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const JIRA_ISSUE_FIELDS = 'summary,issuetype,status,assignee,description,labels,project,updated';
 const JIRA_SEARCH_FIELDS = 'summary,issuetype,status,assignee,updated';

@@ -15,6 +15,7 @@ import {
   type ValidatedAtlassianArgs,
 } from './atlassian-operations.js';
 import {
+  ATLASSIAN_RESPONSE_MAX_BYTES,
   buildAtlassianRequest,
   buildReadinessRequest,
   CLOUD_ID_PATTERN,
@@ -246,7 +247,7 @@ export class AtlassianRestProvider {
     const http = await sendAtlassianRequest(
       buildAtlassianRequest(args, this.state.cloudId!),
       this.credentials,
-      { timeoutMs, maxBytes: maxOutputBytes, signal, fetchImpl: this.fetchImpl },
+      { timeoutMs, maxBytes: ATLASSIAN_RESPONSE_MAX_BYTES, signal, fetchImpl: this.fetchImpl },
     );
     return normalizeAtlassianResponse(args, http, this.state.site!, maxOutputBytes);
   }
