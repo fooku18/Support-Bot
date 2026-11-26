@@ -1321,6 +1321,7 @@ export function createApp(deps: AppDeps): AdminApp {
               host: String(req.body.host ?? '').trim() || null,
               settings: settingsFromForm(instance.kind, req.body),
               credential: credentialFromForm(instance.kind, req.body),
+              keepStoredTokens: true,
             });
             return `${instance.label} saved (config v${document.version}).`;
           });

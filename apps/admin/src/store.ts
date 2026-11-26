@@ -30,6 +30,7 @@ import { validModelKey } from './generated/model-catalog.js';
 import { ChannelPromptError, normalizeChannelPrompt, promptAuditDetail } from './prompts.js';
 import {
   isToolKind,
+  parseAtlassianCredential,
   TOOL_INSTANCE_ID,
   validateToolCredential,
   validateToolInstance as validateContractToolInstance,
@@ -778,6 +779,7 @@ export class AdminStore {
       host?: unknown;
       settings?: unknown;
       credential?: unknown;
+      keepStoredTokens?: boolean;
       status?: unknown;
     },
   ): Promise<{ instance: ToolInstance; document: CompiledDocument }> {
@@ -803,10 +805,25 @@ export class AdminStore {
         throw new StoreError('status must be enabled or disabled');
       }
       const status = (change.status as ToolInstance['status'] | undefined) ?? existing.status;
+      let credentialInput = change.credential;
+      if (
+        change.keepStoredTokens === true &&
+        existing.kind === 'atlassian' &&
+        typeof credentialInput === 'object' &&
+        credentialInput !== null &&
+        !('jira' in credentialInput && 'confluence' in credentialInput)
+      ) {
+        const row = await this.get('SELECT credential_enc FROM tool_instances WHERE id = ?', id);
+        if (row !== undefined && row.credential_enc !== null)
+          credentialInput = {
+            ...parseAtlassianCredential(this.decryptToken(id, String(row.credential_enc))),
+            ...credentialInput,
+          };
+      }
       const credential =
-        change.credential === undefined
+        credentialInput === undefined
           ? null
-          : validateToolCredential(existing.kind, change.credential);
+          : validateToolCredential(existing.kind, credentialInput);
       const settingsChanged =
         validated.host !== existing.host ||
         JSON.stringify(validated.settings) !== JSON.stringify(existing.settings);

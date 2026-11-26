@@ -7,6 +7,7 @@ import { createApp } from '../src/app.js';
 import { hashPassword, newApiToken, tokenHash } from '../src/auth.js';
 import type { CompiledDocument } from '../src/compile.js';
 import type { AdminConfig } from '../src/config.js';
+import { ATLASSIAN_READ_OPERATIONS } from '../src/generated/tool-kinds.js';
 import { SlackApi } from '../src/slack.js';
 import { AdminStore } from '../src/store.js';
 
@@ -1078,7 +1079,7 @@ describe('admin app', () => {
     });
 
     it('manages instances and channel tools through the UI without ever showing a credential', async () => {
-      const { gitlab } = await setup();
+      const { gitlab, atlassian } = await setup();
       await store.createAdmin('cli', 'alice', await hashPassword('correct horse battery'));
       const form = (path: string, body: Record<string, string>, cookie: string) =>
         fetch(`${base}${path}`, {
@@ -1171,6 +1172,26 @@ describe('admin app', () => {
         label: 'GitLab (renamed)',
         credentialVersion: 1,
       });
+      const rotated = await form(
+        `/workspaces/T0TEAM1/tools/${atlassian.id}`,
+        {
+          csrf,
+          label: 'Jira (example)',
+          host: 'example.atlassian.net',
+          cloudId: CLOUD_ID,
+          email: 'owner@example.com',
+          ...Object.fromEntries(ATLASSIAN_READ_OPERATIONS.map((name) => [`op_${name}`, 'on'])),
+          credentialJira: 'jira-secret-token-0002',
+          credentialConfluence: '',
+        },
+        cookie,
+      );
+      expect(rotated.status).toBe(303);
+      expect(JSON.parse((await store.toolSecret(atlassian.id))?.credential ?? '{}')).toEqual({
+        jira: 'jira-secret-token-0002',
+        confluence: CONFLUENCE_SECRET,
+      });
+      expect(await store.toolInstance(atlassian.id)).toMatchObject({ credentialVersion: 2 });
 
       const assign = await form(
         '/workspaces/T0TEAM1/channels/C0GENERAL/tools',
