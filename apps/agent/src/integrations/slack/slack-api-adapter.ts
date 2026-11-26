@@ -28,11 +28,6 @@ export const SLACK_ENDPOINT = `${SLACK_API_ORIGIN}${SLACK_BASE_PATH}`;
 export const SLACK_GET_USER_TOOL = 'slack_get_user';
 export const SLACK_LOOKUP_BY_EMAIL_TOOL = 'slack_lookup_user_by_email';
 export const SLACK_SEARCH_TOOL = 'slack_search_messages';
-export const SLACK_TOOLS = [
-  SLACK_GET_USER_TOOL,
-  SLACK_LOOKUP_BY_EMAIL_TOOL,
-  SLACK_SEARCH_TOOL,
-] as const;
 /** The only Web API methods this adapter calls. */
 export const SLACK_METHODS = [
   'auth.test',
@@ -143,28 +138,6 @@ function onlyKeys(value: Record<string, unknown>, allowed: readonly string[], to
       throw new SlackRequestError(`${tool}: unknown argument ${key.slice(0, 40)}`);
 }
 
-/**
- * The raw argument names of a Slack tool call, checked before the SDK
- * parser can strip unknown fields (guard); null when acceptable.
- */
-export function slackArgumentProblem(tool: string, input: unknown): string | null {
-  const allowed =
-    tool === SLACK_GET_USER_TOOL
-      ? ['user']
-      : tool === SLACK_LOOKUP_BY_EMAIL_TOOL
-        ? ['email']
-        : tool === SLACK_SEARCH_TOOL
-          ? ['query', 'page']
-          : null;
-  if (allowed === null) return `unknown Slack tool ${tool.slice(0, 40)}`;
-  try {
-    onlyKeys(plainRecord(input, `${tool} arguments`), allowed, tool);
-    return null;
-  } catch (err) {
-    return err instanceof Error ? err.message : 'invalid arguments';
-  }
-}
-
 /** A user ID from an ID, `<@U…>` or `<@U…|name>`; throws for anything else. */
 export function normalizeSlackUserId(value: unknown): string {
   if (typeof value !== 'string')
@@ -239,23 +212,6 @@ export function validateSlackRequest(
   }
   onlyKeys(args, ['email'], tool);
   return { email: normalizeSlackEmail(args.email) };
-}
-
-/**
- * Evidence identity of a lookup argument: a run-salted hash, so the journal
- * never holds the user ID or the e-mail address itself.
- */
-export function slackArgumentFingerprint(runId: string, request: ValidatedSlackRequest): string {
-  const value =
-    'user' in request
-      ? `user:${request.user}`
-      : 'email' in request
-        ? `email:${request.email.toLowerCase()}`
-        : `search:${request.page}:${request.query}`;
-  return createHash('sha256')
-    .update(`support-agent-slack-arg-v1\0${runId}\0${value}`)
-    .digest('hex')
-    .slice(0, 16);
 }
 
 // --- Transport --------------------------------------------------------------------

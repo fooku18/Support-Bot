@@ -87,18 +87,6 @@ export interface PublicationIntent {
   updatedAtMs: number;
 }
 
-export interface PublishedResult {
-  commit: string;
-  tree: string;
-  branch: string;
-  targetBranch: string;
-  projectId: number;
-  mrIid: number | null;
-  mrId: number | null;
-  mrUrl: string | null;
-  state: PublicationState;
-}
-
 export class PublisherError extends Error {
   readonly terminal: boolean;
   /** Redacted Git stderr behind the failure, for the runner log (never a credential). */
@@ -326,12 +314,6 @@ export async function cloneApprovedProject(
     baseCommit: await git(['rev-parse', 'HEAD'], checkoutDir, trustedGitEnv(null)),
     baseTree: await git(['rev-parse', 'HEAD^{tree}'], checkoutDir, trustedGitEnv(null)),
   };
-}
-
-export interface SnapshotFile {
-  path: string;
-  content: Buffer;
-  mode?: '100644' | '100755';
 }
 
 /**

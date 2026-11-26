@@ -6,9 +6,7 @@ import {
   buildCloudflareRequest,
   classifyCloudflareHttp,
   classifyGraphqlErrors,
-  cloudflareArgumentProblem,
   cloudflareCredentialFingerprint,
-  cloudflarePathTemplate,
   cloudflareZoneSetHash,
   normalizeCloudflareGraphql,
   normalizeCloudflareRest,
@@ -119,12 +117,6 @@ describe('Cloudflare REST path validation', () => {
     ).toThrow(/selected zones only/);
     // Without a scope (guard-level checks) only the grammar applies.
     expect(validateCloudflareGet({ path: `/zones/${other}` }).path).toBe(`/zones/${other}`);
-  });
-
-  it('templates IDs out of paths for evidence', () => {
-    expect(cloudflarePathTemplate(`/zones/${ZONE_A.id}/dns_records/${'e'.repeat(32)}`)).toBe(
-      '/zones/{id}/dns_records/{id}',
-    );
   });
 });
 
@@ -280,15 +272,6 @@ describe('Cloudflare GraphQL validation', () => {
         restricted,
       ).datasets,
     ).toEqual(['x']);
-  });
-
-  it('checks raw argument names for the guard', () => {
-    expect(cloudflareArgumentProblem('cloudflare_graphql', { query: '{a}' })).toBeNull();
-    expect(cloudflareArgumentProblem('cloudflare_get', { path: '/zones', query: {} })).toBeNull();
-    expect(
-      cloudflareArgumentProblem('cloudflare_get', { path: '/zones', method: 'DELETE' }),
-    ).toMatch(/unknown argument method/);
-    expect(cloudflareArgumentProblem('cloudflare_graphql', 'x')).toMatch(/must be an object/);
   });
 });
 

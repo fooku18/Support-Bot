@@ -4,11 +4,6 @@ import {
   isChannelMemorySnapshot,
   type ChannelMemorySnapshot,
 } from '../../contracts/channel-commands.js';
-
-export const MEMORY_FAILURE_MS = 5 * 60_000;
-export const MEMORY_RETRY_MS = 5000;
-export const MEMORY_FAILURE_TEXT =
-  'Channel memory unavailable for five minutes; no model call was made.';
 const route = '/internal/channel-memory/snapshot';
 const unavailable = () => new Error('memory_unavailable');
 export interface ChannelMemoryScope {

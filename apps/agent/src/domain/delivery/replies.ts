@@ -17,15 +17,6 @@ import { resultPreview } from './file-results.js';
  */
 export const PROGRESS_MARKER = '⏳';
 
-/** Run message text while a requested cancellation is being confirmed (no Cancel button). */
-export const CANCELLING_PROGRESS_TEXT = `${PROGRESS_MARKER} Cancelling…`;
-
-/** Run message text after Continue on a paused run, until the run reports progress again. */
-export const CONTINUING_PROGRESS_TEXT = `${PROGRESS_MARKER} Continuing…`;
-
-/** Marks a run message paused at a soft run limit (Continue and Cancel buttons). */
-export const PAUSE_MARKER = '⏸';
-
 /** `300/300 tool calls`, `$10.04/$10 estimated cost`, `31/30 min active`. */
 export function renderSoftLimitReading(reading: SoftLimitReading): string {
   switch (reading.metric) {
@@ -36,11 +27,6 @@ export function renderSoftLimitReading(reading: SoftLimitReading): string {
     case 'active_time':
       return `${Math.floor(reading.value / 60_000)}/${Math.round(reading.limit / 60_000)} min active`;
   }
-}
-
-/** Text of a run paused at its crossed soft limits. */
-export function renderPausedText(crossed: readonly SoftLimitReading[]): string {
-  return `${PAUSE_MARKER} Paused: ${crossed.map(renderSoftLimitReading).join(' · ')}`;
 }
 
 /**
@@ -96,14 +82,6 @@ export const CONTROL_REPLY_NO_ACTIVE_RUN = 'There is no active request to cancel
 /** Denied cancellation: only the run's author may cancel it (steering is open to the channel's people). */
 export const CONTROL_REPLY_UNAUTHORIZED =
   'Only the person who started the active request can cancel it.';
-
-/** Denied `task.start` (the channel's people list). */
-export const CONTROL_REPLY_NOT_AUTHORIZED_TASK =
-  'You are not authorized to start or add to requests in this channel. Ask an administrator for access.';
-
-/** Denied because no one is granted anything in this channel (not enabled by an admin). */
-export const CONTROL_REPLY_CHANNEL_NOT_ENABLED =
-  'This channel is not enabled for the bot. Ask an administrator to enable it.';
 
 export const CONTROL_REPLY_UNCERTAIN =
   'That update could not be confirmed as applied. Review the final result before retrying.';
@@ -190,11 +168,6 @@ export function buildCompletionReply(args: {
     `Simulated run completed · context revision ${args.contextRevision} · ` +
     `${args.acceptedMessageCount} context messages. No coding task was executed.`
   );
-}
-
-export function buildFailureReply(args: { reason: string }): string {
-  const reason = args.reason.length > 120 ? `${args.reason.slice(0, 120)}...` : args.reason;
-  return `Simulated run failed: ${reason}. No coding task was executed.`;
 }
 
 /**
@@ -364,30 +337,6 @@ function codingStatusLine(args: {
     parts.push('recovery needed before follow-up work');
   }
   return parts.join(' · ');
-}
-
-/**
- * the recovery notice of a run fenced by an expired question's
- * retained, unpublished files. Names the retained checkouts (directory names
- * only) and both exits; never publishes or discards them.
- */
-export function buildRetentionExpiredReply(error: string): string {
-  const listed = error.startsWith('retention_expired: ')
-    ? error
-        .slice('retention_expired: '.length)
-        .split(',')
-        .map((name) => name.trim())
-        .filter((name) => /^[A-Za-z0-9_.-]{1,120}$/.test(name))
-        .slice(0, 10)
-    : [];
-  const paths =
-    listed.length === 0 ? 'the task workspace' : listed.map((n) => `\`${n}\``).join(', ');
-  return (
-    `⚠️ An earlier clarification question in this thread expired, and its unpublished files are still retained (${paths}). ` +
-    'I do not continue or publish them automatically, for anyone, so this request did not run. ' +
-    'The block clears by itself when the ordinary cleanup removes those idle files; a new mention then starts from a fresh workspace. ' +
-    'Alternatively an operator can recover the thread with `scripts/recover-thread.mjs`, which keeps the files for the next request without publishing them.'
-  );
 }
 
 export function buildCodingFailureReply(args: { reason: string }): string {

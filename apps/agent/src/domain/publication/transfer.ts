@@ -280,37 +280,6 @@ export function fsTreeLookup(root: string): TreeLookup {
   };
 }
 
-/**
- * A prospective tree: `base` with `entries` written (their ancestors become
- * directories) and `removed` paths (with everything below them) gone. A
- * path below an entry that is a file or link no longer exists.
- */
-export function overlayTreeLookup(
-  base: TreeLookup,
-  entries: ReadonlyMap<string, TreeNode>,
-  removed: Iterable<string>,
-): TreeLookup {
-  const dirs = new Set<string>();
-  for (const key of entries.keys()) {
-    const parts = key.split('/');
-    for (let i = 1; i < parts.length; i += 1) dirs.add(parts.slice(0, i).join('/'));
-  }
-  const gone = new Set(removed);
-  return (components) => {
-    if (components.length === 0) return DIR;
-    const key = components.join('/');
-    const own = entries.get(key);
-    if (own !== undefined) return own;
-    if (dirs.has(key)) return DIR;
-    for (let i = 1; i <= components.length; i += 1) {
-      const prefix = components.slice(0, i).join('/');
-      if (gone.has(prefix)) return null;
-      if (i < components.length && (entries.get(prefix)?.type ?? 'dir') !== 'dir') return null;
-    }
-    return base(components);
-  };
-}
-
 // --- Manifest builders -----------------------------------------------------
 
 /** What the manifest walk does with one directory entry. */
@@ -867,42 +836,6 @@ export function realParents(root: string, relative: string): boolean {
     if (lstatOrNull(current)?.isDirectory() !== true) return false;
   }
   return true;
-}
-
-/** Removes one entry without following links: below a link or file nothing is removed. */
-export function removeNoFollow(root: string, relative: string): boolean {
-  if (!realParents(root, relative)) return false;
-  const target = path.join(root, relative);
-  const stat = lstatOrNull(target);
-  if (stat === null) return false;
-  // rmSync never follows a link: it removes the link itself.
-  fs.rmSync(target, { recursive: stat.isDirectory(), force: true });
-  return true;
-}
-
-/**
- * Makes `relative` writable as a new entry: every parent becomes a real
- * directory (a file or link in the way is removed, never followed) and
- * whatever sits at the destination (a file, link or directory) is removed.
- */
-export function prepareDestination(
-  root: string,
-  relative: string,
-  onCreate?: (dir: string) => void,
-): void {
-  const parts = relative.split('/');
-  let current = root;
-  for (const part of parts.slice(0, -1)) {
-    current = path.join(current, part);
-    const stat = lstatOrNull(current);
-    if (stat !== null && stat.isDirectory()) continue;
-    if (stat !== null) fs.rmSync(current, { force: true });
-    fs.mkdirSync(current);
-    onCreate?.(current);
-  }
-  const destination = path.join(root, relative);
-  const existing = lstatOrNull(destination);
-  if (existing !== null) fs.rmSync(destination, { recursive: existing.isDirectory(), force: true });
 }
 
 /** Creates or truncates a regular file; a link at the destination is never followed. */

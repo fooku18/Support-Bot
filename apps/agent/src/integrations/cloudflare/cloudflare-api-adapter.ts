@@ -22,7 +22,6 @@ export const CLOUDFLARE_ENDPOINT = `${CLOUDFLARE_API_ORIGIN}${CLOUDFLARE_BASE_PA
 /** Model-facing tool names. */
 export const CLOUDFLARE_GRAPHQL_TOOL = 'cloudflare_graphql';
 export const CLOUDFLARE_GET_TOOL = 'cloudflare_get';
-export const CLOUDFLARE_TOOLS = [CLOUDFLARE_GRAPHQL_TOOL, CLOUDFLARE_GET_TOOL] as const;
 /** Upstream response bodies above this size fail with output_limit. */
 export const CLOUDFLARE_RESPONSE_MAX_BYTES = 2_000_000;
 /** Cloudflare account and zone IDs. */
@@ -115,26 +114,6 @@ function onlyKeys(value: Record<string, unknown>, allowed: readonly string[], to
 }
 
 /**
- * The raw argument names of a Cloudflare tool call, checked before the SDK
- * parser can strip unknown fields (guard); null when acceptable.
- */
-export function cloudflareArgumentProblem(tool: string, input: unknown): string | null {
-  const allowed =
-    tool === CLOUDFLARE_GRAPHQL_TOOL
-      ? ['query', 'variables']
-      : tool === CLOUDFLARE_GET_TOOL
-        ? ['path', 'query']
-        : null;
-  if (allowed === null) return `unknown Cloudflare tool ${tool.slice(0, 40)}`;
-  try {
-    onlyKeys(plainRecord(input, `${tool} arguments`), allowed, tool);
-    return null;
-  } catch (err) {
-    return err instanceof Error ? err.message : 'invalid arguments';
-  }
-}
-
-/**
  * Validates a `cloudflare_get` request: one path under `/zones`,
  * `/accounts` or a token verify endpoint, and bounded query parameters.
  * With a scope, a zone ID must be one of the instance's zones and an
@@ -216,11 +195,6 @@ export function validateCloudflareGet(
     }
   }
   return { path, query };
-}
-
-/** A path with every 32-hex ID replaced by `{id}` (evidence; never the IDs themselves). */
-export function cloudflarePathTemplate(path: string): string {
-  return path.replace(/\/[0-9a-f]{32}(?=\/|$)/g, '/{id}').slice(0, MAX_REST_PATH_CHARS);
 }
 
 // --- GraphQL validation -----------------------------------------------------------

@@ -17,13 +17,7 @@
  * `MAX_TRACE_BYTES` / `MAX_TRACE_RAW_BYTES`).
  */
 
-import {
-  GITLAB_CONTRACT_VERSION,
-  type GitlabTransportOperationName,
-  type ValidatedGitlabArgs,
-} from './gitlab-operations.js';
-
-export const GITLAB_ADAPTER_VERSION = GITLAB_CONTRACT_VERSION;
+import type { GitlabTransportOperationName, ValidatedGitlabArgs } from './gitlab-operations.js';
 
 /** Bytes of a job trace the model receives: the tail by default, the head on request. */
 export const MAX_TRACE_BYTES = 48_000;

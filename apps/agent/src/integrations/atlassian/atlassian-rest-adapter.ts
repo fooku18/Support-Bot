@@ -280,23 +280,6 @@ export interface AtlassianResult {
   refused?: string;
 }
 
-export function atlassianResourceIdentity(args: ValidatedAtlassianArgs): string {
-  switch (args.kind) {
-    case 'getJiraIssue':
-    case 'listJiraIssueComments':
-      return args.issueKey;
-    case 'getConfluencePage':
-      return args.pageId;
-    case 'listJiraProjects':
-      return 'projects';
-    case 'searchJiraIssues':
-    case 'searchConfluencePages':
-      return `search "${args.query.slice(0, 80)}"`;
-    case 'searchJiraIssuesUsingJql':
-      return 'JQL search';
-  }
-}
-
 function record(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
