@@ -37,6 +37,8 @@ export const LIVE_LIMITS = {
   sessionRecheckMs: 30_000,
 } as const;
 
+type LiveLimits = Record<keyof typeof LIVE_LIMITS, number>;
+
 const SETTINGS_TOPICS = new Set(['costs', 'audit', 'config']);
 
 export function isLiveTopic(topic: unknown): topic is string {
@@ -80,7 +82,7 @@ export interface LiveOptions {
     cookieHeader: string | undefined,
   ) => Promise<LiveSession | null> | LiveSession | null;
   log?: (line: string) => void;
-  limits?: Partial<typeof LIVE_LIMITS>;
+  limits?: Partial<LiveLimits>;
 }
 
 interface Client {
@@ -103,7 +105,7 @@ function refuse(socket: Duplex, status: number, reason: string): void {
 export class LiveSockets {
   private readonly wss: WebSocketServer;
   private readonly clients = new Set<Client>();
-  private readonly limits: typeof LIVE_LIMITS;
+  private readonly limits: LiveLimits;
   private readonly origin: string | null;
   private readonly timers: NodeJS.Timeout[] = [];
   private readonly unsubscribe: () => void;

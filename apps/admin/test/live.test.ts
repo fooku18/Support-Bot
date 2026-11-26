@@ -131,7 +131,7 @@ describe('live socket upgrade', () => {
 
   it('bounds sockets per session and per process', async () => {
     const { url } = await serve({
-      limits: { socketsPerSession: 2, socketsPerProcess: 3 } as unknown as LiveOptions['limits'],
+      limits: { socketsPerSession: 2, socketsPerProcess: 3 },
     });
     await open(url);
     await open(url);
