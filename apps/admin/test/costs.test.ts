@@ -246,13 +246,14 @@ describe('cost ranges', () => {
   });
 
   it('refuses malformed, reversed and over-long ranges', () => {
-    for (const query of [
+    const queries: Record<string, string>[] = [
       { from: '2026-13-01' },
       { from: '2026-02-30' },
       { from: 'yesterday' },
       { from: '2026-10-15', to: '2026-10-14' },
       { from: '2010-01-01', to: '2026-10-15' },
-    ]) {
+    ];
+    for (const query of queries) {
       expect(() => parseCostRange(new URLSearchParams(query), NOW), JSON.stringify(query)).toThrow(
         CostInputError,
       );

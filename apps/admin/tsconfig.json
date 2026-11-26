@@ -5,15 +5,12 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "types": ["node"],
-    "outDir": "dist",
-    "rootDir": "src",
     "strict": true,
     "noUncheckedIndexedAccess": true,
+    "noEmit": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
-    "skipLibCheck": true,
-    "sourceMap": false,
-    "declaration": false
+    "skipLibCheck": true
   },
-  "include": ["src"]
+  "include": ["src", "test"]
 }

@@ -166,7 +166,9 @@ describe('long answer delivery in the Slack adapter', () => {
     expect(fixtures.transfers).toBe(1);
     // Current delivery authority before each external call of the upload and the post.
     expect(calls.filter((p) => p === '/agents/delivery-authority').length).toBeGreaterThan(4);
-    const args = (postMessage.mock.calls[0] as unknown as [Record<string, never>])[0];
+    const args = (
+      postMessage.mock.calls[0] as unknown as [{ blocks: unknown[]; metadata: unknown }]
+    )[0];
     const text = `${longAnswerNotice(true)}\n\n${split.preview}`;
     expect(args.blocks[0]).toEqual({ type: 'markdown', text });
     expect((args.blocks[0] as { text: string }).text.length).toBeLessThan(SLACK_MARKDOWN_CHARS);
@@ -191,10 +193,14 @@ describe('long answer delivery in the Slack adapter', () => {
     });
     const response = await deliver();
     expect(response.status).toBe(200);
-    expect((await response.json()).answerFile).toEqual({ attached: false });
+    expect(((await response.json()) as { answerFile: unknown }).answerFile).toEqual({
+      attached: false,
+    });
     expect(completions).toBe(1);
     expect(order).toEqual(['allocate', 'post']);
-    const args = (postMessage.mock.calls[0] as unknown as [Record<string, never>])[0];
+    const args = (
+      postMessage.mock.calls[0] as unknown as [{ blocks: unknown[]; metadata: unknown }]
+    )[0];
     expect((args.blocks[0] as { text: string }).text).toContain(longAnswerNotice(false));
     expect(args.metadata).not.toHaveProperty('event_payload.result_files');
   });

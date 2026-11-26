@@ -15,7 +15,12 @@ import {
   type ToolInstanceRow,
   type ToolStatusRow,
 } from '../src/compile.js';
-import { ATLASSIAN_READ_OPERATIONS, TOOL_KINDS } from '../src/generated/tool-kinds.js';
+import {
+  ATLASSIAN_READ_OPERATIONS,
+  TOOL_KINDS,
+  type AtlassianSettings,
+  type ToolSettings,
+} from '../src/generated/tool-kinds.js';
 
 const installation = {
   teamId: 'T0TEAM1',
@@ -204,13 +209,14 @@ describe('compileDocument tool assignments', () => {
     hasCredential: true,
     credentialVersion: 2,
   });
+  const atlassianSettings: AtlassianSettings = {
+    cloudId: '11111111-2222-3333-4444-555555555555',
+    email: 'owner@example.com',
+    operations: ['getJiraIssue', 'searchJiraIssues'],
+  };
   const atlassian = instance('ti_000000000000000b', 'atlassian', {
     host: 'example.atlassian.net',
-    settings: {
-      cloudId: '11111111-2222-3333-4444-555555555555',
-      email: 'owner@example.com',
-      operations: ['getJiraIssue', 'searchJiraIssues'],
-    },
+    settings: atlassianSettings,
     hasCredential: true,
     credentialVersion: 1,
   });
@@ -225,7 +231,7 @@ describe('compileDocument tool assignments', () => {
   // Stored rows of the retired search-provider shape (plan D9).
   const legacySearch = instance('ti_0000000000000010', 'webSearch', {
     host: 'search.example.com',
-    settings: { endpoint: 'https://search.example.com/v1/search' },
+    settings: { endpoint: 'https://search.example.com/v1/search' } as unknown as ToolSettings,
     hasCredential: true,
     credentialVersion: 1,
   });
@@ -483,7 +489,7 @@ describe('compileDocument tool assignments', () => {
       ...base,
       toolInstances: [
         gitlab,
-        { ...atlassian, settings: { ...atlassian.settings, operations: null } },
+        { ...atlassian, settings: { ...atlassianSettings, operations: null } },
         datadog,
         search,
         files,
