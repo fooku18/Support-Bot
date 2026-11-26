@@ -592,7 +592,7 @@ const service = createNativeAgentService({
           slackSearchMessages: unavailable,
         },
       }),
-  limits: { contextTokens: 16000, outputTokens: 256, maxSteps: 4, timeoutMs: 5000 },
+  limits: { outputTokens: 256, maxSteps: 4, timeoutMs: 5000 },
 });
 const app = startNativeAgentServer({
   agents: service,

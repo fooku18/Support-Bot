@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { JWT } from 'google-auth-library';
 import { describe, expect, it, vi } from 'vitest';
-import { parseModelCatalog } from '../../../src/contracts/model-catalog.js';
+import { DEFAULT_CONTEXT_TOKENS, parseModelCatalog } from '../../../src/contracts/model-catalog.js';
 import {
   loadModelProviders,
   type ModelBinding,
@@ -33,8 +33,12 @@ describe('provider catalog', () => {
   it('validates IDs and defaults, and rejects ambiguous configuration', () => {
     expect(parseModelCatalog(JSON.stringify([entry]), 'primary')).toEqual({
       defaultKey: 'primary',
-      models: [{ ...entry, webSearch: false }],
+      models: [{ ...entry, webSearch: false, contextTokens: DEFAULT_CONTEXT_TOKENS }],
     });
+    expect(
+      parseModelCatalog(JSON.stringify([{ ...entry, contextTokens: 150_000 }]), 'primary')
+        .models[0],
+    ).toMatchObject({ contextTokens: 150_000 });
     for (const catalog of [
       [entry, entry],
       [{ ...entry, route: 'gateway' }],
@@ -45,6 +49,10 @@ describe('provider catalog', () => {
       [{ ...entry, baseURL: 'https://example.test' }],
       [{ ...entry, route: 'vertex-gemini', model: 'gemini-test', webSearch: true }],
       [{ ...entry, webSearch: 'true' }],
+      [{ ...entry, contextTokens: 7_999 }],
+      [{ ...entry, contextTokens: 1_000_001 }],
+      [{ ...entry, contextTokens: 64_000.5 }],
+      [{ ...entry, contextTokens: '64000' }],
     ])
       expect(() => parseModelCatalog(JSON.stringify(catalog), 'primary')).toThrow('MODEL_CATALOG');
     expect(() => parseModelCatalog(JSON.stringify([entry]), 'absent')).toThrow('MODEL_DEFAULT_KEY');
@@ -86,6 +94,7 @@ describe('provider catalog', () => {
       route: 'anthropic',
       webSearch: false,
       connection: 'synthetic-messages',
+      contextTokens: DEFAULT_CONTEXT_TOKENS,
     });
     expect(bind(selection).access).toMatchObject({ origin: 'http://model-stub:9877' });
     expect(() => bind({ ...selection, model: 'another' })).toThrow('model binding refused');
@@ -133,6 +142,7 @@ it('sends a stateless Responses request and renders a URL annotation from the pr
         model: 'gpt-5',
         connection: 'openai',
         webSearch: true,
+        contextTokens: 64000,
       },
       access: { connection: 'openai', apiKey: 'synthetic-openai' },
       async fetchImpl(input, init) {
@@ -553,6 +563,7 @@ it('refuses unsupported hosted tools and missing search caps before dispatch', a
         model: 'gpt-5',
         connection: 'openai',
         webSearch: true,
+        contextTokens: 64000,
       },
       access: { connection: 'openai', apiKey: 'synthetic-openai' },
       fetchImpl,
@@ -567,6 +578,7 @@ it('refuses unsupported hosted tools and missing search caps before dispatch', a
         model: 'gemini-test',
         connection: 'vertex-fixture',
         webSearch: false,
+        contextTokens: 64000,
       },
       access: {
         connection: 'vertex',
@@ -629,6 +641,7 @@ it('renders one provider annotation in the streamed GPT answer and records that 
         model: 'gpt-5',
         connection: 'openai',
         webSearch: true,
+        contextTokens: 64000,
       },
       access: { connection: 'openai', apiKey: 'synthetic-openai' },
       onCitation: (markdown) => citations.push(markdown),

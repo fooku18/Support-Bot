@@ -70,7 +70,14 @@ it.each([
     const runtime = createNativeRuntime({
       storage: new InMemoryStore(),
       model: {
-        selection: { key: 'vertex', route, model, connection: 'vertex-fixture', webSearch: false },
+        selection: {
+          key: 'vertex',
+          route,
+          model,
+          connection: 'vertex-fixture',
+          webSearch: false,
+          contextTokens: 64000,
+        },
         access: {
           connection: 'vertex',
           authClient,
@@ -100,7 +107,7 @@ it.each([
       instructions: 'Ask the user if the image is ambiguous.',
       tools: {},
       beforeDispatch: async () => {},
-      contextTokens: 1024,
+      contextTokens: 8000,
       outputTokens: 128,
       maxSteps: 2,
     });

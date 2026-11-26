@@ -68,6 +68,7 @@ describe('OpenAI Responses durable execution', () => {
           model: 'gpt-5',
           connection: 'openai',
           webSearch: false,
+          contextTokens: 64000,
         },
         access: { connection: 'openai', apiKey: 'synthetic-openai' },
         async fetchImpl(input, init) {

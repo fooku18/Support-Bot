@@ -57,7 +57,7 @@ export interface NativeAgentOptions {
   ): Promise<Omit<ServiceBinding, 'authorize'>>;
   /** Existing channel-memory authority; returns trusted instructions only. */
   channelInstructions(identity: IntakeRequest): Promise<string>;
-  limits: { contextTokens: number; outputTokens: number; maxSteps: number; timeoutMs: number };
+  limits: { outputTokens: number; maxSteps: number; timeoutMs: number };
 }
 export type NativeAgentInput = IntakeRequest & {
   files?: import('../contracts/dto.js').SlackFileDescriptorDto[];

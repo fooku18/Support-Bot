@@ -168,6 +168,24 @@ describe('answer@2 native durable execution', () => {
     await runNativeSegment(await stream('OTHER', 'thread-b', 'tenant-b'));
     expect(JSON.stringify(f.requests.at(-1))).not.toContain('FIRST_CONTEXT');
   });
+  it('keeps the opening request and marks left-out turns when a thread outgrows the budget', async () => {
+    const f = await fixture(3000);
+    const stream = (prompt: string) =>
+      f.agent.stream(prompt, {
+        memory: { thread: 'long', resource: 'tenant' },
+        closeOnSuspend: true,
+      });
+    await runNativeSegment(await stream('OPENING alert question'));
+    for (let i = 0; i < 4; i++)
+      await runNativeSegment(await stream(`MIDDLE_${i} ` + 'detail '.repeat(1200)));
+    const out = await runNativeSegment(await stream('CURRENT try again'));
+    expect(out.uncertain).toBe(false);
+    const last = JSON.stringify(f.requests.at(-1));
+    expect(last).toContain('OPENING alert question');
+    expect(last).toContain('CURRENT try again');
+    expect(last).toContain('earlier messages of this conversation were left out');
+    expect(last).not.toContain('MIDDLE_0');
+  });
   it('does not allow a caller to choose a non-loopback Gateway or empty proxy token', async () => {
     const f = await fixture();
     const config = {

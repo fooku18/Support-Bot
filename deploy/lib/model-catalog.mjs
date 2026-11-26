@@ -1,5 +1,8 @@
 /** GENERATED from apps/agent/src/contracts/model-catalog.ts. Run npm run generate:protocol. */
 const MODEL_ROUTES = ['anthropic', 'openai', 'vertex-claude', 'vertex-gemini'];
+const DEFAULT_CONTEXT_TOKENS = 64e3;
+const MIN_CONTEXT_TOKENS = 8e3;
+const MAX_CONTEXT_TOKENS = 1e6;
 const MODEL_KEY_PATTERN = /^[a-z][a-z0-9-]{0,23}$/;
 const MODEL_SETTING_NAMES = [
   'MODEL_CATALOG',
@@ -47,8 +50,12 @@ function parseModelCatalog(raw, defaultKey) {
   const entries = models.map((entry) => {
     if (!entry || typeof entry !== 'object' || Array.isArray(entry))
       throw new Error('MODEL_CATALOG entries must be objects');
-    const { key, route, model, webSearch } = entry;
-    if (Object.keys(entry).some((name) => !['key', 'route', 'model', 'webSearch'].includes(name)))
+    const { key, route, model, webSearch, contextTokens } = entry;
+    if (
+      Object.keys(entry).some(
+        (name) => !['key', 'route', 'model', 'webSearch', 'contextTokens'].includes(name),
+      )
+    )
       throw new Error('MODEL_CATALOG entry has an unknown field');
     if (!validModelKey(key) || keys.has(key))
       throw new Error('MODEL_CATALOG entry has an invalid or duplicate key');
@@ -66,8 +73,21 @@ function parseModelCatalog(raw, defaultKey) {
       (route === 'vertex-gemini' && webSearch === true)
     )
       throw new Error('MODEL_CATALOG entry has an invalid webSearch capability');
+    if (
+      Object.hasOwn(entry, 'contextTokens') &&
+      (!Number.isSafeInteger(contextTokens) ||
+        contextTokens < MIN_CONTEXT_TOKENS ||
+        contextTokens > MAX_CONTEXT_TOKENS)
+    )
+      throw new Error('MODEL_CATALOG entry has an invalid contextTokens budget');
     keys.add(key);
-    return { key, route, model, webSearch: webSearch === true };
+    return {
+      key,
+      route,
+      model,
+      webSearch: webSearch === true,
+      contextTokens: contextTokens ?? DEFAULT_CONTEXT_TOKENS,
+    };
   });
   if (!validModelKey(defaultKey) || !keys.has(defaultKey))
     throw new Error('MODEL_DEFAULT_KEY must name a key in MODEL_CATALOG');
@@ -173,6 +193,9 @@ function stubModelCatalog(catalog) {
   };
 }
 export {
+  DEFAULT_CONTEXT_TOKENS,
+  MAX_CONTEXT_TOKENS,
+  MIN_CONTEXT_TOKENS,
   MODEL_KEY_PATTERN,
   MODEL_ROUTES,
   MODEL_SETTING_NAMES,

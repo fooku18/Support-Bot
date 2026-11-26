@@ -10,6 +10,7 @@ import type { MastraModelConfig } from '@mastra/core/llm';
 import { askUserTool } from '@mastra/core/tools';
 import { Memory } from '@mastra/memory';
 import type { ModelBinding } from '../../integrations/providers/access.js';
+import { ContextBudgetProcessor } from '../runtime/context-budget.js';
 import { createAnswerModel } from '../runtime/model.js';
 
 export interface NativeAgentConfiguration {
@@ -25,6 +26,7 @@ export interface NativeAgentConfiguration {
   beforeDispatch(): Promise<void>;
   /** Present only for a ready assigned search instance; rechecked at dispatch. */
   webSearch?: { authorize(): Promise<void> };
+  /** Estimated prompt tokens per request; the selected model's catalog entry sets it. */
   contextTokens: number;
   outputTokens: number;
   maxSteps: number;
@@ -109,7 +111,7 @@ export function nativeAgentConfiguration(options: NativeAgentConfiguration, time
     },
     inputProcessors: [
       ...(forRun ? [attributionProcessor] : []),
-      new TokenLimiterProcessor({ limit: options.contextTokens, trimMode: 'contiguous' }),
+      new ContextBudgetProcessor(options.contextTokens),
     ],
     outputProcessors: [
       new TokenLimiterProcessor({ limit: options.outputTokens, strategy: 'abort' }),

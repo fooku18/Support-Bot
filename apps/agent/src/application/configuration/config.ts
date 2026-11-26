@@ -1,5 +1,11 @@
 import { createHash } from 'node:crypto';
-import { isModelRoute, validModelKey, type ResolvedModel } from '../../contracts/model-catalog.js';
+import {
+  MAX_CONTEXT_TOKENS,
+  MIN_CONTEXT_TOKENS,
+  isModelRoute,
+  validModelKey,
+  type ResolvedModel,
+} from '../../contracts/model-catalog.js';
 import type { RunLimitsDto } from '../../contracts/dto.js';
 import { parseCoordinatorAdminDocument, type CoordinatorAdminDocument } from './admin-document.js';
 
@@ -41,13 +47,16 @@ export function coordinatorConfigHash(input: Omit<CoordinatorConfig, 'hash'>): s
         sourceJson: input.sourceJson,
         modelPolicy: {
           defaultKey: input.modelPolicy.defaultKey,
-          models: input.modelPolicy.models.map(({ key, model, route, connection, webSearch }) => ({
-            key,
-            model,
-            route,
-            connection,
-            webSearch,
-          })),
+          models: input.modelPolicy.models.map(
+            ({ key, model, route, connection, webSearch, contextTokens }) => ({
+              key,
+              model,
+              route,
+              connection,
+              webSearch,
+              contextTokens,
+            }),
+          ),
         },
         admission: { global: input.admission.global, perThread: input.admission.perThread },
         execution: { maxInferenceInvocations: input.execution.maxInferenceInvocations },
@@ -92,12 +101,15 @@ export function validateCoordinatorConfig(input: CoordinatorConfig): Coordinator
     models.some(
       (m) =>
         !m ||
-        Object.keys(m).sort().join(',') !== 'connection,key,model,route,webSearch' ||
+        Object.keys(m).sort().join(',') !== 'connection,contextTokens,key,model,route,webSearch' ||
         !validModelKey(m.key) ||
         !isModelRoute(m.route) ||
         typeof m.model !== 'string' ||
         typeof m.connection !== 'string' ||
-        typeof m.webSearch !== 'boolean',
+        typeof m.webSearch !== 'boolean' ||
+        !Number.isSafeInteger(m.contextTokens) ||
+        m.contextTokens < MIN_CONTEXT_TOKENS ||
+        m.contextTokens > MAX_CONTEXT_TOKENS,
     )
   )
     throw new Error('invalid model policy');

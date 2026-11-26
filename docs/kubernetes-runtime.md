@@ -58,6 +58,8 @@ env:
     value: /run/secrets/openai/key
 ```
 
+Each catalog entry can set `contextTokens`, the estimated prompt tokens one model request keeps. The default is 64,000 and the allowed range is 8,000 to 1,000,000. The estimate counts the system prompt and messages but not tool schemas or the answer, so leave headroom below the model's context window. A higher budget keeps more history but costs more per request. When a request exceeds the budget, older tool results shrink to a short note first, then older turns are left out with a note. The thread's opening request, the current request and the latest step are always kept.
+
 The example sends POST requests to `/anthropic/v1/messages` and `/openai/v1/responses`. A blank base selects the public provider. Trailing slashes are removed and a final `/v1` is used once. Anthropic accepts `x-api-key` (default) or `bearer`. OpenAI uses bearer authentication.
 
 For a Vertex-compatible gateway, use the same connection for both publishers. This example reads the gateway key from a Kubernetes Secret.

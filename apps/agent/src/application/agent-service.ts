@@ -222,6 +222,7 @@ export function createNativeAgentService(options: NativeAgentOptions) {
       codeMode,
       nativeInputs: !!options.inputs,
       ...options.limits,
+      contextTokens: modelBinding.selection.contextTokens,
     });
     let timer: NodeJS.Timeout | undefined;
     const beganAt = performance.now();
