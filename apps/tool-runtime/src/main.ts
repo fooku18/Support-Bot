@@ -89,6 +89,7 @@ import {
   type ToolInstanceStatusReport,
 } from '../../agent/src/integrations/tools/tool-instances.js';
 import {
+  CLI_RUNTIME_KINDS,
   SLACK_API_HOST,
   parseAtlassianCredential,
   type ToolKind,
@@ -237,13 +238,6 @@ export interface CliInstanceEntry {
 
 /** Kinds this runtime serves. */
 export type CliRuntimeKind = 'gitlab' | 'atlassian' | 'datadog' | 'cloudflare' | 'slack';
-const CLI_RUNTIME_KINDS: readonly CliRuntimeKind[] = [
-  'gitlab',
-  'atlassian',
-  'datadog',
-  'cloudflare',
-  'slack',
-];
 
 /** Kinds whose hosts the operator admits through an egress allowlist (Slack's host is fixed). */
 export type AdmittedKind = Exclude<CliRuntimeKind, 'slack'>;

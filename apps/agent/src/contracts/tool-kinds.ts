@@ -471,13 +471,7 @@ export interface ChannelToolAssignment {
 
 /** Kinds whose readiness comes from a runtime probe; the others are ready when enabled. */
 export function kindNeedsProbe(kind: ToolKind): boolean {
-  return (
-    kind === 'gitlab' ||
-    kind === 'atlassian' ||
-    kind === 'datadog' ||
-    kind === 'cloudflare' ||
-    kind === 'slack'
-  );
+  return CLI_RUNTIME_KINDS.includes(kind);
 }
 
 /** Instance readiness reported by a runtime (`POST /internal/tool-instances/status`). */
