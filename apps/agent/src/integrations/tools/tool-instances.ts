@@ -229,8 +229,17 @@ export class ToolInstanceSync {
       this.lastError = 'admin returned invalid JSON';
       return;
     }
+    if (
+      body === null ||
+      typeof body !== 'object' ||
+      Array.isArray(body) ||
+      !Array.isArray(body.instances)
+    ) {
+      this.lastError = 'admin returned an invalid tool instance listing';
+      return;
+    }
     const next = new Map<string, SyncedToolInstance>();
-    for (const raw of Array.isArray(body.instances) ? body.instances : []) {
+    for (const raw of body.instances) {
       const instance = parseSyncedInstance(raw);
       if (instance === null) {
         this.options.log?.('tool instance sync: dropped a malformed instance');

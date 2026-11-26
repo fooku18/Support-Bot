@@ -195,6 +195,35 @@ describe('ToolInstanceSync', () => {
     expect([...sync.current().keys()]).toEqual([GITLAB.id]);
   });
 
+  it('keeps the last listing and ETag when a 2xx answer is not a listing', async () => {
+    const answers: Response[] = [
+      listing([GITLAB], '"v1"'),
+      new Response('null', { status: 200, headers: { etag: '"v2"' } }),
+      Response.json({ configVersion: 8 }, { headers: { etag: '"v3"' } }),
+      Response.json({ configVersion: 8, instances: {} }, { headers: { etag: '"v4"' } }),
+      new Response(null, { status: 304 }),
+    ];
+    const admin = fakeAdmin(() => answers.shift()!);
+    const changes: Array<ReadonlyMap<string, unknown>> = [];
+    const sync = new ToolInstanceSync({
+      adminUrl: ADMIN,
+      adminToken: ADMIN_TOKEN,
+      caller: 'runner',
+      kinds: ['gitlab'],
+      fetchImpl: admin.fetchImpl,
+      onChange: (next) => changes.push(next),
+    });
+    await sync.syncOnce();
+    for (let round = 0; round < 3; round += 1) {
+      await expect(sync.syncOnce()).resolves.toBeUndefined();
+      expect(sync.lastError).toBe('admin returned an invalid tool instance listing');
+      expect([...sync.current().keys()]).toEqual([GITLAB.id]);
+    }
+    await sync.syncOnce();
+    expect(admin.seen.at(-1)!.headers.get('if-none-match')).toBe('"v1"');
+    expect(changes).toHaveLength(1);
+  });
+
   it('shares one request between concurrent callers and stays idle when unconfigured', async () => {
     let release: () => void = () => undefined;
     const gate = new Promise<void>((resolve) => {
