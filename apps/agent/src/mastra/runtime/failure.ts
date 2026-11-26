@@ -1,11 +1,9 @@
-import {
-  sanitizeFailureForSlack,
-  type ClaudeFailureCategory,
-} from '../../integrations/providers/failure.js';
+import type { ClaudeFailureCategory } from '../../contracts/protocol.js';
+import { sanitizeFailureForSlack } from '../../integrations/providers/failure.js';
 import { ExecutorError } from '../../integrations/providers/error.js';
 
 export function answerFailure(category: ClaudeFailureCategory): ExecutorError {
-  return new ExecutorError(`${category}: ${sanitizeFailureForSlack(category, '')}`);
+  return new ExecutorError(`${category}: ${sanitizeFailureForSlack(category)}`);
 }
 
 /** Classify an HTTP refusal without retaining upstream content. */
