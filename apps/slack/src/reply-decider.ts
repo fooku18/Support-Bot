@@ -1,14 +1,16 @@
 export type ReplyDecision =
-  | { reply: true; reason: 'decider' | 'files_only'; probability?: number }
+  | { reply: true; reason: 'decider' | 'files_only'; probability?: number; failure?: undefined }
   | {
       reply: false;
-      reason: 'decider' | 'mentions_others' | 'decider_unavailable';
+      reason: 'decider' | 'mentions_others' | 'empty';
       probability?: number;
-    };
+      failure?: undefined;
+    }
+  | { reply: false; reason: 'decider_unavailable'; failure: string; probability?: undefined };
 
 export type ReplyDecider = (text: string, hasFiles: boolean) => Promise<ReplyDecision>;
 
-const MENTIONS_OTHERS = /<@[UW][A-Z0-9]+>|<!subteam\^|<!(channel|here|everyone)\b/;
+const MENTIONS_OTHERS = /<@[UW][A-Z0-9]+(\|[^>]*)?>|<!subteam\^|<!(channel|here|everyone)\b/;
 const MAX_TEXT = 2000;
 const TIMEOUT_MS = 2000;
 
@@ -24,21 +26,29 @@ const QUESTION = {
   },
 };
 
+const unavailable = (failure: string): ReplyDecision => ({
+  reply: false,
+  reason: 'decider_unavailable',
+  failure,
+});
+
 export function createReplyDecider(env: NodeJS.ProcessEnv): ReplyDecider | null {
   const url = env.THREAD_REPLY_DECIDER_URL?.trim();
   if (!url) return null;
   const parsed = new URL(url);
-  if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password)
-    throw new Error('invalid THREAD_REPLY_DECIDER_URL');
+  if (parsed.protocol !== 'https:' || parsed.username || parsed.password)
+    throw new Error('THREAD_REPLY_DECIDER_URL must be an https URL without credentials');
   const model = env.THREAD_REPLY_DECIDER_MODEL?.trim();
   if (!model) throw new Error('THREAD_REPLY_DECIDER_MODEL required');
   const clientId = env.THREAD_REPLY_DECIDER_CLIENT_ID?.trim();
   return async (text, hasFiles) => {
     const message = text.trim();
     if (MENTIONS_OTHERS.test(message)) return { reply: false, reason: 'mentions_others' };
-    if (!message && hasFiles) return { reply: true, reason: 'files_only' };
+    if (!message)
+      return hasFiles ? { reply: true, reason: 'files_only' } : { reply: false, reason: 'empty' };
+    let response: Response;
     try {
-      const response = await fetch(url, {
+      response = await fetch(url, {
         method: 'POST',
         redirect: 'error',
         headers: {
@@ -52,18 +62,27 @@ export function createReplyDecider(env: NodeJS.ProcessEnv): ReplyDecider | null 
         }),
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
-      if (!response.ok) return { reply: false, reason: 'decider_unavailable' };
+    } catch (error) {
+      return unavailable(
+        error instanceof Error && error.name === 'TimeoutError' ? 'timeout' : 'network',
+      );
+    }
+    if (!response.ok) {
+      void response.body?.cancel().catch(() => {});
+      return unavailable(`http_${response.status}`);
+    }
+    try {
       const body = (await response.json()) as {
         answers?: { reply?: { choice?: unknown; probabilities?: { reply?: unknown } } };
-      };
-      const answer = body.answers?.reply;
+      } | null;
+      const answer = body?.answers?.reply;
       const probability =
         typeof answer?.probabilities?.reply === 'number' ? answer.probabilities.reply : undefined;
       if (answer?.choice === 'reply') return { reply: true, reason: 'decider', probability };
       if (answer?.choice === 'silent') return { reply: false, reason: 'decider', probability };
-      return { reply: false, reason: 'decider_unavailable' };
     } catch {
-      return { reply: false, reason: 'decider_unavailable' };
+      return unavailable('malformed');
     }
+    return unavailable('malformed');
   };
 }

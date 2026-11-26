@@ -19,8 +19,11 @@ the current behaviour.
 
 - **Where:** the adapter's `reply` handler, after `/agents/thread` has
   confirmed the requester and the thread, before the follow-up is admitted.
-  The decision model is only called for messages that would start a run
-  today.
+  `/agents/thread` also returns `autoReplies` (the channel setting) and
+  `delivered` (the current answer was delivered). The model is called only
+  when both are true, so a message that admission would refuse never leaves
+  the system. Admission still rechecks both atomically; an undelivered
+  thread keeps its explicit-control notice.
 - **API:** the Jev REST API (`POST /v1/systemone`), shared by Jev and its
   clones. One `choice` question, `reply` or `silent`. The bot replies when
   the model's choice is `reply`. Only the message text is sent, bounded to
@@ -29,28 +32,34 @@ the current behaviour.
   `@channel`, `@here` or `@everyone` is meant for them. It stays silent
   without calling the model. In the evaluation the model misread such
   messages as requests.
-- **Files without text** (a screenshot) start the follow-up without calling the model.
+- **Files without text** (a screenshot) start the follow-up without calling
+  the model. An empty message without files stays silent.
+- **Request controls** (`continue <answer>`, `cancel`, `status`) skip the
+  model.
 - **Failure:** on a timeout (2 s), an HTTP error or a malformed answer,
-  the message stays silent (fail closed) and the adapter logs a warning.
+  the message stays silent (fail closed) and the adapter logs a warning
+  with a failure code (`http_<status>`, `timeout`, `network`, `malformed`).
   The operator asked that the bot answer an unmentioned message only when
   the model confirmed it (2026-11-26). A mention always works. The
   self-hosted clef-flash pilot is documented for weekdays 8:00–20:00
   Berlin time; outside those hours unmentioned follow-ups stay silent
   if it is off.
-- **Socket Mode:** the reply handler runs before the Slack acknowledgement.
-  The 2 s bound keeps it within Slack's 3 s window in the normal case.
-  A late acknowledgement is already safe: the agent deduplicates redelivered
-  event IDs.
+- **Socket Mode:** the reply handler runs before the Slack acknowledgement,
+  as it already did for `/agents/thread` and admission. The 2 s bound adds
+  at most 2 s. A redelivered event that was admitted is deduplicated by the
+  agent. A redelivered event that stayed silent asks the model again; with
+  at most three Slack retries that load is accepted.
 - **Configuration:** adapter environment `THREAD_REPLY_DECIDER_URL` (full
   endpoint URL), `THREAD_REPLY_DECIDER_MODEL` (required with the URL) and an
   optional `THREAD_REPLY_DECIDER_CLIENT_ID` (sent as `x-client-id`).
-  Compose passes them to the adapter. The egress proxy admits the
-  decider's host like the operations webhook.
+  The URL must be `https`. Compose passes them to the adapter, and the
+  egress proxy admits the decider's host (port 443) like the operations
+  webhook. No preflight check: a missing model fails adapter startup.
 - **Context:** the bot's last answer is not sent. In the evaluation it made the
   decision worse (20/24 with context, 21/24 without), and it would cost
   a Slack read per message.
-- **Logging:** decisions log the channel, message ts and probability, never
-  the message text.
+- **Logging:** decisions log the channel, message ts, probability and
+  failure code, never the message text.
 
 ### Evaluation (2026-11-26, clef-flash staging)
 
@@ -64,10 +73,15 @@ mention rule. Latency was about 170 ms per call from the office network and
 
 ## Work
 
-- [ ] Decider module with unit tests (`apps/slack/src/reply-decider.ts`)
-- [ ] Wire it into the adapter's reply handler
-- [ ] Compose environment and egress host
-- [ ] Documentation: `docs/thread-replies.md`, `.env.example`
+- [x] Decider module with unit tests (`apps/slack/src/reply-decider.ts`)
+- [x] Wire it into the adapter's reply handler; `/agents/thread` reports
+      `autoReplies` and `delivered`
+- [x] Compose environment and egress host
+- [x] Documentation: `docs/thread-replies.md`, `.env.example`
+- [x] Review: Gemini 4 Neon (2026-11-26). Fixed: decider called with replies
+      off or before delivery, `<@U…|label>` mentions, failure codes, https
+      only, docs placement. Declined: an in-memory cache of skipped event IDs
+      (retry load is bounded) and a preflight check (startup already fails).
 
 ## Verification
 
@@ -76,8 +90,9 @@ mention rule. Latency was about 170 ms per call from the office network and
 
 ## Rollout
 
-Set the three variables on the adapter and restart it. Rollback: unset
-`THREAD_REPLY_DECIDER_URL`.
+Deploy agent and adapter from the same image. Set the three variables on
+the adapter and restart it; in Compose recreate `egress` too. Rollback:
+unset `THREAD_REPLY_DECIDER_URL`.
 
 ## Open items
 

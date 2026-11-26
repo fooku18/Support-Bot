@@ -64,7 +64,7 @@ async function setup(env: Record<string, string> = {}) {
             ? { session: 'session', model: null, prompt: null, autoReplies: true, keys: ['sonnet'] }
             : path.endsWith('/claim-receipt')
               ? null
-              : { runId: 'synthetic-run', owner: 'U1' },
+              : { runId: 'synthetic-run', owner: 'U1', autoReplies: true, delivered: true },
       );
     }),
   );
@@ -256,7 +256,7 @@ describe('native startup command routing at the Socket Mode call site', () => {
 
   it('starts an unmentioned follow-up only when the reply decider says it is meant for the bot', async () => {
     const { send, calls, responses, ack } = await setup({
-      THREAD_REPLY_DECIDER_URL: 'http://decider/v1/systemone',
+      THREAD_REPLY_DECIDER_URL: 'https://decider/v1/systemone',
       THREAD_REPLY_DECIDER_MODEL: 'clef-flash',
     });
     let choice = 'silent';
@@ -277,6 +277,22 @@ describe('native startup command routing at the Socket Mode call site', () => {
     await reply('cancel');
     expect(calls.filter((c) => c.path === '/v1/systemone')).toHaveLength(2);
     expect(calls.filter((c) => c.path === '/agents/cancel')).toHaveLength(1);
+  });
+
+  it.each([
+    ['replies are disabled', { autoReplies: false, delivered: true }],
+    ['the answer is not delivered yet', { autoReplies: true, delivered: false }],
+  ])('never sends the message to the reply decider when %s', async (_name, thread) => {
+    const { send, calls, responses } = await setup({
+      THREAD_REPLY_DECIDER_URL: 'https://decider/v1/systemone',
+      THREAD_REPLY_DECIDER_MODEL: 'clef-flash',
+    });
+    responses.set('/agents/thread', () =>
+      Response.json({ runId: 'synthetic-run', owner: 'U1', ...thread }),
+    );
+    await send('and for yesterday?', { type: 'message', thread_ts: '1792940000.000001' });
+    expect(calls.filter((c) => c.path === '/v1/systemone')).toEqual([]);
+    expect(calls.filter((c) => c.path === '/agents/followup')).toHaveLength(1);
   });
 
   it('silently acknowledges automatic replies disabled by current service config while mentions and controls keep their routes', async () => {

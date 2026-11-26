@@ -58,8 +58,10 @@ describe('policyFromEnv', () => {
       GITLAB_HOSTS: '',
       SUPPORT_AGENT_EGRESS_EXTRA_HOSTS: '',
       OPERATIONS_WEBHOOK_URL: '',
+      THREAD_REPLY_DECIDER_URL: '',
       SUPPORT_AGENT_WEB_SUBNET: '',
     });
+    expect(p.frontendHosts.has('decider.example.org')).toBe(false);
     expect(p.toolsHosts.has('api.atlassian.com')).toBe(false);
     expect(p.toolsHosts.has('api.cloudflare.com')).toBe(false);
     expect(p.toolsHosts.has('gitlab.com')).toBe(false);

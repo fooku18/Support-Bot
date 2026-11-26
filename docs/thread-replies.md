@@ -12,6 +12,15 @@ access. It ignores unrelated messages, copies of explicit mentions and
 unmentioned `!` commands. Other participants can make an explicit mention
 subject to channel policy.
 
+Use `continue <answer>`, `cancel` and `status` for
+[request controls](agent-progress.md). These controls are available when
+automatic replies are off. The same requester and current authorization
+are required.
+
+The [Slack app manifest](../deploy/slack-app-settings.json) includes the
+public and private channel message events used by this feature. See the
+[setup guide](slack-app-setup.md) for installation and reinstallation.
+
 ## Reply decider
 
 With a decision model configured, the requester's unmentioned message
@@ -19,7 +28,9 @@ starts a follow-up only when the model judges it meant for the bot: a
 request, a question, a correction or an answer. Thanks, reactions, remarks
 and small talk stay silent. A message that mentions someone else, a user
 group, `@channel`, `@here` or `@everyone` stays silent without a model call.
-Files without text and the request controls below skip the model. When the
+Files without text and the request controls above skip the model, and so
+does a message that would not start a follow-up anyway (replies disabled, or
+the current answer not yet delivered). When the
 model fails or takes longer than 2 seconds, the message stays silent; a
 mention still starts a run.
 
@@ -33,15 +44,8 @@ adapter:
 | `THREAD_REPLY_DECIDER_MODEL`     | Model name, such as `clef-flash`. Required with the URL.                                        |
 | `THREAD_REPLY_DECIDER_CLIENT_ID` | Optional `x-client-id` header.                                                                  |
 
-The adapter sends only the message text, up to 2,000 characters. It logs
-the decision and its probability without the text. In Compose, the egress
-proxy admits the decider's host from the frontend network.
-
-Use `continue <answer>`, `cancel` and `status` for
-[request controls](agent-progress.md). These controls are available when
-automatic replies are off. The same requester and current authorization
-are required.
-
-The [Slack app manifest](../deploy/slack-app-settings.json) includes the
-public and private channel message events used by this feature. See the
-[setup guide](slack-app-setup.md) for installation and reinstallation.
+The URL must use `https`. The adapter sends only the message text, up to
+2,000 characters. It logs the decision, its probability and a failure code
+(`http_<status>`, `timeout`, `network`, `malformed`) without the text. In
+Compose, the egress proxy admits the decider's host on port 443 from the
+frontend network; recreate both `adapter` and `egress` after a change.
