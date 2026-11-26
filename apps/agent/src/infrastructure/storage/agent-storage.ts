@@ -34,6 +34,8 @@ export async function provisionNativeAgents(pool: Pool) {
       receipt jsonb, UNIQUE(run_id,path));`);
 }
 
+const ignoreHeldConnectionError = () => undefined;
+
 /** Application receipts and segment leases only. Framework execution stays in Mastra.
  * The caller retains the advisory-lock connection across admission and execution. */
 export function createNativeAgentStorage(pool: Pool) {
@@ -47,6 +49,7 @@ export function createNativeAgentStorage(pool: Pool) {
     let client: PoolClient | undefined;
     try {
       client = await pool.connect();
+      client.on('error', ignoreHeldConnectionError);
       const held = (
         await client.query('SELECT pg_try_advisory_lock(hashtextextended($1,1152)) AS held', [
           taskKey,
@@ -55,6 +58,7 @@ export function createNativeAgentStorage(pool: Pool) {
       if (!held) fail('task_busy');
       return client;
     } catch (error) {
+      client?.off('error', ignoreHeldConnectionError);
       client?.release();
       taskLeases--;
       throw error;
@@ -64,6 +68,7 @@ export function createNativeAgentStorage(pool: Pool) {
     try {
       await client.query('SELECT pg_advisory_unlock(hashtextextended($1,1152))', [taskKey]);
     } finally {
+      client.off('error', ignoreHeldConnectionError);
       client.release();
       taskLeases--;
     }
