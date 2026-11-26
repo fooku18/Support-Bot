@@ -110,13 +110,25 @@ export function classifyDatadogHttp(status: number): DatadogErrorCategory | null
   return 'upstream_error';
 }
 
-/** Classifies an MCP error text (JSON-RPC error or tool `isError` content). */
+/** Classifies a JSON-RPC or MCP error text. */
 export function classifyDatadogText(text: string): DatadogErrorCategory | null {
   if (/rate.?limit|too many requests|\b429\b|quota/i.test(text)) return 'rate_limit';
   if (/unauthori[sz]ed|\b401\b|invalid (?:api )?(?:token|key)|expired token/i.test(text))
     return 'invalid_auth';
   if (
     /forbidden|\b403\b|permission|scope|not allowed|read-?only|request blocked|requires (?:all|and|or|at least one) of/i.test(
+      text,
+    )
+  )
+    return 'forbidden_scope';
+  return null;
+}
+
+function classifyDatadogToolRefusal(text: string): DatadogErrorCategory | null {
+  if (/^\s*(?:rate limit exceeded|too many requests)\b/i.test(text)) return 'rate_limit';
+  if (/^\s*unauthori[sz]ed\b/i.test(text)) return 'invalid_auth';
+  if (
+    /^\s*forbidden\b|\bmissing scope \w+|\bMCP request blocked\b|requires (?:all|and|or|at least one) of:?\s*\[/i.test(
       text,
     )
   )
@@ -530,7 +542,7 @@ export class DatadogMcpSession {
     const text = renderDatadogContent(result);
     if (text === null) return datadogFailure(name, 'invalid_shape');
     if (record(result)?.isError === true) {
-      const category = classifyDatadogText(text) ?? 'tool_error';
+      const category = classifyDatadogToolRefusal(text) ?? 'tool_error';
       if (category !== 'tool_error')
         return datadogFailure(name, category, datadogPermissionHint(text));
       // The tool's own error text (e.g. a query syntax problem) helps the
