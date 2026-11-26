@@ -135,6 +135,24 @@ describe('admin store channel settings', () => {
     ).rejects.toThrow(/unknown model sonnet/);
     await store.close();
   });
+
+  it('forgets the automatic reply choice when the workspace is removed', async () => {
+    const store = await AdminStore.open({ path: ':memory:' }, KEY);
+    await configure(store);
+    await store.setChannelSettings(
+      'test',
+      'T0TEAM1',
+      'C0CHAN1',
+      await fingerprint(store),
+      { autoReplies: false },
+      null,
+    );
+    await store.deleteInstallation('test', 'T0TEAM1');
+    expect(await store.all('SELECT * FROM channel_reply_settings')).toEqual([]);
+    await configure(store);
+    expect(await store.autoReplies('T0TEAM1', 'C0CHAN1')).toBe(true);
+    await store.close();
+  });
 });
 
 describe('admin store channel blocklist', () => {
