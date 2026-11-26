@@ -73,6 +73,16 @@ describe('shared protocol contract', () => {
     }
   });
 
+  it('vendors the canonical task key into the Slack adapter', () => {
+    const canonical = readFileSync(
+      path.join(REPO_ROOT, 'apps/agent/src/contracts/task-key.ts'),
+      'utf8',
+    );
+    const copy = readFileSync(path.join(REPO_ROOT, 'apps/slack/src/taskkey.ts'), 'utf8');
+    expect(copy).toMatch(/GENERATED from apps\/agent\/src\/contracts\/task-key\.ts/);
+    expect(copy.endsWith(canonical)).toBe(true);
+  });
+
   it('vendors the canonical Slack message flattener into the receiver', () => {
     const canonical = readFileSync(
       path.join(REPO_ROOT, 'apps/agent/src/contracts/slack-message-content.ts'),
