@@ -669,7 +669,7 @@ export function redactRuntimeOutput(text: string, requestSecrets: readonly strin
   }
   return out
     .replace(/glpat-[A-Za-z0-9_-]{6,}/g, '[redacted]')
-    .replace(/(?:Basic|Bearer)\s+[A-Za-z0-9._~-]+/gi, 'Bearer [redacted]')
+    .replace(/\b(Basic|Bearer)\s+[A-Za-z0-9._~+/=-]+/gi, '$1 [redacted]')
     .replace(/sk-[A-Za-z0-9_-]{8,}/g, '[redacted]')
     .replace(/xox[bap]-[A-Za-z0-9-]+/g, '[redacted]')
     .replace(/ATP[A-Za-z0-9_-]{8,}/g, '[redacted]')
