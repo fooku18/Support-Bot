@@ -1,30 +1,11 @@
 /** Fixed public failure labels; provider error text never reaches delivery. */
-export type ClaudeFailureCategory =
-  | 'provider_auth'
-  | 'model_unavailable'
-  | 'timeout'
-  | 'context_limit'
-  | 'output_limit'
-  | 'invalid_response'
-  | 'transient'
-  | 'interrupted'
-  | 'budget_exhausted'
-  | 'config'
-  | 'authorization_denied'
-  | 'storage_pressure'
-  | 'verification_failed'
-  | 'needs_recovery'
-  | 'publication_failed'
-  | 'turn_limit'
-  | 'retention_expired';
+import type { ClaudeFailureCategory } from '../../contracts/protocol.js';
 
 /**
  * Fixed category labels for Slack/outbox delivery. Provider detail is discarded,
  * since arbitrary credentials and reflected conversation text cannot be reliably scrubbed.
- * Only `storage_pressure` appends a scrubbed admission-reason detail (byte counts
- * plus fixed words; never tokens, transcripts, or Slack text).
  */
-export function sanitizeFailureForSlack(category: ClaudeFailureCategory, detail: string): string {
+export function sanitizeFailureForSlack(category: ClaudeFailureCategory): string {
   const labels: Record<ClaudeFailureCategory, string> = {
     provider_auth: 'Model provider authentication or access failed',
     model_unavailable: 'Configured model is unavailable',
@@ -46,37 +27,5 @@ export function sanitizeFailureForSlack(category: ClaudeFailureCategory, detail:
     retention_expired:
       'An expired clarification question left unpublished files that fence new work in this thread',
   };
-  if (category === 'retention_expired') {
-    // only checkout directory names (validated), never content; the
-    // coordinator renders the recovery notice from them.
-    const names = detail
-      .split(',')
-      .map((name) => name.trim())
-      .filter((name) => /^[A-Za-z0-9_.-]{1,120}$/.test(name))
-      .slice(0, 10);
-    return `retention_expired: ${names.join(', ')}`.slice(0, 200);
-  }
-  if (category === 'storage_pressure') {
-    return appendScrubbedStorageDetail(labels[category], detail);
-  }
-  void detail; // Internal diagnostics are never published.
   return labels[category];
-}
-
-/**
- * Scrubs an admission reason for thread delivery: the same token regexes as
- * the app-side sanitizer, single-line whitespace, truncated to 120 chars so
- * the stored error plus label stays within the 200-char runFail bound and the
- * threaded reply stays within its 160-char reason bound.
- */
-export function appendScrubbedStorageDetail(label: string, detail: string): string {
-  const scrubbed = detail
-    .replace(/sk-[A-Za-z0-9_-]{4,}/g, '[redacted]')
-    .replace(/xox[bap]-[A-Za-z0-9-]+/g, '[redacted]')
-    .replace(/Bearer\s+[A-Za-z0-9._~-]+/gi, 'Bearer [redacted]')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 120);
-  if (scrubbed.length === 0) return label;
-  return `${label}: ${scrubbed}`;
 }
