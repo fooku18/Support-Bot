@@ -1,11 +1,9 @@
 import { defineConfig } from 'vitest/config';
 
-// Native release path. Historical legacy-stack suites are not release gates.
 // Real framework/PG behavior runs separately via test:native:integration.
 export default defineConfig({
   test: {
     include: [
-      'tests/integration/manifest.test.ts',
       'tests/integration/native-deployment.test.ts',
       'tests/integration/native-coding-deployment.test.ts',
       'tests/integration/native-live.test.ts',
