@@ -275,6 +275,7 @@ export class SlackApi {
       cursor = typeof metadata.next_cursor === 'string' ? metadata.next_cursor : '';
       if (!cursor) return;
     }
+    throw new SlackApiError(method, 'pagination_limit');
   }
 }
 
@@ -312,6 +313,7 @@ interface Entry<T> {
   tokenHash: string;
   rows: T[] | null;
   fetchedAt: number | null;
+  error: string | null;
   inflight: Promise<void> | null;
 }
 
@@ -367,17 +369,23 @@ export class SlackDirectory {
     const tokenHash = hashToken(botToken);
     let entry = this.entries.get(key) as Entry<T> | undefined;
     if (entry === undefined || entry.tokenHash !== tokenHash) {
-      entry = { tokenHash, rows: null, fetchedAt: null, inflight: null };
+      entry = { tokenHash, rows: null, fetchedAt: null, error: null, inflight: null };
       this.entries.set(key, entry as Entry<unknown>);
     }
     const fresh = entry.fetchedAt !== null && this.now() - entry.fetchedAt < this.ttlMs;
-    if (fresh && !refresh) return { rows: entry.rows, fetchedAt: entry.fetchedAt, error: null };
+    if (fresh && !refresh)
+      return { rows: entry.rows, fetchedAt: entry.fetchedAt, error: entry.error };
     const current = entry;
     let error: string | null = null;
     current.inflight ??= (async () => {
       try {
-        const rows = await fetchRows();
-        current.rows = rows;
+        current.rows = await fetchRows();
+        current.error = null;
+        current.fetchedAt = this.now();
+      } catch (err) {
+        if (!(err instanceof SlackApiError && err.code === 'pagination_limit')) throw err;
+        current.rows = null;
+        current.error = err.code;
         current.fetchedAt = this.now();
       } finally {
         current.inflight = null;
@@ -388,7 +396,7 @@ export class SlackDirectory {
     } catch (err) {
       error = err instanceof SlackApiError ? err.code : 'error';
     }
-    return { rows: current.rows, fetchedAt: current.fetchedAt, error };
+    return { rows: current.rows, fetchedAt: current.fetchedAt, error: error ?? current.error };
   }
 }
 
