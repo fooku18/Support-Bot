@@ -98,6 +98,9 @@ services:
       ADMIN_URL: http://admin:9883
       ADMIN_INTERNAL_TOKEN: ${ADMIN_INTERNAL_TOKEN:?admin token required}
       EGRESS_PROXY_URL: http://egress:3128
+      THREAD_REPLY_DECIDER_URL: ${THREAD_REPLY_DECIDER_URL:-}
+      THREAD_REPLY_DECIDER_MODEL: ${THREAD_REPLY_DECIDER_MODEL:-}
+      THREAD_REPLY_DECIDER_CLIENT_ID: ${THREAD_REPLY_DECIDER_CLIENT_ID:-}
     mem_limit: 128m
     pids_limit: 64
     stop_grace_period: 660s
@@ -230,6 +233,7 @@ services:
       ATLASSIAN_SITES: ${ATLASSIAN_SITES:-}
       DATADOG_SITES: ${DATADOG_SITES:-}
       CLOUDFLARE_HOSTS: ${CLOUDFLARE_HOSTS:-}
+      THREAD_REPLY_DECIDER_URL: ${THREAD_REPLY_DECIDER_URL:-}
     mem_limit: 128m
     pids_limit: 128
     healthcheck:

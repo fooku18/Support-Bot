@@ -21,6 +21,9 @@ import { readLinkedMessage, readThreadRoot } from './message-reads.js';
 import { fetchRepliesPage, postEphemeral, addReaction } from './slackclient.js';
 import { buildTaskKey, parseTaskKey, type TaskIdentity } from './taskkey.js';
 import { ChannelCommandHandler, CommandClient } from './channel-commands.js';
+import { createReplyDecider } from './reply-decider.js';
+
+const REQUEST_CONTROL = /^(continue(?:\s|$)|cancel$|status$)/i;
 
 class NativeTransportRefusal extends Error {
   constructor(readonly code: string) {
@@ -51,6 +54,7 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
   const token = required(env, 'SERVICE_TOKEN');
   const baseUrl = privateUrl(required(env, 'NATIVE_APPLICATION_URL'));
   const log = createStageLogger('native-adapter');
+  const decideReply = createReplyDecider(env);
   configureOutbound(env.EGRESS_PROXY_URL);
   const agent = createOutboundAgent(env.EGRESS_PROXY_URL);
   const installations = new InstallationRegistry({
@@ -391,6 +395,20 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
                 return;
               throw error;
             }
+            if (decideReply && !REQUEST_CONTROL.test(decision.request.canonicalText.trim())) {
+              const verdict = await decideReply(
+                decision.request.canonicalText,
+                Boolean(event.files?.length),
+              );
+              const detail = `reason=${verdict.reason}${verdict.probability === undefined ? '' : ` p=${verdict.probability.toFixed(3)}`} channel=${event.channel} message_ts=${event.ts}`;
+              if (!verdict.reply) {
+                log.info(`automatic reply skipped ${detail}`);
+                return;
+              }
+              if (verdict.reason === 'decider_unavailable')
+                log.warn(`thread reply decider unavailable; replying ${detail}`);
+              else log.info(`automatic reply accepted ${detail}`);
+            }
             await intake(normalized, eventId, installation, current.owner);
           })(),
         ),
@@ -435,7 +453,7 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
       .replace(new RegExp(`<@${installation.identity.botUserId}>`, 'g'), '')
       .trim();
     try {
-      if (/^(continue(?:\s|$)|cancel$|status$)/i.test(command)) {
+      if (REQUEST_CONTROL.test(command)) {
         if (event.files?.length) throw new Error('native controls do not accept attachments');
         const current = (await transport('/agents/thread', decision.request)) as {
           runId: string;

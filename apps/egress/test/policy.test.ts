@@ -9,6 +9,7 @@ const ENV: Record<string, string> = {
   MODEL_CATALOG: JSON.stringify([{ key: 'anthropic', route: 'anthropic', model: 'claude-test' }]),
   MODEL_DEFAULT_KEY: 'anthropic',
   OPERATIONS_WEBHOOK_URL: 'https://hooks.slack.com/services/T/B/x',
+  THREAD_REPLY_DECIDER_URL: 'https://decider.example.org/v1/systemone',
   SUPPORT_AGENT_EGRESS_EXTRA_HOSTS: 'extra.example.org, Bad Host',
   GITLAB_HOSTS: 'gitlab.com',
   ATLASSIAN_SITES: 'example.atlassian.net',
@@ -26,6 +27,7 @@ describe('policyFromEnv', () => {
   it('derives the pinned sets from the env file', () => {
     const p = policy();
     expect([...p.frontendHosts].sort()).toEqual([
+      'decider.example.org',
       'extra.example.org',
       'files.slack.com',
       'hooks.slack.com',
