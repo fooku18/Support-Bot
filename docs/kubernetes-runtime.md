@@ -19,6 +19,7 @@ Use the published image (or a downstream wrapper image built from it) as the con
 | Admin Deployment        | `["admin"]`          | Settings service. Mount writable storage at `/var/lib/support-agent-admin` for local state.             |
 | Admin Job               | `["admin-cli", ...]` | Pass admin CLI arguments as separate strings.                                                           |
 | Provision Job           | `["provision"]`      | Explicit fresh-install hook for database and role creation.                                             |
+| Upgrade Job             | `["upgrade"]`        | Framework schema changes on an existing store. Run it with each new image before the agent starts.      |
 | Telemetry Deployment    | `["telemetry"]`      | Optional long-running partition maintenance.                                                            |
 | Tool runtime Deployment | `["cli-runtime"]`    | Starts the REST/MCP service with `--serve`. Explicit arguments replace that default.                    |
 
@@ -30,7 +31,7 @@ Supply `NATIVE_PG_PASSWORD`, `NATIVE_ANTHROPIC_API_KEY`, `NATIVE_OPENAI_API_KEY`
 
 For TCP provisioning set `NATIVE_PG_HOST`, optional `NATIVE_PG_PORT` (default 5432), `NATIVE_PG_ADMIN_PASSWORD` or its `_FILE`, and the new runtime role's `NATIVE_PG_PASSWORD` or its `_FILE`. The Job connects as `postgres` to database `postgres` and initializes `native_answer`. Socket maintenance uses `NATIVE_PG_SOCKET` instead. The telemetry maintainer uses the same maintenance connection and its own observability password. Keep maintenance credentials out of the agent Deployment.
 
-Enable the provision hook only for a fresh install. An existing role or database causes refusal, including on a retry after partial creation. Disable this hook for upgrades to an initialized store. If your cluster uses a service mesh sidecar, configure database connectivity and Job completion accordingly.
+Enable the provision hook only for a fresh install. An existing role or database causes refusal, including on a retry after partial creation. Disable this hook for upgrades to an initialized store and run the upgrade Job instead: the agent's startup check fails when a new framework version reads columns the store lacks. The upgrade Job uses the same maintenance connection. If your cluster uses a service mesh sidecar, configure database connectivity and Job completion accordingly.
 
 For managed PostgreSQL over TCP, set `NATIVE_PG_SSLMODE=verify-full` on the agent and both maintenance workloads. The telemetry reader uses the same port and TLS settings. Both `require` and `verify-full` validate the certificate chain and hostname. Use `verify-ca` only when chain validation without hostname verification is intentional. Set `NATIVE_PG_SSLROOTCERT` to an absolute mounted CA bundle path for private trust, or extend Node's default trust via `NODE_EXTRA_CA_CERTS`. An unset native mode honors `PGSSLMODE`, then defaults to `disable`. Unix socket maintenance uses disabled TLS. Blank secret sources, host and socket settings count as unset, and a blank port defaults to 5432.
 

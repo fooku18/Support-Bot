@@ -16,8 +16,9 @@ Build or promote the exact `native-answer`, `adapter`, `cli-runtime`, `admin`
 and `egress` images under the selected
 `NATIVE_IMAGE_TAG`. Fresh PostgreSQL setup is a separate `native-provision`
 maintenance operation. It refuses an existing native database/schema.
-After a new image, run `native-upgrade` before the agent starts: it applies
-the framework's additive DDL to an existing sealed store.
+After a new image, dump the native database, then run `native-upgrade`
+before the agent starts: it applies the framework's schema changes to an
+existing sealed store.
 See [native-answer.md](native-answer.md#storage-and-prerequisites).
 
 ## 2. Drain before stop or recreate

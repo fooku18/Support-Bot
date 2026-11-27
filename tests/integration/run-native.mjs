@@ -272,11 +272,12 @@ async function inProcessSuite() {
     assert.equal(provision().status, 0, 'fresh TCP provisioning');
     assert.equal(provision().status, 1, 'refuse existing TCP database');
     sql('ALTER TABLE framework.mastra_workflow_run_entries DROP COLUMN first_seq');
+    sql('REVOKE ALL ON framework.mastra_workflow_run_entries FROM native_answer');
     assert.equal(upgrade().status, 0, 'upgrade a store of an older framework version');
     assert.equal(upgrade().status, 0, 'repeat the upgrade');
     assert.equal(
       sql(
-        "SELECT has_column_privilege('native_answer','framework.mastra_workflow_run_entries','first_seq','SELECT,UPDATE')",
+        "SELECT has_table_privilege('native_answer','framework.mastra_workflow_run_entries','SELECT,INSERT,UPDATE,DELETE') AND has_column_privilege('native_answer','framework.mastra_workflow_run_entries','first_seq','SELECT,UPDATE')",
       ),
       't',
       'upgraded column granted to the runtime',
