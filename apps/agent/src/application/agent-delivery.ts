@@ -116,7 +116,7 @@ export function createNativeAgentDelivery(
           if (inspected.active) fail('native_run_still_active');
           const cancelled = inspected.actions.some((a) => a.action === 'cancel');
           const cfg = await authorize(r, 'task.read');
-          // A question needs `continue`, and a continue runs only under the
+          // A question needs an answer, and an answer runs only under the
           // run's accepted settings. After a settings change it could never be
           // answered, so the run ends with the failure notice instead.
           const asked = cancelled ? undefined : inspected.suspended;

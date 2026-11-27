@@ -34,6 +34,17 @@ function controlText(request: { text: string; canonicalText: string }) {
   );
 }
 
+async function resumeQuestion(
+  adapter: ReturnType<typeof createNativeAgentAdapter>,
+  who: { runId: string; owner: string; actor: string },
+  answer: string,
+) {
+  const inspected = (await adapter.inspect(who)) as { suspended?: { toolCallId: string } };
+  if (!inspected.suspended) return false;
+  await adapter.resume({ ...who, toolCallId: inspected.suspended.toolCallId, answer });
+  return true;
+}
+
 class NativeTransportRefusal extends Error {
   constructor(readonly code: string) {
     super('native request refused');
@@ -429,16 +440,17 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
                 return;
               throw error;
             }
-            const control = REQUEST_CONTROL.test(controlText(decision.request));
-            const typed = controlText(decision.request).trim();
+            const typed = controlText(decision.request);
+            const control = REQUEST_CONTROL.test(typed);
             if (
               current.requester &&
               !current.delivered &&
               !control &&
               typed &&
-              !event.files?.length
+              !event.files?.length &&
+              (await answerQuestion(current, typed, normalized, installation))
             )
-              if (await answerQuestion(current, typed, normalized, installation)) return;
+              return;
             if (decideReply && current.autoReplies && current.delivered && !control) {
               const verdict = await decideReply(
                 decision.request.canonicalText,
@@ -535,12 +547,10 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
       slack: installation.slack,
     });
     const who = { runId: current.runId, owner: current.owner, actor: current.requesterId };
-    const inspected = (await adapter.inspect(who)) as { suspended?: { toolCallId: string } };
-    if (!inspected.suspended) return false;
     try {
-      await adapter.resume({ ...who, toolCallId: inspected.suspended.toolCallId, answer });
+      if (!(await resumeQuestion(adapter, who, answer))) return false;
     } catch {
-      await refuse(installation, event.channel, current.requesterId, event.thread_ts!);
+      await refuse(installation, event.channel, who.actor, event.thread_ts ?? event.ts);
       return true;
     }
     log.info(`question answered by thread reply run_id=${current.runId} message_ts=${event.ts}`);
@@ -593,13 +603,8 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
         else if (/^continue(?:\s|$)/i.test(command)) {
           const answer = command.slice('continue'.length).trim();
           if (!answer) throw new Error('native continuation requires an answer');
-          const inspected = (await adapter.inspect(who)) as { suspended?: { toolCallId: string } };
-          if (!inspected.suspended) throw new Error('no native question awaits an answer');
-          await adapter.resume({
-            ...who,
-            toolCallId: inspected.suspended.toolCallId,
-            answer,
-          });
+          if (!(await resumeQuestion(adapter, who, answer)))
+            throw new Error('no native question awaits an answer');
         }
         void present(
           current,
