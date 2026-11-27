@@ -374,6 +374,25 @@ describe('native startup command routing at the Socket Mode call site', () => {
     expect(calls.filter((c) => c.path === '/agents/cancel')).toHaveLength(1);
   });
 
+  it('posts no notice for unmentioned chat the service refuses, but does for controls and outages', async () => {
+    const { send, calls, responses, postEphemeral } = await setup();
+    responses.set('/agents/followup', () =>
+      Response.json({ error: 'thread_requires_explicit_control' }, { status: 409 }),
+    );
+    await send('looks like it is still working on it', {
+      type: 'message',
+      thread_ts: '1792940000.000001',
+    });
+    expect(calls.filter((c) => c.path === '/agents/followup')).toHaveLength(1);
+    expect(postEphemeral).not.toHaveBeenCalled();
+    responses.set('/agents/cancel', () => Response.json({ error: 'forbidden' }, { status: 403 }));
+    await send('cancel', { type: 'message', thread_ts: '1792940000.000001' });
+    expect(postEphemeral).toHaveBeenCalledOnce();
+    responses.set('/agents/followup', () => new Response('unavailable', { status: 503 }));
+    await send('and for yesterday?', { type: 'message', thread_ts: '1792940000.000001' });
+    expect(postEphemeral).toHaveBeenCalledTimes(2);
+  });
+
   it('keeps unmentioned follow-ups to the requester without a reply decider', async () => {
     const { send, calls } = await setup();
     await send('and for yesterday?', { type: 'message', thread_ts: '1792940000.000001' });

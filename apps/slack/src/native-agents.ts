@@ -4,10 +4,12 @@ import { fileDescriptors } from './file-descriptors.js';
 import { nativeInputFiles } from './generated/native-inputs.js';
 import { longAnswerMessage, type AnswerFileReceipt } from './generated/long-answer.js';
 
-/** A current channel preference is a silent routing decision, not a failed request. */
-export class AutomaticRepliesDisabledError extends Error {
-  constructor() {
-    super('automatic_replies_disabled');
+export class NativeAgentRefusal extends Error {
+  constructor(
+    readonly operation: string,
+    readonly code: string,
+  ) {
+    super(`Native agent ${operation} refused (409 ${code})`);
   }
 }
 
@@ -51,9 +53,9 @@ export function createNativeAgentAdapter(options: {
     });
     if (!response.ok) {
       if (operation === 'followup' && response.status === 409) {
-        const refusal = (await response.json()) as { error?: string };
-        if (refusal.error === 'automatic_replies_disabled')
-          throw new AutomaticRepliesDisabledError();
+        const refusal = (await response.json().catch(() => ({}))) as { error?: unknown };
+        if (typeof refusal.error === 'string' && /^[a-z_]{1,64}$/.test(refusal.error))
+          throw new NativeAgentRefusal(operation, refusal.error);
       }
       throw new Error(`Native agent ${operation} refused (${response.status})`);
     }
