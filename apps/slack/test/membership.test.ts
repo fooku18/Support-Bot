@@ -19,7 +19,7 @@ describe('installation/channel membership', () => {
         'WEXTERNAL',
       ),
     ).toBe(true);
-    expect(members).toHaveBeenLastCalledWith({ channel: 'CSHARED', limit: 200, cursor: 'next' });
+    expect(members).toHaveBeenLastCalledWith({ channel: 'CSHARED', limit: 1000, cursor: 'next' });
   });
   it('denies an absent actor and fails closed on unavailable or looping rosters', async () => {
     const members = vi.fn().mockResolvedValue({ ok: true, members: [], response_metadata: {} });

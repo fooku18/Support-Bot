@@ -15,7 +15,7 @@ export async function isChannelMember(
   for (let page = 0; page < 50; page++) {
     const response = await installation.slack.webClient.conversations.members({
       channel,
-      limit: 200,
+      limit: 1000,
       ...(cursor ? { cursor } : {}),
     });
     if (!response.ok || !Array.isArray(response.members))
