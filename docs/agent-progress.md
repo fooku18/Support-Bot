@@ -6,8 +6,8 @@ are best-effort indicators. For the request's current state, use `status`
 in the same thread.
 
 Use `cancel` to stop work or `continue <answer>` to answer the agent's
-outstanding question. The thread owner must use these controls in the
-original thread. A continuation checks current authorization and requires
+outstanding question. Anyone in the original thread can use these controls if their own
+authorization allows it. A continuation checks current authorization and requires
 an answer. Pass files with a normal work request.
 
 The agent can suspend a run with Mastra's `ask_user` tool. The question and

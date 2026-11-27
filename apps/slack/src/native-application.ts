@@ -21,7 +21,7 @@ import { readLinkedMessage, readThreadRoot } from './message-reads.js';
 import { fetchRepliesPage, postEphemeral, addReaction } from './slackclient.js';
 import { buildTaskKey, parseTaskKey, type TaskIdentity } from './taskkey.js';
 import { ChannelCommandHandler, CommandClient } from './channel-commands.js';
-import { createReplyDecider } from './reply-decider.js';
+import { createReplyDecider, type ThreadMessage } from './reply-decider.js';
 
 const REQUEST_CONTROL = /^(continue(?:\s|$)|cancel$|status$)/i;
 
@@ -379,9 +379,19 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
             if (decision.kind !== 'accept') return;
             // Silence unrelated threads and other participants. The service rechecks
             // current authorization and the owner atomically at admission.
-            let current: { runId: string; owner: string; autoReplies: boolean; delivered: boolean };
+            let current: {
+              runId: string;
+              owner: string;
+              autoReplies: boolean;
+              delivered: boolean;
+              requester: boolean;
+              requesterId: string;
+            };
             try {
-              current = (await transport('/agents/thread', decision.request)) as typeof current;
+              current = (await transport('/agents/thread', {
+                ...decision.request,
+                anyParticipant: Boolean(decideReply),
+              })) as typeof current;
             } catch (error) {
               if (
                 error instanceof NativeTransportRefusal &&
@@ -392,15 +402,19 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
                 return;
               throw error;
             }
-            if (
-              decideReply &&
-              current.autoReplies &&
-              current.delivered &&
-              !REQUEST_CONTROL.test(decision.request.canonicalText.trim())
-            ) {
+            const control = REQUEST_CONTROL.test(decision.request.canonicalText.trim());
+            if (decideReply && current.autoReplies && current.delivered && !control) {
               const verdict = await decideReply(
                 decision.request.canonicalText,
                 Boolean(event.files?.length),
+                current.requester,
+                await recentThreadMessages(
+                  installation,
+                  decision.request.channelId,
+                  decision.request.rootTs,
+                  decision.request.messageTs,
+                  current.requesterId,
+                ),
               );
               const detail = `reason=${verdict.reason}${verdict.failure ? ` failure=${verdict.failure}` : ''}${verdict.probability === undefined ? '' : ` p=${verdict.probability.toFixed(3)}`} channel=${event.channel} message_ts=${event.ts}`;
               if (verdict.reason === 'decider_unavailable')
@@ -408,7 +422,7 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
               else log.info(`automatic reply ${verdict.reply ? 'accepted' : 'skipped'} ${detail}`);
               if (!verdict.reply) return;
             }
-            await intake(normalized, eventId, installation, current.owner);
+            await intake(normalized, eventId, installation, current.owner, !current.requester);
           })(),
         ),
     });
@@ -433,11 +447,51 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
     throw error;
   }
 
+  async function recentThreadMessages(
+    installation: Installation,
+    channel: string,
+    rootTs: string,
+    beforeTs: string,
+    requesterId: string,
+  ): Promise<ThreadMessage[]> {
+    const { botId, botUserId } = installation.identity;
+    const earlier: ThreadMessage[] = [];
+    try {
+      let cursor: string | undefined;
+      for (let page = 0; page < 5; page += 1) {
+        const replies = await fetchRepliesPage(installation.slack, {
+          channel,
+          rootTs,
+          cursor,
+          limit: 200,
+        });
+        for (const message of replies.messages) {
+          if (!message.ts || message.ts >= beforeTs || !message.text) continue;
+          earlier.push({
+            author:
+              message.bot_id === botId || message.user === botUserId
+                ? 'assistant'
+                : message.user === requesterId
+                  ? 'requester'
+                  : 'other',
+            text: message.text.replaceAll(`<@${botUserId}>`, '@assistant'),
+          });
+        }
+        cursor = replies.nextCursor;
+        if (!cursor) break;
+      }
+    } catch {
+      log.warn('thread history for the reply decider unavailable');
+    }
+    return earlier.slice(-3);
+  }
+
   async function intake(
     event: MentionEvent,
     eventId: string | undefined,
     installation: Installation,
     expectedOwner?: string,
+    anyParticipant = false,
   ) {
     if (stopping || !eventId) throw new Error('native intake unavailable');
     const decision = decideMention(event, installation.identity);
@@ -454,11 +508,16 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
     try {
       if (REQUEST_CONTROL.test(command)) {
         if (event.files?.length) throw new Error('native controls do not accept attachments');
-        const current = (await transport('/agents/thread', decision.request)) as {
-          runId: string;
-          owner: string;
-        };
-        const who = { ...current, actor: decision.request.userId };
+        const current = (await transport('/agents/thread', {
+          ...decision.request,
+          anyParticipant: true,
+          control: /^cancel$/i.test(command)
+            ? 'task.cancel'
+            : /^continue(?:\s|$)/i.test(command)
+              ? 'task.steer'
+              : 'task.read',
+        })) as { runId: string; owner: string; requesterId: string };
+        const who = { runId: current.runId, owner: current.owner, actor: current.requesterId };
         if (/^cancel$/i.test(command)) await adapter.cancel(who);
         else if (/^continue(?:\s|$)/i.test(command)) {
           const answer = command.slice('continue'.length).trim();
@@ -477,7 +536,7 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
           /^continue/i.test(command) ? { event, installation } : undefined,
         );
       } else {
-        const accepted = (await adapter.mention(event, eventId, expectedOwner)) as {
+        const accepted = (await adapter.mention(event, eventId, expectedOwner, anyParticipant)) as {
           runId: string;
           owner: string;
           duplicate?: boolean;

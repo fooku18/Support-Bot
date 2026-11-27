@@ -64,7 +64,13 @@ async function setup(env: Record<string, string> = {}) {
             ? { session: 'session', model: null, prompt: null, autoReplies: true, keys: ['sonnet'] }
             : path.endsWith('/claim-receipt')
               ? null
-              : { runId: 'synthetic-run', owner: 'U1', autoReplies: true, delivered: true },
+              : {
+                  runId: 'synthetic-run',
+                  owner: 'U1',
+                  autoReplies: true,
+                  delivered: true,
+                  requester: true,
+                },
       );
     }),
   );
@@ -271,12 +277,80 @@ describe('native startup command routing at the Socket Mode call site', () => {
     choice = 'reply';
     await reply('and for yesterday?');
     expect(calls.filter((c) => c.path === '/agents/followup')).toHaveLength(1);
-    await reply('<@U2> can you look?');
-    expect(calls.filter((c) => c.path === '/v1/systemone')).toHaveLength(2);
-    expect(calls.filter((c) => c.path === '/agents/followup')).toHaveLength(1);
     await reply('cancel');
     expect(calls.filter((c) => c.path === '/v1/systemone')).toHaveLength(2);
     expect(calls.filter((c) => c.path === '/agents/cancel')).toHaveLength(1);
+  });
+
+  it('lets the reply decider judge messages of other thread participants', async () => {
+    const { send, calls, responses, installation } = await setup({
+      THREAD_REPLY_DECIDER_URL: 'https://decider/v1/systemone',
+      THREAD_REPLY_DECIDER_MODEL: 'clef-flash',
+    });
+    responses.set('/agents/thread', () =>
+      Response.json({
+        runId: 'synthetic-run',
+        owner: 'owner',
+        autoReplies: true,
+        delivered: true,
+        requester: false,
+        requesterId: 'U9',
+      }),
+    );
+    responses.set('/v1/systemone', () =>
+      Response.json({ answers: { reply: { type: 'choice', choice: 'reply', probabilities: {} } } }),
+    );
+    Object.assign(installation.slack.webClient.conversations, {
+      replies: async () => ({
+        ok: true,
+        messages: [
+          { ts: '1792940000.000001', user: 'U1', text: '<@UBOT> error rate today?' },
+          { ts: '1792940000.000002', bot_id: 'B1', text: 'It is 0.4%.' },
+          { ts: '1792940000.200000', user: 'U3', text: 'later message' },
+        ],
+        response_metadata: {},
+      }),
+    });
+    const reply = (text: string) =>
+      send(text, { type: 'message', user: 'U2', thread_ts: '1792940000.000001' });
+    await reply('does the bot also know the error rate?');
+    expect(calls.find((c) => c.path === '/agents/thread')?.body).toMatchObject({
+      userId: 'U2',
+      anyParticipant: true,
+    });
+    const state = (calls.find((c) => c.path === '/v1/systemone')?.body as { state: string }).state;
+    expect(state).toContain('the assistant: It is 0.4%.');
+    expect(state).toContain('another person: @assistant error rate today?');
+    expect(state).not.toContain('later message');
+    expect(state).toContain('Someone in the thread now wrote');
+    expect(calls.find((c) => c.path === '/agents/followup')?.body).toMatchObject({
+      userId: 'U2',
+      expectedOwner: 'owner',
+      anyParticipant: true,
+    });
+    await reply('cancel');
+    expect(calls.filter((c) => c.path === '/v1/systemone')).toHaveLength(1);
+    expect(calls.filter((c) => c.path === '/agents/thread').at(-1)?.body).toMatchObject({
+      userId: 'U2',
+      anyParticipant: true,
+      control: 'task.cancel',
+    });
+    expect(calls.find((c) => c.path === '/agents/cancel')?.body).toMatchObject({
+      runId: 'synthetic-run',
+      owner: 'owner',
+      actor: 'U9',
+    });
+  });
+
+  it('keeps unmentioned follow-ups to the requester without a reply decider', async () => {
+    const { send, calls } = await setup();
+    await send('and for yesterday?', { type: 'message', thread_ts: '1792940000.000001' });
+    expect(calls.find((c) => c.path === '/agents/thread')?.body).toMatchObject({
+      anyParticipant: false,
+    });
+    expect(calls.find((c) => c.path === '/agents/followup')?.body).not.toHaveProperty(
+      'anyParticipant',
+    );
   });
 
   it.each([
@@ -288,7 +362,7 @@ describe('native startup command routing at the Socket Mode call site', () => {
       THREAD_REPLY_DECIDER_MODEL: 'clef-flash',
     });
     responses.set('/agents/thread', () =>
-      Response.json({ runId: 'synthetic-run', owner: 'U1', ...thread }),
+      Response.json({ runId: 'synthetic-run', owner: 'U1', requester: true, ...thread }),
     );
     await send('and for yesterday?', { type: 'message', thread_ts: '1792940000.000001' });
     expect(calls.filter((c) => c.path === '/v1/systemone')).toEqual([]);
