@@ -1,4 +1,5 @@
 import type { NativeAgentOptions } from '../agent-options.js';
+import { CLI_RUNTIME_KINDS } from '../../contracts/tool-kinds.js';
 import { coordinatorRunConfiguration, type CoordinatorConfig } from '../configuration/config.js';
 import {
   resolveChannelTools,
@@ -76,17 +77,22 @@ export function nativeReadServices(options: {
       { gitlab: true },
     );
     const { cli } = options;
-    const readiness = cli ? await fetchCliRuntimeReadiness(cli.url, cli.token) : undefined;
-    if (readiness?.syncError) throw new Error('tool configuration unavailable');
-    const status = (id: string) => readiness?.instances.find((i) => i.instanceId === id);
-    if (cli && profile.gitlab)
-      verifyGitlabInstance(status(profile.gitlab.instanceId), profile.gitlab, identity.teamId);
     const find = (kind: EffectiveToolName) => profile.tools.find((t) => t.name === kind);
     const webFetch = options.web ? find('webFetch') : undefined;
     const at = find('atlassian'),
       dd = find('datadog'),
       cf = find('cloudflare'),
       sl = find('slack');
+    const readiness =
+      cli &&
+      (profile.gitlab ||
+        profile.tools.some((t) => (CLI_RUNTIME_KINDS as readonly string[]).includes(t.name)))
+        ? await fetchCliRuntimeReadiness(cli.url, cli.token)
+        : undefined;
+    if (readiness?.syncError) throw new Error('tool configuration unavailable');
+    const status = (id: string) => readiness?.instances.find((i) => i.instanceId === id);
+    if (cli && profile.gitlab)
+      verifyGitlabInstance(status(profile.gitlab.instanceId), profile.gitlab, identity.teamId);
     const atlassian =
       cli && at ? verifyAtlassianInstance(status(at.instanceId), at, identity.teamId) : undefined;
     const datadog =
