@@ -66,8 +66,12 @@ truncation or summarisation.
 
 ## Verification
 
-- Deterministic (Windows, node 26.13.1): T0 `npm run typecheck:all`, `npm run lint`, `npm run format:check` pass.
-  T1/T2: see the commit report.
+- Deterministic (Windows 11, node 26.13.1, revision `92bca50`): T0 `npm run typecheck:all`, `npm run lint` and
+  `npm run format:check` pass. T1 `npm run test:packages`: 61 of 667 agent tests fail, and the other workspaces pass.
+  T2 `npm test`: 31 of 122 fail. The same set fails with the two source files reverted to `03ec828`. The only
+  difference is that the six new tests fail there too. The failures are environment-specific: Windows `fsync` EPERM
+  and symlink handling in the publication and checkout tests, `C:\C:\` path doubling and bash exit 127 in the script
+  tests, and Docker in the deployment tests. A Linux run is still needed for a clean T1/T2 record.
 - Live: BLOCKED. T3 and T5 were not run: the shared test instance is locked by another session, and this change
   touches inference, which needs a T5 gateway run before release.
 - Evidence: none retained yet.
