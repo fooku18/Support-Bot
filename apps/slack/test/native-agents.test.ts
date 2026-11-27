@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { createNativeAgentAdapter } from '../src/native-agents.js';
+import { createNativeAgentAdapter, nativeThreadReply } from '../src/native-agents.js';
 import type { SlackDeps } from '../src/slackclient.js';
 const identity = { teamId: 'TTEST', installationId: 'UBOT', botUserId: 'UBOT', botId: 'BBOT' };
 const slack = {} as SlackDeps;
@@ -172,4 +172,64 @@ it('routes only eligible unmentioned thread messages through the existing sender
   expect(
     nativeThreadReply({ ...message, bot_id: 'BTRUSTED', subtype: 'bot_message' }, trusted),
   ).not.toBeNull();
+});
+
+const threadReply = {
+  type: 'message',
+  channel: 'CTEST',
+  user: 'UACTOR',
+  ts: '1794740001.1',
+  thread_ts: '1794740000.1',
+};
+const longLog = Array.from({ length: 600 }, (_, i) => `2026-11-27T10:00:${i} ERROR boom`).join(
+  '\n',
+);
+
+it('treats an unmentioned thread reply that is also sent to the channel as a follow-up', () => {
+  const reply = {
+    ...threadReply,
+    subtype: 'thread_broadcast',
+    text: 'And how do I do the same for Poland?',
+  };
+  expect(nativeThreadReply(reply, identity)?.type).toBe('app_mention');
+});
+
+it('ignores the message copy of a mention beyond the flattened content cap', () => {
+  const copy = { ...threadReply, text: `${longLog}\n<@UBOT> what does this log mean?` };
+  expect(Buffer.byteLength(copy.text)).toBeGreaterThan(16 * 1024);
+  expect(nativeThreadReply(copy, identity)).toBeNull();
+});
+
+it('ignores the message copy of a rich-text mention beyond the flattened content cap', () => {
+  const blocks = (userId: string) => [
+    {
+      type: 'rich_text',
+      elements: [
+        {
+          type: 'rich_text_section',
+          elements: [
+            { type: 'text', text: `${longLog}\n` },
+            { type: 'user', user_id: userId },
+            { type: 'text', text: ' please check' },
+          ],
+        },
+      ],
+    },
+  ];
+  expect(nativeThreadReply({ ...threadReply, blocks: blocks('UBOT') }, identity)).toBeNull();
+  expect(nativeThreadReply({ ...threadReply, blocks: blocks('UOTHER') }, identity)).not.toBeNull();
+});
+
+it('ignores the message copy of a mention made in a section block or an attachment', () => {
+  const section = [{ type: 'section', text: { type: 'mrkdwn', text: '<@UBOT> alert fired' } }];
+  expect(nativeThreadReply({ ...threadReply, blocks: section }, identity)).toBeNull();
+  expect(
+    nativeThreadReply({ ...threadReply, attachments: [{ text: '<@UBOT> alert fired' }] }, identity),
+  ).toBeNull();
+  expect(
+    nativeThreadReply(
+      { ...threadReply, text: longLog, attachments: [{ text: '<@UBOT> alert fired' }] },
+      identity,
+    ),
+  ).toBeNull();
 });
