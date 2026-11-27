@@ -115,7 +115,9 @@ export function createServiceToolDefinitions(
   const definitions: BrokerToolDefinition[] = [];
   const projectArg = z
     .union([z.string().min(1).max(255), z.number().int().positive()])
-    .describe('GitLab project: group/name path or numeric project ID');
+    .describe(
+      'GitLab project: full path from the top-level group (group/subgroup/name) or numeric project ID',
+    );
   if (options.gitlab) {
     // The GitLab handler renders its own `ok|failed (operation @ project)` text.
     const text = (result: BrokerToolResult) => ({

@@ -1294,8 +1294,8 @@ describe('get_repository_file on the read path (decoded in the runtime, before r
     });
   });
 
-  it("answers the read tool (and Code Mode, which calls it) with the coding path's normalization", async () => {
-    const h = runtime();
+  /** The native read tools over an HTTP stand-in for the tool runtime's /gitlab route. */
+  async function readTools(h: ReturnType<typeof gitlabRuntime>) {
     const requests: Array<Record<string, unknown>> = [];
     const server = http.createServer(async (req, res) => {
       if (req.url === '/readyz') {
@@ -1316,6 +1316,10 @@ describe('get_repository_file on the read path (decoded in the runtime, before r
       res.end(JSON.stringify(await handleGitlab(body)));
     });
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const close = async () => {
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    };
     try {
       const document = compileDocument(1, {
         installations: [
@@ -1360,6 +1364,16 @@ describe('get_repository_file on the read path (decoded in the runtime, before r
         string,
         { execute(args: unknown, context: unknown): Promise<unknown> }
       >;
+      return { tools, requests, close };
+    } catch (err) {
+      await close();
+      throw err;
+    }
+  }
+
+  it("answers the read tool (and Code Mode, which calls it) with the coding path's normalization", async () => {
+    const { tools, requests, close } = await readTools(runtime());
+    try {
       const read = async (file_path: string) =>
         (await tools.get_repository_file!.execute(
           { project: 'g/p', file_path, ref: 'main' },
@@ -1407,8 +1421,36 @@ describe('get_repository_file on the read path (decoded in the runtime, before r
       expect(huge.result.data).toMatchObject({ content: null, content_truncated: true });
       expect(huge.result.data!.content_note).toMatch(/200000-byte capture bound/);
     } finally {
-      server.closeAllConnections();
-      await new Promise<void>((resolve) => server.close(() => resolve()));
+      await close();
+    }
+  }, 30_000);
+
+  it('names the full paths of reachable projects when GitLab does not find the project', async () => {
+    const { seen, fetchImpl } = fakeGitlab((request) => {
+      const url = new URL(request.url);
+      if (url.pathname === '/api/v4/projects')
+        return jsonAnswer([
+          { id: 1, path_with_namespace: 'apps/app-shell' },
+          { id: 2, path_with_namespace: 'top/frontend/app' },
+        ]);
+      return jsonAnswer({ message: '404 Project Not Found' }, 404);
+    });
+    const { tools, close } = await readTools(gitlabRuntime(fetchImpl));
+    try {
+      const missing = (await tools.get_repository_file!.execute(
+        { project: 'frontend/app', file_path: 'package.json', ref: 'main' },
+        {},
+      )) as { result: { ok: boolean }; content: Array<{ text: string }> };
+      expect(missing.result.ok).toBe(false);
+      expect(missing.content[0]!.text).toBe(
+        'failed (get_repository_file @ frontend/app): [not_found] GitLab project was not found (or is not visible to this token). Projects named "app" this token can reach: top/frontend/app. Use the full path, starting at the top-level group.',
+      );
+      expect(seen.map((request) => request.method)).toEqual(['GET', 'GET']);
+      expect(new URL(seen[1]!.url).search).toBe(
+        '?membership=true&simple=true&order_by=last_activity_at&sort=desc&search=app&page=1&per_page=100',
+      );
+    } finally {
+      await close();
     }
   }, 30_000);
 });

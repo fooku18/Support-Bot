@@ -936,6 +936,47 @@ function normalizeTrace(
   };
 }
 
+const PROJECT_NOT_FOUND = 'GitLab project was not found (or is not visible to this token)';
+const MAX_PROJECT_CANDIDATES = 5;
+
+/**
+ * Adds the reachable projects named like the last segment of a project path
+ * GitLab did not find, so a path without its top-level group or a moved
+ * project can be corrected in one step. One membership-scoped `list_projects`
+ * read through `list`; the result is unchanged when that read fails.
+ */
+export async function hintProjectPaths(
+  result: GitlabNormalizedResult,
+  list: (validated: ValidatedGitlabArgs) => Promise<GitlabNormalizedResult>,
+): Promise<GitlabNormalizedResult> {
+  if (result.error !== PROJECT_NOT_FOUND || /^\d+$/.test(result.project)) return result;
+  const name = result.project.split('/').at(-1)!;
+  let found: GitlabNormalizedResult;
+  try {
+    found = await list({ kind: 'list_projects', search: name, page: 1, per_page: 100 });
+  } catch {
+    return result;
+  }
+  if (!found.ok || !Array.isArray(found.data)) return result;
+  const wanted = result.project.toLowerCase();
+  const paths = found.data
+    .map((entry) => (entry as Record<string, unknown> | null)?.path_with_namespace)
+    .filter(
+      (path): path is string =>
+        typeof path === 'string' && path.split('/').at(-1)!.toLowerCase() === name.toLowerCase(),
+    );
+  const suffix = (path: string) => Number(path.toLowerCase().endsWith(`/${wanted}`));
+  paths.sort((a, b) => suffix(b) - suffix(a));
+  const listed =
+    paths.slice(0, MAX_PROJECT_CANDIDATES).join(', ') +
+    (paths.length > MAX_PROJECT_CANDIDATES ? ', …' : '');
+  const hint =
+    paths.length === 0
+      ? `No project named "${name}" is visible to this token; list_projects shows the reachable ones.`
+      : `Projects named "${name}" this token can reach: ${listed}. Use the full path, starting at the top-level group.`;
+  return { ...result, error: `${result.error}. ${hint}` };
+}
+
 function classifyHttpFailure(
   httpStatus: number | null,
   output: string,
@@ -952,7 +993,9 @@ function classifyHttpFailure(
   if (httpStatus === 404)
     return {
       errorCategory: 'not_found',
-      error: 'GitLab resource was not found (or is not visible to this token)',
+      error: /"message"\s*:\s*"404 Project Not Found"/.test(output)
+        ? PROJECT_NOT_FOUND
+        : 'GitLab resource was not found (or is not visible to this token)',
     };
   const rejected = httpStatus === 400 || httpStatus === 422;
   if (httpStatus === 409 || (rejected && /already exists/i.test(output)))

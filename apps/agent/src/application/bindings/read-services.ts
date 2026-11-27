@@ -26,8 +26,10 @@ import {
   GITLAB_READ_OPERATIONS,
   operationScopeLabel,
   validateGitlabOperation,
+  type ValidatedGitlabArgs,
 } from '../../integrations/gitlab/gitlab-operations.js';
 import {
+  hintProjectPaths,
   normalizeGitlabOutput,
   renderGitlabResultText,
 } from '../../integrations/gitlab/gitlab-rest-adapter.js';
@@ -176,41 +178,50 @@ export function nativeReadServices(options: {
           if (!cli || typeof operation !== 'string') return unavailable();
           if (!(GITLAB_READ_OPERATIONS as readonly string[]).includes(operation))
             return unavailable();
+          const read = async (validated: ValidatedGitlabArgs) => {
+            const response = await gitlabViaRuntime(
+              {
+                ...ref(profile.gitlab?.instanceId),
+                // The capture bound of the coding path; the shared
+                // normalization bounds what reaches the model.
+                maxOutputBytes: 200000,
+                operation: validated.kind,
+                operationArgs: validated,
+              },
+              cli.url,
+              cli.token,
+              40000,
+              signal,
+            );
+            if (response.status === 'not_run')
+              return { refused: (response.refused ?? response.output).slice(0, 300) };
+            // The same normalization as the coding path: bounded fields and
+            // collections, the trace report, the decoded repository file.
+            return normalizeGitlabOutput({
+              operation: validated.kind,
+              project: operationScopeLabel(validated),
+              status: response.status,
+              httpStatus: response.httpStatus,
+              output: response.output,
+              error: response.error,
+              ...('page' in validated ? { page: validated.page } : {}),
+              ...('per_page' in validated ? { per_page: validated.per_page } : {}),
+              ...(validated.kind === 'search' ? { scope: validated.scope } : {}),
+              textMeta: response.textMeta,
+            });
+          };
           const validated = validateGitlabOperation(operation, args);
-          const response = await gitlabViaRuntime(
-            {
-              ...ref(profile.gitlab?.instanceId),
-              // The capture bound of the coding path; the shared
-              // normalization bounds what reaches the model.
-              maxOutputBytes: 200000,
-              operation,
-              operationArgs: validated,
-            },
-            cli.url,
-            cli.token,
-            40000,
-            signal,
-          );
-          const project = operationScopeLabel(validated);
-          if (response.status === 'not_run')
+          const result = await read(validated);
+          if ('refused' in result)
             return {
               ok: false,
-              output: `failed (${validated.kind} @ ${project}): [refused] ${(response.refused ?? response.output).slice(0, 300)}`,
+              output: `failed (${validated.kind} @ ${operationScopeLabel(validated)}): [refused] ${result.refused}`,
               operationId: 'native-read',
             };
-          // The same normalization as the coding path: bounded fields and
-          // collections, the trace report, the decoded repository file.
-          const normalized = normalizeGitlabOutput({
-            operation: validated.kind,
-            project,
-            status: response.status,
-            httpStatus: response.httpStatus,
-            output: response.output,
-            error: response.error,
-            ...('page' in validated ? { page: validated.page } : {}),
-            ...('per_page' in validated ? { per_page: validated.per_page } : {}),
-            ...(validated.kind === 'search' ? { scope: validated.scope } : {}),
-            textMeta: response.textMeta,
+          const normalized = await hintProjectPaths(result, async (search) => {
+            const listed = await read(search);
+            if ('refused' in listed) throw new Error('project search refused');
+            return listed;
           });
           return {
             ok: normalized.ok,
