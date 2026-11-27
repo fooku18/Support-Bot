@@ -127,7 +127,7 @@ describe('OpenAI Responses durable execution', () => {
       beforeDispatch: async () => {},
       contextTokens: 1024,
       outputTokens: 128,
-      maxSteps: 3,
+      maxSteps: 2,
     };
     const first = createNativeRuntime(options);
     const second = createNativeRuntime(options);
@@ -162,6 +162,8 @@ describe('OpenAI Responses durable execution', () => {
         ]),
       });
       expect(requests[1]?.previous_response_id).toBeNull();
+      expect(requests[0]?.tool_choice).not.toBe('none');
+      expect(requests[1]?.tool_choice).toBe('none');
     } finally {
       await first.mastra.shutdown();
       await second.mastra.shutdown();
