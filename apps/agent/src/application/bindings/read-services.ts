@@ -229,6 +229,9 @@ export function nativeReadServices(options: {
             output: renderGitlabResultText(normalized),
             operationId: 'native-read',
             ...(normalized.ok ? { data: normalized.data } : {}),
+            ...(normalized.ok && normalized.warnings.length > 0
+              ? { warnings: normalized.warnings }
+              : {}),
           };
         },
         async atlassian(operation, args) {

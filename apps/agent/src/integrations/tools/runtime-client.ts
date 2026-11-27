@@ -78,6 +78,7 @@ export interface BrokerToolResult {
   evidence?: string;
   /** Structured result for scripts (Code Mode), when the adapter has one. */
   data?: unknown;
+  warnings?: string[];
   meta?: Record<string, unknown>;
 }
 

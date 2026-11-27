@@ -36,17 +36,18 @@ export function assertCodeModeRuntime(
 type TransportRun = Parameters<IsolatedVmCodeModeTransport['run']>[0];
 
 export const CODE_MODE_READ_SHAPE =
-  'Every external_* function resolves to { ok: true, data } with the parsed JSON response, or to { ok, output } with the text of a non-JSON response or of a failed read (ok false, output says why).';
+  'Every external_* function resolves to { ok: true, data, warnings? } with the parsed JSON response, or to { ok, output } with the text of a non-JSON response or of a failed read (ok false, output says why). warnings, when present, says the data is partial (for example a full page: read the next page). A read that is refused or cannot run rejects instead; use Promise.allSettled to keep the other results of a batch.';
 
-/** What a script receives from an `external_*` read: the parsed JSON of a
- * successful read, or its text. The model-facing copies stay out. */
 export function codeModeReadResult(value: unknown): unknown {
   const result = (value as { result?: unknown } | null)?.result as
-    | { ok?: unknown; output?: unknown; data?: unknown }
+    | { ok?: unknown; output?: unknown; data?: unknown; warnings?: unknown }
     | undefined;
   if (typeof result?.ok !== 'boolean' || typeof result.output !== 'string') return value;
   if (!result.ok) return { ok: false, output: result.output };
-  if (result.data !== undefined) return { ok: true, data: result.data };
+  if (result.data !== undefined)
+    return Array.isArray(result.warnings) && result.warnings.length > 0
+      ? { ok: true, data: result.data, warnings: result.warnings }
+      : { ok: true, data: result.data };
   try {
     return { ok: true, data: JSON.parse(result.output) as unknown };
   } catch {

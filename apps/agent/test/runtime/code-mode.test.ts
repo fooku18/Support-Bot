@@ -82,6 +82,11 @@ describe('Code Mode in isolated-vm', () => {
       ok: true,
       data: { b: 2 },
     });
+    expect(
+      codeModeReadResult(
+        reply({ ok: true, output: '[1]', data: [1], warnings: ['page 1 is full (1 rows)'] }),
+      ),
+    ).toEqual({ ok: true, data: [1], warnings: ['page 1 is full (1 rows)'] });
     expect(codeModeReadResult(reply({ ok: true, output: 'plain text' }))).toEqual({
       ok: true,
       output: 'plain text',
