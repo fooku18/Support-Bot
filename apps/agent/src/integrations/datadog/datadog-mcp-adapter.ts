@@ -7,6 +7,7 @@
  * supplies only a tool name from the pinned catalog and its arguments; it
  * never sees upstream URLs, headers or HTTP error bodies.
  */
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { createHash } from 'node:crypto';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import {
@@ -166,6 +167,8 @@ function errorText(err: unknown): string {
 
 export type DatadogFetch = (input: URL, init: RequestInit) => Promise<Response>;
 
+const callSignal = new AsyncLocalStorage<AbortSignal>();
+
 function capBody(body: ReadableStream<Uint8Array>, maxBytes: number): ReadableStream<Uint8Array> {
   let total = 0;
   const reader = body.getReader();
@@ -224,12 +227,15 @@ export function guardedDatadogFetch(
       throw new Error('Datadog request method outside the MCP transport');
     const headers = new Headers(init.headers);
     headers.set('authorization', `Bearer ${token}`);
+    const call = callSignal.getStore();
+    const signal =
+      call && init.signal ? AbortSignal.any([init.signal, call]) : (call ?? init.signal);
     let response: Response;
     try {
-      response = await doFetch(url, { ...init, headers, redirect: 'manual' });
+      response = await doFetch(url, { ...init, headers, signal, redirect: 'manual' });
     } catch (err) {
       if (err instanceof DatadogTransportError) throw err;
-      throw new DatadogTransportError(init.signal?.aborted ? 'timeout' : 'network');
+      throw new DatadogTransportError(signal?.aborted ? 'timeout' : 'network');
     }
     if (response.status === 0 || response.type === 'opaqueredirect')
       throw new DatadogTransportError('redirect_refused');
@@ -258,6 +264,8 @@ export function classifyDatadogError(err: unknown, signal?: AbortSignal): Datado
   }
   if (err instanceof McpError) {
     if (err.code === ErrorCode.RequestTimeout) return 'timeout';
+    if (err.code === ErrorCode.InvalidParams || err.code === ErrorCode.InvalidRequest)
+      return 'tool_error';
     if (err.code === ErrorCode.ConnectionClosed) return 'session_lost';
     return classifyDatadogText(err.message) ?? 'upstream_error';
   }
@@ -500,14 +508,37 @@ export class DatadogMcpSession {
     args: Record<string, unknown>,
     bounds: { timeoutMs: number; maxOutputBytes: number; signal?: AbortSignal },
   ): Promise<DatadogCallResult> {
-    const timeout = AbortSignal.timeout(bounds.timeoutMs);
-    const signal = bounds.signal ? AbortSignal.any([bounds.signal, timeout]) : timeout;
+    const call = new AbortController();
+    const abort = () => call.abort(bounds.signal?.reason);
+    if (bounds.signal?.aborted) abort();
+    else bounds.signal?.addEventListener('abort', abort, { once: true });
+    const timer = setTimeout(
+      () =>
+        call.abort(new DOMException('The operation was aborted due to timeout', 'TimeoutError')),
+      bounds.timeoutMs,
+    );
+    try {
+      return await this.runCall(name, args, bounds, call.signal);
+    } finally {
+      clearTimeout(timer);
+      bounds.signal?.removeEventListener('abort', abort);
+    }
+  }
+
+  private async runCall(
+    name: string,
+    args: Record<string, unknown>,
+    bounds: { timeoutMs: number; maxOutputBytes: number },
+    signal: AbortSignal,
+  ): Promise<DatadogCallResult> {
     const attempt = async (): Promise<unknown> => {
       const client = await this.session(bounds.timeoutMs);
-      return client.callTool({ name, arguments: args }, undefined, {
-        timeout: bounds.timeoutMs,
-        signal,
-      });
+      return callSignal.run(signal, () =>
+        client.callTool({ name, arguments: args }, undefined, {
+          timeout: bounds.timeoutMs,
+          signal,
+        }),
+      );
     };
     let result: unknown;
     try {
@@ -524,11 +555,12 @@ export class DatadogMcpSession {
       if (
         category !== 'rate_limit' &&
         category !== 'timeout' &&
-        category !== 'tool_error' &&
         // A JSON-RPC refusal (e.g. a missing permission) keeps the session.
         !(err instanceof McpError && category !== 'session_lost')
       )
         await this.reset();
+      if (category === 'tool_error')
+        return datadogToolError(name, errorText(err), bounds.maxOutputBytes);
       return datadogFailure(name, category, datadogPermissionHint(errorText(err)));
     }
     const text = renderDatadogContent(result);
@@ -539,17 +571,7 @@ export class DatadogMcpSession {
         return datadogFailure(name, category, datadogPermissionHint(text));
       // The tool's own error text (e.g. a query syntax problem) helps the
       // model correct its call; it is bounded and labelled like any result.
-      const bounded = boundDatadogOutput(
-        `${name}: tool_error: ${DATADOG_ERROR_TEXT.tool_error}\n${text}`,
-        Math.min(bounds.maxOutputBytes, 4_000),
-      );
-      return {
-        status: 'failed',
-        errorCategory: 'tool_error',
-        output: bounded.output,
-        truncated: bounded.truncated,
-        bytes: Buffer.byteLength(bounded.output),
-      };
+      return datadogToolError(name, text, bounds.maxOutputBytes);
     }
     const bounded = boundDatadogOutput(text, bounds.maxOutputBytes);
     return {
@@ -559,6 +581,20 @@ export class DatadogMcpSession {
       bytes: Buffer.byteLength(bounded.output),
     };
   }
+}
+
+function datadogToolError(name: string, text: string, maxOutputBytes: number): DatadogCallResult {
+  const bounded = boundDatadogOutput(
+    `${name}: tool_error: ${DATADOG_ERROR_TEXT.tool_error}\n${text}`,
+    Math.min(maxOutputBytes, 4_000),
+  );
+  return {
+    status: 'failed',
+    errorCategory: 'tool_error',
+    output: bounded.output,
+    truncated: bounded.truncated,
+    bytes: Buffer.byteLength(bounded.output),
+  };
 }
 
 export function datadogFailure(

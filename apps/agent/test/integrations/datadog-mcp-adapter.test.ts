@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
 import {
   DatadogMcpSession,
   DatadogTransportError,
   boundDatadogOutput,
+  classifyDatadogError,
   classifyDatadogHttp,
   datadogCatalogHash,
   datadogEndpoint,
@@ -244,6 +246,100 @@ describe('Datadog MCP session', () => {
       { timeoutMs: 100, maxOutputBytes: 1_000 },
     );
     expect(result).toMatchObject({ status: 'timed_out', errorCategory: 'timeout' });
+  });
+
+  it('aborts the upstream request of a timed-out or canceled call', async () => {
+    const upstream: AbortSignal[] = [];
+    const fake = fakeDatadog({
+      call: (_name, _args, signal) => {
+        if (signal) upstream.push(signal);
+        return new Promise((_, reject) =>
+          signal?.addEventListener('abort', () => reject(new Error('aborted'))),
+        );
+      },
+    });
+    const s = session(fake);
+    await s.listTools(5_000);
+    const caller = new AbortController();
+    const canceled = s.callTool(
+      'search_datadog_logs',
+      { query: 'x' },
+      { timeoutMs: 5_000, maxOutputBytes: 1_000, signal: caller.signal },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    caller.abort();
+    expect(await canceled).toMatchObject({ status: 'timed_out', errorCategory: 'timeout' });
+    expect(
+      await s.callTool(
+        'search_datadog_logs',
+        { query: 'y' },
+        { timeoutMs: 100, maxOutputBytes: 1_000 },
+      ),
+    ).toMatchObject({ status: 'timed_out', errorCategory: 'timeout' });
+    expect(upstream).toHaveLength(2);
+    expect(upstream.every((signal) => signal.aborted)).toBe(true);
+  });
+
+  it('sends no cancellation for a call that already completed', async () => {
+    const fake = fakeDatadog();
+    const s = session(fake);
+    await s.listTools(5_000);
+    expect(
+      await s.callTool(
+        'search_datadog_logs',
+        { query: 'x' },
+        { timeoutMs: 200, maxOutputBytes: 1_000 },
+      ),
+    ).toMatchObject({ status: 'completed' });
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    const cancellations = fake.seen.filter(
+      (request) =>
+        (request.body as { method?: string } | null)?.method === 'notifications/cancelled',
+    );
+    expect(cancellations).toEqual([]);
+  });
+
+  it('classifies invalid-argument JSON-RPC errors as tool errors with their bounded message', async () => {
+    const missing = new McpError(
+      ErrorCode.InvalidParams,
+      'Invalid arguments for tool search_datadog_logs: query is required',
+    );
+    const window = new McpError(
+      ErrorCode.InvalidParams,
+      'Invalid arguments: from is not allowed to be later than to',
+    );
+    const malformed = new McpError(ErrorCode.InvalidRequest, 'Invalid request: permission field');
+    expect([missing, window, malformed].map((err) => classifyDatadogError(err))).toEqual([
+      'tool_error',
+      'tool_error',
+      'tool_error',
+    ]);
+    const fake = fakeDatadog();
+    const refusing: typeof fake.fetchImpl = async (input, init) => {
+      const body = typeof init.body === 'string' ? JSON.parse(init.body) : null;
+      if (body?.method === 'tools/call')
+        return Response.json({
+          jsonrpc: '2.0',
+          id: body.id,
+          error: {
+            code: ErrorCode.InvalidParams,
+            message: 'from is not allowed to be later than to',
+          },
+        });
+      return fake.fetchImpl(input, init);
+    };
+    const s = new DatadogMcpSession({
+      site: 'datadoghq.eu',
+      toolsets: 'all',
+      token: TOKEN,
+      fetchImpl: refusing,
+    });
+    const result = await s.callTool('search_datadog_logs', { query: 'x' }, bounds);
+    expect(result).toMatchObject({ status: 'failed', errorCategory: 'tool_error' });
+    expect(result.output).toContain('from is not allowed to be later than to');
+    expect(result.output).not.toContain('Missing Datadog permission');
+    await s.callTool('search_datadog_logs', { query: 'x' }, bounds);
+    expect(fake.sessions()).toBe(1);
   });
 
   it('maps an isError write refusal to forbidden_scope and keeps plain tool errors', async () => {
