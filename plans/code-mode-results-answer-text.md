@@ -1,6 +1,6 @@
 # Code Mode read results and answer text
 
-Status: In progress
+Status: Done
 
 ## Summary
 
@@ -53,12 +53,18 @@ operationId, data }, content: [{ type: 'text', text }] }`: the same response
   `inputs-corrections` left out: it fails on `main` already (stale 200 KB
   fixture). T3 `coding` and `tools`: BLOCKED on this machine (the image
   suites call `process.getuid`).
-- Live: pending. The deployment check repeats the traffic question.
+- Live, 2026-11-27 16:54 UTC on the deployment (upstream `08da638`): the
+  same traffic question took 6 model requests instead of 10, all
+  successful, and was answered in 64 s instead of 107 s. Each script read
+  `.data` directly, the unpaged zone listing fit the output limit, and the
+  answer started without narration.
 
 ## Rollout
 
-Merge to `main`, then the deployment repository's digest bump.
+Merged as `08da638` (#29) and deployed with #28 and #27 by deployment MR
+!17 (`df1ebc4d`, 2026-11-27 16:49 UTC; pipeline 2842338). Rollback: pin
+`sha256:0f076208…` (upstream `97efb3c`) in the deployment repository.
 
 ## Open items
 
-- [ ] Verification and live check.
+- [ ] T3 `coding` and `tools` on a Linux Docker host.
