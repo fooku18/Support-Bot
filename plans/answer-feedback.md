@@ -45,13 +45,18 @@ stored and the Costs page shows the counts.
 - [x] Tests: blocks, click routing (stored body, invalid vote and run ID, admin
       refusal), admin route (upsert, validation, token), page render, agent
       delivery passes the run ID.
-- [ ] T0 to T3, PR.
+- [x] T0 to T3 `application`, PR.
 - [ ] Deploy, live click in #test-1234.
 
 ## Verification
 
-- Deterministic: pending.
-- Live: pending.
+- Deterministic (2026-11-28): T0 passes. T1 and T2 pass in a Linux container
+  (agent 719 tests, Slack 214, root 135). T3 `application` passes (82 records)
+  after the vertical's footer checks moved to the second-last block; its
+  discovery answer now also asserts both buttons carry the run ID.
+- T4: not run. The shared local instance was locked by another session
+  (`playbook-budget`, until 02:45 UTC), and the stub suite cannot click a button.
+- Live: T5 BLOCKED (no gateway test instance with the needed tools). Staging check pending.
 
 ## Rollout
 
