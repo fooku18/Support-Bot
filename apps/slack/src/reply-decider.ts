@@ -8,11 +8,50 @@ export type ReplyDecision =
     }
   | { reply: false; reason: 'decider_unavailable'; failure: string; probability?: undefined };
 
-export type ReplyDecider = (text: string, hasFiles: boolean) => Promise<ReplyDecision>;
+export interface ThreadMessage {
+  author: 'assistant' | 'requester' | 'other';
+  text: string;
+}
+
+export type ReplyDecider = (
+  text: string,
+  hasFiles: boolean,
+  requester: boolean,
+  recent?: ThreadMessage[],
+) => Promise<ReplyDecision>;
 
 const APP_ATTRIBUTION = /\*?Sent using\*?\s*<@[UW][A-Z0-9]+(\|[^>]*)?>/gi;
 const MENTIONS_OTHERS = /<@[UW][A-Z0-9]+(\|[^>]*)?>|<!subteam\^|<!(channel|here|everyone)\b/;
 const MAX_TEXT = 2000;
+const MAX_RECENT = 3;
+const MAX_RECENT_TEXT = 500;
+const AUTHOR = {
+  assistant: 'the assistant',
+  requester: 'the person who asked the assistant',
+  other: 'another person',
+};
+
+function readable(text: string) {
+  return text
+    .replace(APP_ATTRIBUTION, '')
+    .replace(/<@[UW][A-Z0-9]+\|([^>]+)>/g, '@$1')
+    .replace(/<@[UW][A-Z0-9]+>/g, '@someone')
+    .trim();
+}
+
+function describe(message: string, requester: boolean, recent: ThreadMessage[]) {
+  const who = requester ? 'The person who asked the assistant' : 'Someone in the thread';
+  const history = recent
+    .slice(-MAX_RECENT)
+    .map((m) => ({ ...m, text: readable(m.text).slice(0, MAX_RECENT_TEXT) }))
+    .filter((m) => m.text)
+    .map((m) => `${AUTHOR[m.author]}: ${m.text}`);
+  const text = message.slice(0, MAX_TEXT);
+  if (!history.length)
+    return `A Slack thread with an AI assistant. ${who} wrote this new message${requester ? ' in the thread' : ''}, without mentioning the assistant:\n${text}`;
+  return `A Slack thread with an AI assistant. Recent messages, oldest first:\n${history.join('\n')}\n\n${who} now wrote this new message, without mentioning the assistant:\n${text}`;
+}
+
 const TIMEOUT_MS = 2000;
 
 const QUESTION = {
@@ -42,11 +81,13 @@ export function createReplyDecider(env: NodeJS.ProcessEnv): ReplyDecider | null 
   const model = env.THREAD_REPLY_DECIDER_MODEL?.trim();
   if (!model) throw new Error('THREAD_REPLY_DECIDER_MODEL required');
   const clientId = env.THREAD_REPLY_DECIDER_CLIENT_ID?.trim();
-  return async (text, hasFiles) => {
+  return async (text, hasFiles, requester, recent = []) => {
     const message = text.replace(APP_ATTRIBUTION, '').trim();
     if (MENTIONS_OTHERS.test(message)) return { reply: false, reason: 'mentions_others' };
     if (!message)
-      return hasFiles ? { reply: true, reason: 'files_only' } : { reply: false, reason: 'empty' };
+      return hasFiles && requester
+        ? { reply: true, reason: 'files_only' }
+        : { reply: false, reason: 'empty' };
     let response: Response;
     try {
       response = await fetch(url, {
@@ -58,7 +99,7 @@ export function createReplyDecider(env: NodeJS.ProcessEnv): ReplyDecider | null 
         },
         body: JSON.stringify({
           model,
-          state: `A Slack thread with an AI assistant. The person who asked the assistant wrote this new message in the thread, without mentioning the assistant:\n${message.slice(0, MAX_TEXT)}`,
+          state: describe(message, requester, recent),
           questions: QUESTION,
         }),
         signal: AbortSignal.timeout(TIMEOUT_MS),

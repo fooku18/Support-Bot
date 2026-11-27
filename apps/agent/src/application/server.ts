@@ -75,13 +75,17 @@ export function startNativeAgentServer(options: {
           result = await options.agents.selectedModel(b.teamId, b.channelId);
           break;
         case '/agents/thread':
-          result = await options.agents.thread(b as NativeAgentInput);
+          result = await options.agents.thread(b as NativeAgentInput, b.anyParticipant === true);
           break;
         case '/agents/present':
           result = await options.agents.present(b.runId, b.actor, b.owner, options.send);
           break;
         case '/agents/followup':
-          result = await options.agents.followup(b as NativeAgentInput, b.expectedOwner);
+          result = await options.agents.followup(
+            b as NativeAgentInput,
+            b.expectedOwner,
+            b.anyParticipant === true,
+          );
           break;
         case '/agents/start':
           result = await options.agents.start(b as NativeAgentInput);

@@ -60,7 +60,12 @@ export function createNativeAgentAdapter(options: {
     return response.json();
   }
   return {
-    async mention(event: MentionEvent, eventId: string, expectedOwner?: string) {
+    async mention(
+      event: MentionEvent,
+      eventId: string,
+      expectedOwner?: string,
+      anyParticipant = false,
+    ) {
       const decision = decideMention(event, options.identity);
       if (decision.kind !== 'accept') throw new Error('Mention identity refused');
       const accepted = decision.request;
@@ -73,6 +78,7 @@ export function createNativeAgentAdapter(options: {
         eventId,
         ...(files.length ? { files } : {}),
         ...(expectedOwner ? { expectedOwner } : {}),
+        ...(expectedOwner && anyParticipant ? { anyParticipant } : {}),
       });
     },
     resume(input: {

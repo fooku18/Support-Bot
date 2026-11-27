@@ -23,15 +23,20 @@ public and private channel message events used by this feature. See the
 
 ## Reply decider
 
-With a decision model configured, the requester's unmentioned message
+With a decision model configured, the bot considers the unmentioned
+messages of everyone in the thread, not only the requester's. A message
 starts a follow-up only when the model judges it meant for the bot: a
-request, a question, a correction or an answer. Thanks, reactions, remarks
+request, a question, a correction or an answer. The follow-up runs as the
+person who wrote it, with their authorization, and they become the
+thread's requester for the request controls. Thanks, reactions, remarks
 and small talk stay silent. A message that mentions someone else, a user
 group, `@channel`, `@here` or `@everyone` stays silent without a model call;
 the "Sent using @app" attribution of a Slack app posting for the person does
 not count.
-Files without text and the request controls above skip the model, and so
-does a message that would not start a follow-up anyway (replies disabled, or
+Files without text from the requester and the request controls above skip
+the model; files without text from others and controls from anyone but the
+requester stay silent. The model is also skipped
+for a message that would not start a follow-up anyway (replies disabled, or
 the current answer not yet delivered). When the
 model fails or takes longer than 2 seconds, the message stays silent; a
 mention still starts a run.
@@ -46,8 +51,11 @@ adapter:
 | `THREAD_REPLY_DECIDER_MODEL`     | Model name, such as `clef-flash`. Required with the URL.                                        |
 | `THREAD_REPLY_DECIDER_CLIENT_ID` | Optional `x-client-id` header.                                                                  |
 
-The URL must use `https`. The adapter sends only the message text, up to
-2,000 characters. It logs the decision, its probability and a failure code
-(`http_<status>`, `timeout`, `network`, `malformed`) without the text. In
-Compose, the egress proxy admits the decider's host on port 443 from the
-frontend network; recreate both `adapter` and `egress` after a change.
+The URL must use `https`. The adapter sends the message text (up to 2,000
+characters) and the three thread messages before it (up to 500 characters
+each), labelled as the assistant, the requester or another person, with
+mentions as readable names. It reads them with one `conversations.replies`
+call; if that fails, the model sees the message alone. The adapter logs
+the decision, its probability and a failure code (`http_<status>`,
+`timeout`, `network`, `malformed`) without any text. In Compose, the egress
+proxy admits the decider's host on port 443 from the frontend network; recreate both `adapter` and `egress` after a change.

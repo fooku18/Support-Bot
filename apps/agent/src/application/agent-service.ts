@@ -483,19 +483,18 @@ export function createNativeAgentService(options: NativeAgentOptions) {
       });
     });
   }
-  async function thread(identity: NativeAgentInput) {
+  async function thread(identity: NativeAgentInput, anyParticipant = false) {
     const found = (
       await options.pool.query<IdentityRow>(
         'SELECT r.* FROM native_agents.tasks t JOIN native_agents.requests r ON r.task_key=t.task_key AND r.owner=t.owner WHERE t.task_key=$1',
         [buildTaskKey(identity)],
       )
     ).rows[0];
-    if (
-      !found ||
-      found.accepted.userId !== identity.userId ||
-      (found.accepted.authorBotId ?? null) !== (identity.authorBotId ?? null)
-    )
-      fail('thread_owner_required');
+    if (!found) fail('thread_owner_required');
+    const requester =
+      found.accepted.userId === identity.userId &&
+      (found.accepted.authorBotId ?? null) === (identity.authorBotId ?? null);
+    if (!requester && !anyParticipant) fail('thread_owner_required');
     const cfg = await authorize(found, 'task.read');
     const delivered = await options.pool.query(
       "SELECT 1 FROM native_agents.deliveries WHERE run_id=$1 AND outcome='delivered'",
@@ -507,9 +506,11 @@ export function createNativeAgentService(options: NativeAgentOptions) {
       autoReplies: coordinatorRunConfiguration(cfg, identity.teamId, identity.channelId).channel
         .autoReplies,
       delivered: Boolean(delivered.rowCount),
+      requester,
+      requesterId: found.accepted.userId,
     };
   }
-  async function start(accepted: NativeAgentInput, expectedOwner?: string) {
+  async function start(accepted: NativeAgentInput, expectedOwner?: string, anyParticipant = false) {
     if ('inputFiles' in accepted || ('files' in accepted && !options.inputs))
       fail('native_files_unavailable');
     let files;
@@ -590,8 +591,9 @@ export function createNativeAgentService(options: NativeAgentOptions) {
         if (
           !current ||
           current.owner !== expectedOwner ||
-          current.accepted.userId !== safe.userId ||
-          (current.accepted.authorBotId ?? null) !== safe.authorBotId
+          (!anyParticipant &&
+            (current.accepted.userId !== safe.userId ||
+              (current.accepted.authorBotId ?? null) !== safe.authorBotId))
         )
           fail('thread_owner_required');
         const delivered = await tx.query(
@@ -756,9 +758,9 @@ export function createNativeAgentService(options: NativeAgentOptions) {
     start(accepted: NativeAgentInput) {
       return accept(() => start(accepted));
     },
-    followup(accepted: NativeAgentInput, expectedOwner: string) {
+    followup(accepted: NativeAgentInput, expectedOwner: string, anyParticipant = false) {
       if (typeof expectedOwner !== 'string' || !expectedOwner) fail('thread_owner_required');
-      return accept(() => start(accepted, expectedOwner));
+      return accept(() => start(accepted, expectedOwner, anyParticipant));
     },
     resume(runId: string, actor: string, owner: string, toolCallId: string, answer: string) {
       return accept(() => resume(runId, actor, owner, toolCallId, answer));

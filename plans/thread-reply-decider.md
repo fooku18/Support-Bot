@@ -1,6 +1,6 @@
 # Thread reply decider
 
-Status: Done
+Status: In progress
 
 ## Summary
 
@@ -70,6 +70,30 @@ at the model's choice. The lowest `reply` probability of a real request was
 Messages that mention a colleague scored 0.6–0.83 for `reply`, hence the
 mention rule. Latency was about 170 ms per call from the office network and
 1.5 s for a first call from the cluster.
+
+### Every participant (2026-11-27)
+
+The operator asked that lumi not ignore relevant messages from anyone in
+its threads. With a decider configured, `/agents/thread` and
+`/agents/followup` accept `anyParticipant`: any participant's unmentioned
+message is judged by the model, and an accepted one runs as its author
+(their `task.start` authorization; the thread's owner moves to them, as
+with any follow-up). An @mention from a participant already did this, so
+no new access is granted. Without a decider it stays requester-only.
+Request controls stay with the current requester; a participant's file
+without text stays silent. The model is told who wrote the message:
+"the person who asked the assistant" (43/43 in the evaluation) or
+"someone in the thread" (48/51 on the same cases plus 8 multi-party
+ones; the misses were terse follow-ups such as "same for SKU 4711",
+which only read as requests from the requester).
+
+Context: the model now also gets the three thread messages before the new
+one, labelled as the assistant, the requester or another person, with
+mentions as readable names. On 18 multi-party cases it decided 15 correctly
+with context and 13 without; the 43 requester cases stayed at 43 with
+context. The remaining misses are replies to a colleague's question
+("could be, did you change anything yesterday?") and "that link is broken".
+A stricter criteria wording was worse on both sets (14/18, 40/43).
 
 ## Work
 
