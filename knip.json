@@ -7,13 +7,6 @@
     "deploy/lib/model-catalog.mjs",
     "tests/fixtures/repository/**"
   ],
-  "ignoreIssues": {
-    "apps/agent/src/contracts/channel-commands.ts": ["exports", "types"],
-    "apps/agent/src/contracts/slack-message-content.ts": ["exports", "types"],
-    "apps/agent/src/contracts/slack-messages.ts": ["exports", "types"],
-    "apps/agent/src/contracts/tool-kinds.ts": ["exports", "types"],
-    "apps/agent/src/domain/delivery/slack-charts.ts": ["exports", "types"]
-  },
   "ignoreBinaries": ["mkfifo"],
   "workspaces": {
     ".": {

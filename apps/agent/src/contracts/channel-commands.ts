@@ -8,6 +8,7 @@ export type ChannelCommand =
   | { kind: 'replace'; id: number; text: string }
   | { kind: 'delete'; id: number };
 
+/** @public */
 export function classifyChannelCommand(text: string, botUserId: string): ChannelCommand | null {
   const mention = /^\s*<@([A-Z0-9]+)>\s*(![\s\S]*)$/.exec(text);
   if (!mention || mention[1] !== botUserId) return null;
@@ -30,8 +31,10 @@ export function classifyChannelCommand(text: string, botUserId: string): Channel
   return { kind: 'invalid' };
 }
 
+/** @public */
 export const CHANNEL_COMMAND_HELP =
   'Commands: !help; !config (channel settings, including automatic thread replies); !memory [list [page]]; !memory remember <text>; !memory replace <#id> <text>; !memory delete <#id>. Memory is saved only by these explicit commands. Changes apply to newly pinned runs. Deletion does not erase Slack history, earlier runs or backups.';
+/** @public */
 export const COMMAND_RECEIPT_TYPE = 'support_agent_command_receipt';
 export interface MemoryEntry {
   id: number;
@@ -104,7 +107,11 @@ export function isChannelMemorySnapshot(value: unknown): value is ChannelMemoryS
   return total <= 12000 && renderChannelMemory(v.entries) === v.rendered;
 }
 
-/** Literal cells for the durable memory-list presentation (ID, note, confirmation). */
+/**
+ * Literal cells for the durable memory-list presentation (ID, note, confirmation).
+ *
+ * @public
+ */
 export interface CommandReceiptTable {
   rows: Array<[string, string, string]>;
 }

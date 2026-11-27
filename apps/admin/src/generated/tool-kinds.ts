@@ -32,6 +32,7 @@ export const TOOL_KINDS = [
 ] as const;
 export type ToolKind = (typeof TOOL_KINDS)[number];
 
+/** @public */
 export const TOOL_KIND_TITLES: Record<ToolKind, string> = {
   gitlab: 'GitLab',
   atlassian: 'Jira/Confluence',
@@ -64,13 +65,25 @@ export const CLI_RUNTIME_KINDS = [
   'cloudflare',
   'slack',
 ] as const satisfies readonly ToolKind[];
-/** Hosted search runs inside the selected model provider. */
+/**
+ * Hosted search runs inside the selected model provider.
+ *
+ * @public
+ */
 export const WEB_RUNTIME_KINDS: readonly ToolKind[] = ['webFetch'];
 
-/** Kinds that are also MCP servers for authorization (`mcp.use`). */
+/**
+ * Kinds that are also MCP servers for authorization (`mcp.use`).
+ *
+ * @public
+ */
 export const MCP_KINDS: readonly ToolKind[] = ['atlassian', 'datadog', 'cloudflare', 'slack'];
 
-/** Short codes used in compiled policy role names (the role pattern is `[a-z][a-z0-9-]*`). */
+/**
+ * Short codes used in compiled policy role names (the role pattern is `[a-z][a-z0-9-]*`).
+ *
+ * @public
+ */
 export const TOOL_KIND_CODES: Record<ToolKind, string> = {
   gitlab: 'gl',
   atlassian: 'at',
@@ -476,7 +489,11 @@ export interface ChannelToolAssignment {
   tools: AssignedTool[];
 }
 
-/** Kinds whose readiness comes from a runtime probe; the others are ready when enabled. */
+/**
+ * Kinds whose readiness comes from a runtime probe; the others are ready when enabled.
+ *
+ * @public
+ */
 export function kindNeedsProbe(kind: ToolKind): boolean {
   return (CLI_RUNTIME_KINDS as readonly ToolKind[]).includes(kind);
 }

@@ -56,13 +56,20 @@ export interface SlackThreadContext {
   truncated: boolean;
 }
 
-/** Bounds of one read: the whole answer, one message and the pages scanned. */
+/**
+ * Bounds of one read: the whole answer, one message and the pages scanned.
+ *
+ * @public
+ */
 export const SLACK_READ_BYTES = 24_000;
+/** @public */
 export const SLACK_READ_MESSAGE_BYTES = 8_000;
 export const SLACK_READ_MESSAGES = 50;
+/** @public */
 export const SLACK_READ_PAGES = 5;
 export const MAX_SLACK_LINK_CHARS = 512;
 
+/** @public */
 export const SLACK_READ_CHANNEL = /^[CG][A-Z0-9]{1,31}$/;
 export const SLACK_READ_TS = /^[0-9]{10}\.[0-9]{6}$/;
 

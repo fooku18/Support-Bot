@@ -21,11 +21,11 @@ the dead code it finds, so the check starts green.
 - Generated mirrors are ignored, since their exports serve another app:
   `src/generated/` plus `apps/slack/src/taskkey.ts` and
   `deploy/lib/model-catalog.mjs`, which the generator writes elsewhere. Their
-  canonical sources stay checked, except for five files whose exports only
-  their mirror's app uses (`channel-commands`, `slack-message-content`,
-  `slack-messages`, `tool-kinds`, `slack-charts`). For those, exports and
-  types are not reported. `PROTOCOL_VERSION` carries `@public`, because only
-  the generator and the contract test read it, both by regex.
+  canonical sources stay checked. The 18 canonical exports that only a
+  mirror's app uses carry a `@public` JSDoc tag, and so does
+  `PROTOCOL_VERSION`, which only the generator and the contract test read
+  by regex. Knip cannot link a mirror to its source, and a tag keeps the
+  rest of each file checked.
 - `ignoreDependencies` covers dependencies that bundled code from another
   workspace needs. `tool-runtime` bundles agent sources (`@modelcontextprotocol/sdk`,
   `ajv`, `undici`). The agent bundles Slack sources for Studio
@@ -50,11 +50,13 @@ the dead code it finds, so the check starts green.
 
 ## Verification
 
-- Deterministic: T0 (`typecheck:all`, `lint`, `knip`, `format:check`) passes.
+- Deterministic: T0 (`typecheck:all`, `lint`, `knip`, `format:check`) passes
+  on the head of the pull request.
   A probe with a new unused file and an unused export makes `npm run knip`
   exit 1 and name both.
 - Deterministic: T1 (`npm run test:packages`, 1118 tests in five workspaces) and
-  T2 (`npm test`, 135 tests) pass in the Linux container.
+  T2 (`npm test`, 135 tests) pass in the Linux container on 71f8a86. Later commits only change
+  comments, docs and the regenerated mirrors.
 - T3 not run: the change only deletes code that nothing references, which
   `typecheck:all` proves for sources and tests.
 - Live: not applicable. No runtime behaviour changes; the removed code had no
