@@ -120,6 +120,8 @@ services:
     command: [upgrade]
     network_mode: none
     read_only: true
+    depends_on:
+      native-postgres: { condition: service_healthy }
     environment:
       NATIVE_PG_SOCKET: /run/native-postgres
     volumes:

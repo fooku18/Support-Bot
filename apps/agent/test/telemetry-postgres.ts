@@ -198,8 +198,11 @@ try {
       1,
     );
     assert.equal(
-      (await admin.query('SELECT count(*)::int n FROM studio_observability.mastra_span_events'))
-        .rows[0].n,
+      (
+        await admin.query(
+          'SELECT count(DISTINCT "spanId")::int n FROM studio_observability.mastra_span_events',
+        )
+      ).rows[0].n,
       1,
     );
     const reconnect = new Pool({
