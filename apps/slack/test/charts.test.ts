@@ -164,12 +164,9 @@ describe('reply parts', () => {
   });
 
   it('reads a posted chart back as its title', () => {
-    const text = `Traffic is up.
-
-${fence(line)}`;
+    const text = `Traffic is up.\n\n${fence(line)}`;
     expect(flattenOwnAnswer({ text: 'Traffic is up.', blocks: replyBlocks(text) })).toBe(
-      'Traffic is up.
-[Chart: PDP requests per hour (M)]',
+      'Traffic is up.\n[Chart: PDP requests per hour (M)]',
     );
   });
 });
