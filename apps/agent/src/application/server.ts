@@ -75,7 +75,11 @@ export function startNativeAgentServer(options: {
           result = await options.agents.selectedModel(b.teamId, b.channelId);
           break;
         case '/agents/thread':
-          result = await options.agents.thread(b as NativeAgentInput, b.anyParticipant === true);
+          result = await options.agents.thread(
+            b as NativeAgentInput,
+            b.anyParticipant === true,
+            ['task.cancel', 'task.steer', 'task.read'].includes(b.control) ? b.control : undefined,
+          );
           break;
         case '/agents/present':
           result = await options.agents.present(b.runId, b.actor, b.owner, options.send);

@@ -84,7 +84,11 @@ message is judged by the model, and an accepted one runs as its author
 (their `task.start` authorization; the thread's owner moves to them, as
 with any follow-up). An @mention from a participant already did this, so
 no new access is granted. Without a decider it stays requester-only.
-Request controls stay with the current requester; a participant's file
+Request controls (`cancel`, `status`, `continue`) work for anyone in the
+thread (operator, 2026-11-27): `/agents/thread` authorizes the speaker for
+the control (`task.cancel`, `task.steer`, `task.read`) and the adapter runs
+it on the current request. The run's action log records the requester as
+the actor, not the speaker; a participant's file
 without text stays silent. The model is told who wrote the message:
 "the person who asked the assistant" (43/43 in the evaluation) or
 "someone in the thread" (48/51 on the same cases plus 8 multi-party

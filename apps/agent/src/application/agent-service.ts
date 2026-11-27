@@ -483,7 +483,11 @@ export function createNativeAgentService(options: NativeAgentOptions) {
       });
     });
   }
-  async function thread(identity: NativeAgentInput, anyParticipant = false) {
+  async function thread(
+    identity: NativeAgentInput,
+    anyParticipant = false,
+    control?: 'task.cancel' | 'task.steer' | 'task.read',
+  ) {
     const found = (
       await options.pool.query<IdentityRow>(
         'SELECT r.* FROM native_agents.tasks t JOIN native_agents.requests r ON r.task_key=t.task_key AND r.owner=t.owner WHERE t.task_key=$1',
@@ -496,6 +500,18 @@ export function createNativeAgentService(options: NativeAgentOptions) {
       (found.accepted.authorBotId ?? null) === (identity.authorBotId ?? null);
     if (!requester && !anyParticipant) fail('thread_owner_required');
     const cfg = await authorize(found, 'task.read');
+    if (!requester && control)
+      await authorize(
+        {
+          ...found,
+          accepted: {
+            ...found.accepted,
+            userId: identity.userId,
+            authorBotId: identity.authorBotId ?? null,
+          },
+        },
+        control,
+      );
     const delivered = await options.pool.query(
       "SELECT 1 FROM native_agents.deliveries WHERE run_id=$1 AND outcome='delivered'",
       [found.run_id],

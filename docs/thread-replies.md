@@ -14,8 +14,11 @@ subject to channel policy.
 
 Use `continue <answer>`, `cancel` and `status` for
 [request controls](agent-progress.md). These controls are available when
-automatic replies are off. The same requester and current authorization
-are required.
+automatic replies are off. Anyone in the thread can use them on the
+current request, if their own authorization allows the control
+(`task.cancel`, `task.steer` for `continue`, `task.read` for `status`).
+Without a mention, controls from people other than the requester need a
+reply decider, like every other unmentioned message.
 
 The [Slack app manifest](../deploy/slack-app-settings.json) includes the
 public and private channel message events used by this feature. See the
@@ -32,8 +35,7 @@ thread's requester for the request controls. Thanks, reactions, remarks,
 small talk and messages meant for someone else stay silent.
 
 Files without text from the requester and the request controls above skip
-the model; files without text from others and controls from anyone but the
-requester stay silent. The model is also skipped for a message that would
+the model; files without text from others stay silent. The model is also skipped for a message that would
 not start a follow-up anyway (replies disabled, or the current answer not
 yet delivered). When the model fails or takes longer than 2 seconds, the
 message stays silent; a mention still starts a run.

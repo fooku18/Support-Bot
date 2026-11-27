@@ -329,8 +329,17 @@ describe('native startup command routing at the Socket Mode call site', () => {
       anyParticipant: true,
     });
     await reply('cancel');
-    expect(calls.filter((c) => c.path === '/agents/cancel')).toEqual([]);
     expect(calls.filter((c) => c.path === '/v1/systemone')).toHaveLength(1);
+    expect(calls.filter((c) => c.path === '/agents/thread').at(-1)?.body).toMatchObject({
+      userId: 'U2',
+      anyParticipant: true,
+      control: 'task.cancel',
+    });
+    expect(calls.find((c) => c.path === '/agents/cancel')?.body).toMatchObject({
+      runId: 'synthetic-run',
+      owner: 'owner',
+      actor: 'U9',
+    });
   });
 
   it('keeps unmentioned follow-ups to the requester without a reply decider', async () => {

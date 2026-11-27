@@ -403,7 +403,6 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
               throw error;
             }
             const control = REQUEST_CONTROL.test(decision.request.canonicalText.trim());
-            if (control && !current.requester) return;
             if (decideReply && current.autoReplies && current.delivered && !control) {
               const verdict = await decideReply(
                 decision.request.canonicalText,
@@ -509,11 +508,16 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
     try {
       if (REQUEST_CONTROL.test(command)) {
         if (event.files?.length) throw new Error('native controls do not accept attachments');
-        const current = (await transport('/agents/thread', decision.request)) as {
-          runId: string;
-          owner: string;
-        };
-        const who = { ...current, actor: decision.request.userId };
+        const current = (await transport('/agents/thread', {
+          ...decision.request,
+          anyParticipant: true,
+          control: /^cancel$/i.test(command)
+            ? 'task.cancel'
+            : /^continue(?:\s|$)/i.test(command)
+              ? 'task.steer'
+              : 'task.read',
+        })) as { runId: string; owner: string; requesterId: string };
+        const who = { runId: current.runId, owner: current.owner, actor: current.requesterId };
         if (/^cancel$/i.test(command)) await adapter.cancel(who);
         else if (/^continue(?:\s|$)/i.test(command)) {
           const answer = command.slice('continue'.length).trim();
