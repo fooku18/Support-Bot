@@ -24,6 +24,8 @@ import { ChannelCommandHandler, CommandClient } from './channel-commands.js';
 import { createReplyDecider, withoutAttribution, type ThreadMessage } from './reply-decider.js';
 import { flattenMessageContent } from './generated/slack-message-content.js';
 
+const STEP_MEMBERSHIP_MS = 60_000;
+const STEP_MEMBERSHIP_ENTRIES = 10_000;
 const REQUEST_CONTROL = /^(continue(?:\s|$)|cancel$|status$)/i;
 
 function controlText(request: { text: string; canonicalText: string }) {
@@ -123,13 +125,31 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
       throw new Error('current installation unavailable');
     return installation;
   }
+  const stepMembers = new Map<string, number>();
+  async function stepMember(
+    installation: Installation,
+    identity: TaskIdentity & { userId: string },
+  ) {
+    const key = `${identity.teamId}:${identity.installationId}:${identity.channelId}:${identity.userId}`;
+    const now = Date.now();
+    if ((stepMembers.get(key) ?? 0) > now) return true;
+    stepMembers.delete(key);
+    if (!(await isChannelMember(installation, identity.channelId, identity.userId))) return false;
+    if (stepMembers.size >= STEP_MEMBERSHIP_ENTRIES)
+      for (const [k, until] of stepMembers) if (until <= now) stepMembers.delete(k);
+    stepMembers.set(key, now + STEP_MEMBERSHIP_MS);
+    return true;
+  }
   async function authority(
     identity: TaskIdentity & { userId: string; messageTs?: string; authorBotId?: string | null },
+    reuseMembership = false,
   ) {
     const installation = resolve(identity);
     await assertPrivateWorkspaceChannel(installation.slack, identity.channelId);
-    if (!(await isChannelMember(installation, identity.channelId, identity.userId)))
-      throw new Error('requester membership revoked');
+    const member = reuseMembership
+      ? await stepMember(installation, identity)
+      : await isChannelMember(installation, identity.channelId, identity.userId);
+    if (!member) throw new Error('requester membership revoked');
     let cursor: string | undefined;
     let root = false,
       source = identity.messageTs === undefined;
@@ -253,7 +273,7 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
       const body = JSON.parse(Buffer.concat(chunks).toString());
       let result: unknown;
       if (req.url === '/native-authority/check') {
-        await authority(body);
+        await authority(body, true);
         result = { ok: true };
       } else if (req.url === '/native-messages/linked' || req.url === '/native-messages/root') {
         // The origin thread's authority first: it names the requester, whose

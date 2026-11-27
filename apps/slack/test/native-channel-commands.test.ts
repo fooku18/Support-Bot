@@ -493,4 +493,62 @@ describe('native source authority', () => {
     ];
     expect((await check(identity)).ok).toBe(false);
   });
+
+  async function stepChecks(roster: string[]) {
+    const { installation } = await setup();
+    const rootTs = '1792940000.200001';
+    const members = vi.fn(async () => ({ ok: true, members: roster, response_metadata: {} }));
+    Object.assign(installation.slack.webClient.conversations, {
+      info: async () => ({
+        ok: true,
+        channel: { is_ext_shared: false, is_pending_ext_shared: false, is_org_shared: false },
+      }),
+      replies: async () => ({
+        ok: true,
+        messages: [{ ts: rootTs, user: 'U1' }],
+        response_metadata: {},
+      }),
+      members,
+    });
+    const identity = {
+      installationId: 'UBOT',
+      teamId: 'T1',
+      channelId: 'C1',
+      rootTs,
+      userId: 'U1',
+    };
+    const check = async () =>
+      (
+        await realFetch(`http://127.0.0.1:${adapter!.port}/native-authority/check`, {
+          method: 'POST',
+          headers: {
+            authorization: 'Bearer synthetic-service',
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify(identity),
+        })
+      ).status;
+    return { members, check };
+  }
+
+  it('pages the channel roster once per minute for per-step checks of one requester', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      const { members, check } = await stepChecks(['U1']);
+      expect([await check(), await check(), await check()]).toEqual([200, 200, 200]);
+      expect(members).toHaveBeenCalledTimes(1);
+      vi.setSystemTime(Date.now() + 60_001);
+      expect(await check()).toBe(200);
+      expect(members).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('checks the roster again on every step while the requester is not a member', async () => {
+    const { members, check } = await stepChecks([]);
+    expect(await check()).not.toBe(200);
+    expect(await check()).not.toBe(200);
+    expect(members).toHaveBeenCalledTimes(2);
+  });
 });
