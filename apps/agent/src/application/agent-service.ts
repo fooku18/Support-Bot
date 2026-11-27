@@ -118,6 +118,8 @@ export function createNativeAgentService(options: NativeAgentOptions) {
     // receipts and each tool's pinned instance still apply immediately.
     let admitted = false;
     const binding = await options.services(r.accepted, signal.signal);
+    for (const { tool, reason } of binding.unavailable)
+      options.log.warn(`native tool left out run_id=${r.run_id} tool=${tool} reason=${reason}`);
     // Bind only exact current instance/version. A later replacement is revocation,
     // not permission to reuse the old scoped client's credentials.
     const pins = new Map(
@@ -228,6 +230,7 @@ export function createNativeAgentService(options: NativeAgentOptions) {
         : {}),
       instructions,
       tools: reads,
+      unavailableTools: binding.unavailable.map((u) => u.tool),
       coding,
       codeMode,
       nativeInputs: !!options.inputs,

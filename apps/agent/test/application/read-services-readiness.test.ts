@@ -33,7 +33,7 @@ async function cliRuntime(readyz: (res: http.ServerResponse) => void) {
   };
 }
 
-const report = (body: { instances: unknown[] }) => (res: http.ServerResponse) =>
+const report = (body: { instances: unknown[]; syncError?: string }) => (res: http.ServerResponse) =>
   res
     .writeHead(200, { 'content-type': 'application/json' })
     .end(JSON.stringify({ service: 'cli-runtime', configVersion: 1, syncError: null, ...body }));
@@ -123,13 +123,36 @@ describe('native read binding under tool runtime readiness', () => {
     expect(runtime.calls()).toBe(0);
   });
 
-  it('still refuses a channel with a runtime tool while the tool runtime is unavailable', async () => {
+  it('answers without the runtime tools while the tool runtime is unavailable', async () => {
     const runtime = await cliRuntime((res) => res.writeHead(503).end());
-    await expect(bind(['gitlab', 'slack'], runtime.url)).rejects.toThrow(/503/);
+    const binding = await bind(['gitlab', 'slack'], runtime.url);
+    expect(binding.enabled).toEqual(new Set());
+    expect(binding.catalog.gitlab).toBe(false);
+    expect(binding.unavailable.map((u) => u.tool)).toEqual(['gitlab', 'slack']);
+    expect(binding.unavailable[0]!.reason).toMatch(/503/);
+    await expect(binding.services.gitlab('get_project', { project: 'a/b' })).rejects.toThrow(
+      /Unavailable/,
+    );
   }, 20_000);
 
-  it('still refuses a channel whose tool the runtime has not qualified', async () => {
+  it('answers without a tool whose runtime check fails and keeps the others', async () => {
     const runtime = await cliRuntime(report({ instances: [gitlabReady()] }));
-    await expect(bind(['gitlab', 'slack'], runtime.url)).rejects.toThrow(/does not serve/);
+    const binding = await bind(['gitlab', 'slack'], runtime.url);
+    expect(binding.catalog.gitlab).toBe(true);
+    expect(binding.enabled.has('slack')).toBe(false);
+    expect(binding.unavailable).toEqual([
+      { tool: 'slack', reason: expect.stringMatching(/does not serve/) },
+    ]);
+  });
+
+  it('answers without the runtime tools while the tool runtime reports a sync error', async () => {
+    const runtime = await cliRuntime(
+      report({ instances: [gitlabReady()], syncError: 'admin unreachable' }),
+    );
+    const binding = await bind(['gitlab'], runtime.url);
+    expect(binding.catalog.gitlab).toBe(false);
+    expect(binding.unavailable).toEqual([
+      { tool: 'gitlab', reason: 'tool configuration unavailable' },
+    ]);
   });
 });

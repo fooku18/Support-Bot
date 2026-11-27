@@ -211,23 +211,32 @@ export async function discoveryScenario(c: any) {
       assert.equal(serviceCalls.at(-1).instanceId, 'ti_1150000000000001');
       return { unassignedReads: 0, restoredReads: 1 };
     });
-    await check('malformed-bound-readiness-refuses-before-inference', async () => {
+    await check('malformed-bound-readiness-answers-without-the-tool', async () => {
       discoveryState.malformed = true;
-      const before = c.calls();
+      const before = serviceCalls.length;
+      const models = c.calls();
+      const offset = recorded.length;
       const logged = c.warnings.length;
-      // The request was admitted: it ends without an answer, and presentation
-      // posts the failure notice. Only the error class is logged.
       const { result } = await run();
-      assert.equal(result.text, undefined, JSON.stringify(result));
-      assert.equal(result.delivery, null);
-      assert.equal(c.calls(), before);
-      assert.deepEqual(c.warnings.slice(logged), [
-        `native run refused run_id=${result.runId} reason=Error`,
-      ]);
-      assert.equal((await c.present(result)).notice, 'notice:failure');
-      assert.match(new URLSearchParams(slackBytes.at(-1)).get('text')!, /No confirmed answer/);
+      assert.equal(result.uncertain, false, JSON.stringify(result));
+      assert.equal(result.text, 'No usable service tool.');
+      assert.equal(serviceCalls.length, before);
+      assert.equal(c.calls() - models, 2, 'search -> answer');
+      assert.deepEqual(names(recorded[offset]).sort(), ['ask_user', 'search_tools']);
+      assert(!names(recorded[offset + 1]).includes('get_project'));
+      assert.match(JSON.stringify(recorded[offset].system), /unavailable in this run: GitLab/);
+      const left = c.warnings
+        .slice(logged)
+        .filter((w: string) => w.startsWith('native tool left out'));
+      assert.equal(left.length, 1, JSON.stringify(left));
+      assert(
+        left[0].startsWith(
+          `native tool left out run_id=${result.runId} tool=gitlab reason=GitLab contract v0 `,
+        ),
+        left[0],
+      );
       discoveryState.malformed = false;
-      return { providerCalls: 0 };
+      return { providerCalls: c.calls() - models, serviceCalls: 0 };
     });
     for (const at of ['search', 'execute'] as const)
       await check(`current-assignment-revoked-at-${at}-prevents-service-execution`, async () => {

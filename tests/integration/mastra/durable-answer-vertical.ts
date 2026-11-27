@@ -560,6 +560,7 @@ const service = createNativeAgentService({
         cli: { url: `http://127.0.0.1:${port}`, token: 'synthetic-runtime' },
       })
     : async (i, signal) => ({
+        unavailable: [],
         enabled: new Set(),
         catalog: { gitlab: true, slackSearch: false },
         services: {

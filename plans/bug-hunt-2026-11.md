@@ -127,9 +127,6 @@ Behaviour changes operators can see:
 ## Open items
 
 - [ ] T5 gateway suite for findings 1, 2 and 10.
-- [ ] Owner decision: should a channel with tools answer without a tool
-      whose readiness or instance check fails (and log it), instead of
-      refusing the run before inference? Today one unsynced or mismatched
-      tool, or a CLI runtime restart, fails every answer in that channel.
-      Changing it means updating
-      `malformed-bound-readiness-refuses-before-inference`.
+- [x] Owner decision (2026-11-28): a channel with tools answers without a
+      tool whose readiness or instance check fails, and logs it. See
+      [answer-without-unready-tool.md](answer-without-unready-tool.md).

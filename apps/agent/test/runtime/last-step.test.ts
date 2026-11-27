@@ -128,3 +128,32 @@ it('delivers the final step text without the narration of earlier tool steps', a
     await runtime.mastra.shutdown();
   }
 });
+
+it('tells the model which assigned tools are unavailable in this run', async () => {
+  const requests: Request[] = [];
+  vi.stubGlobal('fetch', async (_url: unknown, init: RequestInit) => {
+    requests.push(JSON.parse(String(init.body)) as Request);
+    return stream({ type: 'text', text: 'GitLab is unavailable right now.' });
+  });
+  const runtime = createNativeRuntime({
+    storage: new InMemoryStore({ id: randomUUID() }),
+    instructions: 'TRUSTED instructions',
+    model: testModel('http://127.0.0.1:9999', 'synthetic', testSelection('test', 'synthetic')),
+    tools: {},
+    unavailableTools: ['gitlab', 'datadog'],
+    beforeDispatch: async () => {},
+    contextTokens: 100_000,
+    outputTokens: 64,
+    maxSteps: 3,
+  });
+  try {
+    await runNativeSegment(
+      await runtime.agent.stream('Which MRs merged today?', { closeOnSuspend: true, maxSteps: 3 }),
+    );
+    expect(JSON.stringify(requests[0]!.system)).toContain(
+      'unavailable in this run: GitLab, Datadog',
+    );
+  } finally {
+    await runtime.mastra.shutdown();
+  }
+});
