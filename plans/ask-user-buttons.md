@@ -56,13 +56,18 @@ the guards. The design below is their common minimum.
 - [x] `questionClick` answers through `answerQuestion` and updates the notice.
 - [x] Tests: projection, notice text and fallbacks, blocks, click routing (requester,
       stale, other person, no open question, refused resume).
-- [ ] T0 to T3 `application`, T4 stub suite, PR, deploy, live click in #test-1234.
+- [x] T0 to T3 `application`, PR [#38](https://github.com/fooku18/Support-Bot/pull/38).
+- [ ] Deploy, live click in #test-1234.
 
 ## Verification
 
-- Deterministic: pending.
-- Live: pending. T5 BLOCKED (no gateway test instance with the needed tools); the
-  stub suite cannot click a button, so the click is verified live on staging.
+- Deterministic (2026-11-28, head `2c220c3`): T0 passes. T1 and T2 pass in a Linux
+  container (agent 719 tests, Slack 212, root 135). T3 `application` passes (82
+  records). The click test fails without the handler.
+- T4: not run. The shared local test instance was locked by another session, and
+  the stub suite cannot click a button; `ask-resume.json` only drops the hint text.
+- Live: T5 BLOCKED (no gateway test instance with the needed tools). The click is
+  verified live on staging in #test-1234 after the deploy.
 
 ## Rollout
 
