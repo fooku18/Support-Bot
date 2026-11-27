@@ -163,6 +163,23 @@ describe('reply parts', () => {
     ]);
   });
 
+  it('leaves a chart fence inside another code block as text', () => {
+    const text = ['Example:', '````markdown', fence(line), '````', 'Done.'].join('\n');
+    expect(replyBlocks(text)).toEqual([{ type: 'markdown', text }]);
+  });
+
+  it('leaves an unclosed chart fence as text', () => {
+    const text = `Start.\n\n\`\`\`chart\n${JSON.stringify(line)}`;
+    expect(replyBlocks(text)).toEqual([{ type: 'markdown', text }]);
+  });
+
+  it('keeps the indentation of the text after a chart', () => {
+    expect(replyBlocks(`${fence(line)}\n\n    indented code`)[1]).toEqual({
+      type: 'markdown',
+      text: '    indented code',
+    });
+  });
+
   it('reads a posted chart back as its title', () => {
     const text = `Traffic is up.\n\n${fence(line)}`;
     expect(flattenOwnAnswer({ text: 'Traffic is up.', blocks: replyBlocks(text) })).toBe(
@@ -185,6 +202,23 @@ describe('posting charts', () => {
     expect(post).toHaveBeenCalledOnce();
     expect(post.mock.calls[0]?.[0]).toMatchObject({
       text: 'Traffic is up.\n\n[Chart: PDP requests per hour (M)]',
+    });
+  });
+
+  it('never puts chart JSON into the notification text, even when no chart is valid', async () => {
+    const post = vi.fn(async (_args: unknown) => ({ ok: true, message: { ts: '1.1' } }));
+    const webClient = { chat: { postMessage: post } } as unknown as WebClient;
+    await postMessage(
+      { webClient, botUserId: 'UBOT' },
+      {
+        channel: 'C1',
+        thread_ts: '1.0',
+        text: `Traffic is up.\n\n${fence({ ...line, type: 'radar' })}`,
+        delivery,
+      },
+    );
+    expect(post.mock.calls[0]?.[0]).toMatchObject({
+      text: `Traffic is up.\n\n${CHART_NOT_SHOWN}`,
     });
   });
 

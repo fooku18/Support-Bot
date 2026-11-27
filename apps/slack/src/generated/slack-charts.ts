@@ -17,29 +17,56 @@ type Json = Record<string, unknown>;
 export type ChartBlock = { type: 'data_visualization'; title: string; chart: Json };
 export type ReplyPart = { kind: 'text'; text: string } | { kind: 'chart'; block: ChartBlock };
 
-const FENCE = /^```chart[ \t]*\r?\n([\s\S]*?)\r?\n```[ \t]*$/gm;
+const OPENING = /^ {0,3}(`{3,}|~{3,})(.*)$/;
 
 export function replyParts(text: string): ReplyPart[] {
   if (!text.includes('```chart')) return [{ kind: 'text', text }];
+  const lines = text.split('\n');
   const parts: ReplyPart[] = [];
   let charts = 0;
-  let last = 0;
-  const pushText = (value: string) => {
-    const trimmed = value.trim();
-    if (trimmed) parts.push({ kind: 'text', text: trimmed });
+  let pending: string[] = [];
+  const flush = () => {
+    const value = pending
+      .join('\n')
+      .replace(/^(?:[ \t]*\r?\n)+/, '')
+      .trimEnd();
+    if (value) parts.push({ kind: 'text', text: value });
+    pending = [];
   };
-  for (const match of text.matchAll(FENCE)) {
-    pushText(text.slice(last, match.index));
-    last = match.index + match[0].length;
-    const block = chartBlock(match[1] ?? '');
-    if (!block || charts >= CHART_LIMITS.charts) pushText(CHART_NOT_SHOWN);
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? '';
+    const open = OPENING.exec(line);
+    if (!open) {
+      pending.push(line);
+      continue;
+    }
+    const marker = open[1] ?? '';
+    const close = lines.findIndex((candidate, j) => j > i && isClosing(candidate, marker));
+    if (close < 0) {
+      pending.push(...lines.slice(i));
+      break;
+    }
+    if (marker !== '```' || (open[2] ?? '').trim() !== 'chart') {
+      pending.push(...lines.slice(i, close + 1));
+      i = close;
+      continue;
+    }
+    flush();
+    const block = chartBlock(lines.slice(i + 1, close).join('\n'));
+    if (!block || charts >= CHART_LIMITS.charts) pending.push(CHART_NOT_SHOWN, '');
     else {
       charts++;
       parts.push({ kind: 'chart', block });
     }
+    i = close;
   }
-  pushText(text.slice(last));
+  flush();
   return parts.length ? mergeText(parts) : [{ kind: 'text', text }];
+}
+
+function isClosing(line: string, marker: string): boolean {
+  const close = /^ {0,3}(`{3,}|~{3,})[ \t]*\r?$/.exec(line)?.[1];
+  return close !== undefined && close[0] === marker[0] && close.length >= marker.length;
 }
 
 export function chartFreeText(parts: ReplyPart[]): string {

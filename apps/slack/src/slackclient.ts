@@ -131,8 +131,9 @@ export function previewText(text: string): string {
 export const MAX_FOOTER_CHARS = 300;
 
 /**
- * Reply blocks: the model Markdown, then the optional footer (final answers:
- * check mark and model) as a mrkdwn context line. The footer is not part of
+ * Reply blocks: the model Markdown, with each chart fence as a chart block in
+ * its place, then the optional footer (final answers: check mark and model)
+ * as a mrkdwn context line. The footer is not part of
  * the message text, so it never counts toward reply limits or feeds context.
  */
 export function replyBlocks(text: string, footer: string | null = null): unknown[] {
@@ -156,6 +157,13 @@ function partBlocks(parts: ReplyPart[], footer?: string | null): unknown[] {
   ];
 }
 
+const BLOCK_REJECTIONS = new Set([
+  'invalid_blocks',
+  'invalid_blocks_format',
+  'invalid_arguments',
+  'msg_blocks_too_long',
+]);
+
 /** Posts a reply in a thread. Throws SlackPostError on failure. */
 export async function postMessage(
   deps: SlackDeps,
@@ -178,13 +186,13 @@ export async function postMessage(
       // for history-based reconciliation, never in the visible text. A text
       // above the `text` bound is sent whole in the blocks only. The footer
       // stays out of `text` and notifications.
-      text: previewText(hasCharts(parts) ? chartFreeText(sent) : args.text),
+      text: previewText(chartFreeText(sent)),
       blocks: partBlocks(sent, args.footer) as never,
       metadata: deliveryMetadata(args.delivery),
     });
   try {
     const result = await post(parts).catch((err: unknown) => {
-      if (!hasCharts(parts) || slackErrorCode(err) !== 'invalid_blocks') throw err;
+      if (!hasCharts(parts) || !BLOCK_REJECTIONS.has(slackErrorCode(err) ?? '')) throw err;
       return post(withoutCharts(parts));
     });
     const message = result.message as { ts?: string } | undefined;
