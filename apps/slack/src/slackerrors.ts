@@ -29,7 +29,7 @@ export function describePostError(err: unknown): string {
   }
 }
 
-function slackErrorCode(err: unknown): string | undefined {
+export function slackErrorCode(err: unknown): string | undefined {
   if (typeof err !== 'object' || err === null) {
     return undefined;
   }

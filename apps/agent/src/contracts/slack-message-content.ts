@@ -214,11 +214,46 @@ function blockSegments(blocks: unknown): Segment[] {
         if (alt !== null) segments.push(segment(alt));
         break;
       }
+      case 'data_visualization': {
+        const chart = chartFence(block);
+        if (chart !== null) segments.push(segment(chart));
+        break;
+      }
       default:
         break;
     }
   }
   return segments;
+}
+
+function chartFence(block: Json): string | null {
+  const chart = block.chart;
+  if (!isRecord(chart)) return null;
+  const points = (data: unknown) =>
+    asArray(data).filter(isRecord) as Array<{ label?: unknown; value?: unknown }>;
+  let spec: Json;
+  if (chart.type === 'pie') {
+    const segments = points(chart.segments);
+    spec = {
+      type: 'pie',
+      title: block.title,
+      categories: segments.map((s) => s.label),
+      series: [{ name: 'Share', values: segments.map((s) => s.value) }],
+    };
+  } else {
+    const axis = isRecord(chart.axis_config) ? chart.axis_config : {};
+    spec = {
+      type: chart.type,
+      title: block.title,
+      categories: axis.categories,
+      series: asArray(chart.series)
+        .filter(isRecord)
+        .map((s) => ({ name: s.name, values: points(s.data).map((p) => p.value) })),
+      ...(axis.x_label === undefined ? {} : { x_label: axis.x_label }),
+      ...(axis.y_label === undefined ? {} : { y_label: axis.y_label }),
+    };
+  }
+  return ['```chart', JSON.stringify(spec), '```'].join('\n');
 }
 
 /** A Slack text object (`plain_text` / `mrkdwn`); null for anything else. */

@@ -14,7 +14,8 @@ import {
   parseDeliveryMetadata,
   type DeliveryMetadata,
 } from './generated/protocol.js';
-import { describePostError } from './slackerrors.js';
+import { describePostError, slackErrorCode } from './slackerrors.js';
+import { chartFreeText, hasCharts, replyParts, withoutCharts, type ReplyPart } from './charts.js';
 
 export type SlackFailure =
   | { kind: 'rate_limited'; retryAfterMs: number; summary: string }
@@ -129,9 +130,17 @@ export const MAX_FOOTER_CHARS = 300;
  * the message text, so it never counts toward reply limits or feeds context.
  */
 export function replyBlocks(text: string, footer: string | null = null): unknown[] {
+  return partBlocks(replyParts(text), footer, text);
+}
+
+function partBlocks(parts: ReplyPart[], footer: string | null, text: string): unknown[] {
   const line = footer?.trim() ?? '';
   return [
-    { type: 'markdown', text },
+    ...(parts.length === 0
+      ? [{ type: 'markdown', text }]
+      : parts.map((part) =>
+          part.kind === 'text' ? { type: 'markdown', text: part.text } : part.block,
+        )),
     ...(line.length === 0
       ? []
       : [
@@ -154,8 +163,9 @@ export async function postMessage(
     delivery: DeliveryMetadata;
   },
 ): Promise<PostResult> {
-  try {
-    const result = await deps.webClient.chat.postMessage({
+  const parts = replyParts(args.text);
+  const post = (sent: ReplyPart[], rejected: boolean) =>
+    deps.webClient.chat.postMessage({
       channel: args.channel,
       thread_ts: args.thread_ts,
       // `text` is the notification fallback; the blocks render standard LLM
@@ -164,10 +174,18 @@ export async function postMessage(
       // for history-based reconciliation, never in the visible text. A text
       // above the `text` bound is sent whole in the blocks only. The footer
       // stays out of `text` and notifications.
-      text: previewText(args.text),
-      blocks: replyBlocks(args.text, args.footer) as never,
+      text: previewText(hasCharts(parts) ? chartFreeText(parts, rejected) : args.text),
+      blocks: partBlocks(sent, args.footer ?? null, args.text) as never,
       metadata: deliveryMetadata(args.delivery),
     });
+  try {
+    let result;
+    try {
+      result = await post(parts, false);
+    } catch (err) {
+      if (!hasCharts(parts) || slackErrorCode(err) !== 'invalid_blocks') throw err;
+      result = await post(withoutCharts(parts), true);
+    }
     const message = result.message as { ts?: string } | undefined;
     return { ts: typeof message?.ts === 'string' ? message.ts : undefined };
   } catch (err) {

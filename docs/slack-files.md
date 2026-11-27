@@ -43,3 +43,32 @@ For live qualification, use the designated
 [`coding-files.json`](../tests/live/scenarios/coding-files.json) scenario.
 It verifies the uploaded inputs, exact published files and downloaded
 exports against fixture bytes. See [testing](testing.md#scenarios-and-suites).
+
+## Charts
+
+An answer can show up to two charts as Slack's native
+[data visualization block](https://docs.slack.dev/reference/block-kit/blocks/data-visualization-block):
+line, bar, area or pie. The model writes each chart as a fenced code block
+with the language `chart` holding one JSON object:
+
+````markdown
+```chart
+{"type":"line","title":"PDP requests per hour (M)","categories":["00","01"],
+ "series":[{"name":"Today","values":[3.6,3.8]}],"x_label":"Hour (UTC)","y_label":"Requests (M)"}
+```
+````
+
+The adapter (`apps/slack/src/charts.ts`) replaces each fence with the block
+at the same place, between the answer's Markdown blocks. The notification
+text names the chart instead. Slack's limits apply: title 50 characters,
+category and series names 20, axis labels 50, 1 to 20 categories, 1 to 12
+series with one finite number per category, and a pie has one series of
+positive values. A fence that breaks a limit, and every chart after the
+second, is replaced with a short note. When Slack rejects the blocks
+(`invalid_blocks`, so nothing was posted), the reply is posted once more
+with notes in place of the charts.
+
+The chart stays part of the answer text, so thread memory, the answer hash
+and the long-answer file keep the fence. A later fresh session reads a
+posted chart back as the same fence (`flattenOwnAnswer`). A chart past the
+preview of a long answer is only in `answer.md`.
