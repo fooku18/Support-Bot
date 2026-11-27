@@ -18,6 +18,7 @@ export interface NativeAgentConfiguration {
   modelForRun?(runId: string): ModelBinding;
   instructions: string;
   tools: ConstructorParameters<typeof ToolSearchProcessor>[0]['tools'];
+  unavailableTools?: string[];
   /** Current application authority, re-evaluated before EVERY provider dispatch. */
   beforeDispatch(): Promise<void>;
   /** Present only for a ready assigned search instance; rechecked at dispatch. */
@@ -27,6 +28,14 @@ export interface NativeAgentConfiguration {
   outputTokens: number;
   maxSteps: number;
 }
+
+const TOOL_LABELS: Record<string, string> = {
+  gitlab: 'GitLab',
+  atlassian: 'Jira and Confluence',
+  datadog: 'Datadog',
+  cloudflare: 'Cloudflare',
+  slack: 'Slack',
+};
 
 /** Shared limits, model and memory configuration. The framework owns execution,
  * transcripts and suspension; process-local clients never enter request context. */
@@ -66,6 +75,21 @@ export function nativeAgentConfiguration(options: NativeAgentConfiguration, time
             role: 'system',
             content:
               'This is the last step of this run and no more tool calls are possible. Answer now from what you have found so far, and say what you could not check.',
+          },
+        ],
+      };
+    },
+  };
+  const unavailable = (options.unavailableTools ?? []).map((tool) => TOOL_LABELS[tool] ?? tool);
+  const unavailableProcessor: InputProcessor = {
+    id: 'unavailable-tools',
+    processInputStep({ systemMessages }) {
+      return {
+        systemMessages: [
+          ...systemMessages,
+          {
+            role: 'system',
+            content: `These assigned tools are unavailable in this run: ${unavailable.join(', ')}. If the request needs one of them, say that it is temporarily unavailable and answer what you can without it.`,
           },
         ],
       };
@@ -124,6 +148,7 @@ export function nativeAgentConfiguration(options: NativeAgentConfiguration, time
     },
     inputProcessors: [
       ...(forRun ? [attributionProcessor] : []),
+      ...(unavailable.length > 0 ? [unavailableProcessor] : []),
       lastStepProcessor,
       new ContextBudgetProcessor(options.contextTokens),
     ],

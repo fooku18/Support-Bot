@@ -1,5 +1,4 @@
 import type { NativeAgentOptions } from '../agent-options.js';
-import { CLI_RUNTIME_KINDS } from '../../contracts/tool-kinds.js';
 import { coordinatorRunConfiguration, type CoordinatorConfig } from '../configuration/config.js';
 import {
   resolveChannelTools,
@@ -7,6 +6,7 @@ import {
 } from '../../integrations/tools/tool-profile.js';
 import {
   fetchCliRuntimeReadiness,
+  type CliRuntimeReadiness,
   verifyGitlabInstance,
   verifyAtlassianInstance,
   verifyDatadogInstance,
@@ -83,26 +83,52 @@ export function nativeReadServices(options: {
       dd = find('datadog'),
       cf = find('cloudflare'),
       sl = find('slack');
-    const readiness =
-      cli &&
-      (profile.gitlab ||
-        profile.tools.some((t) => (CLI_RUNTIME_KINDS as readonly string[]).includes(t.name)))
-        ? await fetchCliRuntimeReadiness(cli.url, cli.token)
-        : undefined;
-    if (readiness?.syncError) throw new Error('tool configuration unavailable');
+    const gl = profile.gitlab;
+    const leftOut: Array<{ tool: string; reason: string }> = [];
+    const reason = (error: unknown) =>
+      (error instanceof Error ? error.message : String(error)).slice(0, 200);
+    const assigned = [...(gl ? ['gitlab'] : []), ...[at, dd, cf, sl].flatMap((t) => t?.name ?? [])];
+    let readiness: CliRuntimeReadiness | undefined;
+    if (cli && assigned.length > 0) {
+      const runtime = await fetchCliRuntimeReadiness(cli.url, cli.token).catch(reason);
+      if (typeof runtime === 'string' || runtime.syncError) {
+        const why = typeof runtime === 'string' ? runtime : 'tool configuration unavailable';
+        leftOut.push(...assigned.map((tool) => ({ tool, reason: why })));
+      } else readiness = runtime;
+    }
     const status = (id: string) => readiness?.instances.find((i) => i.instanceId === id);
-    if (cli && profile.gitlab)
-      verifyGitlabInstance(status(profile.gitlab.instanceId), profile.gitlab, identity.teamId);
-    const atlassian =
-      cli && at ? verifyAtlassianInstance(status(at.instanceId), at, identity.teamId) : undefined;
-    const datadog =
-      cli && dd
-        ? await verifyDatadogInstance(status(dd.instanceId), dd, identity.teamId, cli)
-        : undefined;
-    const cloudflare =
-      cli && cf ? verifyCloudflareInstance(status(cf.instanceId), cf, identity.teamId) : undefined;
-    const slack =
-      cli && sl ? verifySlackInstance(status(sl.instanceId), sl, identity.teamId) : undefined;
+    const qualify = async <T>(
+      tool: string,
+      check: (() => T | Promise<T>) | false | null | undefined,
+    ): Promise<T | undefined> => {
+      if (!readiness || !check) return undefined;
+      try {
+        return await check();
+      } catch (error) {
+        leftOut.push({ tool, reason: reason(error) });
+        return undefined;
+      }
+    };
+    const gitlab = await qualify(
+      'gitlab',
+      gl && (() => verifyGitlabInstance(status(gl.instanceId), gl, identity.teamId)),
+    );
+    const atlassian = await qualify(
+      'atlassian',
+      at && (() => verifyAtlassianInstance(status(at.instanceId), at, identity.teamId)),
+    );
+    const datadog = await qualify(
+      'datadog',
+      cli && dd && (() => verifyDatadogInstance(status(dd.instanceId), dd, identity.teamId, cli)),
+    );
+    const cloudflare = await qualify(
+      'cloudflare',
+      cf && (() => verifyCloudflareInstance(status(cf.instanceId), cf, identity.teamId)),
+    );
+    const slack = await qualify(
+      'slack',
+      sl && (() => verifySlackInstance(status(sl.instanceId), sl, identity.teamId)),
+    );
     const limits = { timeoutMs: 30000, maxOutputBytes: 48000 };
     const ref = (instanceId: string | undefined) => {
       signal.throwIfAborted();
@@ -127,6 +153,7 @@ export function nativeReadServices(options: {
       throw new Error('Unavailable in native answer candidate');
     };
     return {
+      unavailable: leftOut,
       enabled: new Set<EffectiveToolName>([
         ...(atlassian?.operations.length ? ['atlassian' as const] : []),
         ...(datadog ? ['datadog' as const] : []),
@@ -135,7 +162,7 @@ export function nativeReadServices(options: {
         ...(webFetch ? ['webFetch' as const] : []),
       ]),
       catalog: {
-        gitlab: !!cli && !!profile.gitlab,
+        gitlab: !!gitlab,
         atlassianOperations: atlassian?.operations,
         datadogTools: datadog?.tools,
         slackSearch: false,
@@ -181,13 +208,13 @@ export function nativeReadServices(options: {
           return { ok: true, output: result.output, operationId: 'native-web-fetch' };
         },
         async gitlab(operation, args) {
-          if (!cli || typeof operation !== 'string') return unavailable();
+          if (!cli || !gitlab || typeof operation !== 'string') return unavailable();
           if (!(GITLAB_READ_OPERATIONS as readonly string[]).includes(operation))
             return unavailable();
           const read = async (validated: ValidatedGitlabArgs) => {
             const response = await gitlabViaRuntime(
               {
-                ...ref(profile.gitlab?.instanceId),
+                ...ref(gitlab.instanceId),
                 // The capture bound of the coding path; the shared
                 // normalization bounds what reaches the model.
                 maxOutputBytes: 200000,

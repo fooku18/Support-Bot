@@ -221,6 +221,15 @@ settings it was accepted with. Authorization changes apply immediately.
   credentials are revoked; the run continues without it. Provider web search
   runs inside the model request, so unassigning or revoking it refuses the
   run's next model call, and the run ends with the failure notice.
+- **Tool readiness**: each segment asks the tool runtime whether it serves
+  every assigned runtime tool (GitLab, Atlassian, Datadog, Cloudflare, Slack)
+  with the instance's current credential version. A tool it cannot qualify
+  (runtime down or restarting, sync error, instance not yet synced, another
+  credential version or contract) is left out of that segment; the model is
+  told it is unavailable and the agent logs
+  `native tool left out run_id=… tool=<kind> reason=…`. The run answers
+  without it. An unassigned or revoked tool is not readiness: it is absent
+  from the settings and refused at every call.
 - **Questions**: a `continue` runs only under the accepted settings and is
   refused after a change. Presentation therefore posts the failure notice
   instead of a question the user could not answer

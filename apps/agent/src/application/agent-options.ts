@@ -54,7 +54,11 @@ export interface NativeAgentOptions {
   services(
     identity: IntakeRequest,
     signal: AbortSignal,
-  ): Promise<Omit<ServiceBinding, 'authorize'>>;
+  ): Promise<
+    Omit<ServiceBinding, 'authorize'> & {
+      unavailable: Array<{ tool: string; reason: string }>;
+    }
+  >;
   /** Existing channel-memory authority; returns trusted instructions only. */
   channelInstructions(identity: IntakeRequest): Promise<string>;
   limits: { outputTokens: number; maxSteps: number; timeoutMs: number };
