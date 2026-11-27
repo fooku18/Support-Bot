@@ -18,7 +18,6 @@ export interface NativeAgentOptions {
   inputs?: NativeInputClient;
   /** Reads the request's own thread through the adapter. */
   messages?: Pick<NativeMessageClient, 'thread'>;
-  /** Shows a short line in the run's thread while it works. Best effort. */
   status?(value: {
     taskKey: string;
     channel: string;

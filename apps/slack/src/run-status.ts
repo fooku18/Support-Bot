@@ -8,11 +8,6 @@ function blocks(text: string) {
   return [{ type: 'context', elements: [{ type: 'mrkdwn', text: `_${text}_` }] }];
 }
 
-/**
- * One status message per run in its thread: the first line posts it, later
- * lines edit it, and `clear` deletes it once the run's answer is out.
- * A failed post or edit leaves the previous state; delivery never depends on it.
- */
 export function createRunStatuses() {
   const runs = new Map<string, Promise<Shown | undefined>>();
   return {

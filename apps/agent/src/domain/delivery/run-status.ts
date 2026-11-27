@@ -11,7 +11,6 @@ function iid(args: unknown, name: string) {
   return Number.isInteger(value) && (value as number) > 0 ? String(value) : undefined;
 }
 
-/** A short line for the user about what the run does now, from the tool it calls. */
 export function toolStatus(toolName: string, args: unknown): string | undefined {
   if (toolName === 'ask_user') return undefined;
   if (toolName.includes('merge_request')) {
@@ -40,10 +39,6 @@ export function toolStatus(toolName: string, args: unknown): string | undefined 
   return 'Working…';
 }
 
-/**
- * Sends status lines in order, at most one per `intervalMs` and `limit` in all,
- * never the same line twice in a row. A failed send is dropped.
- */
 export function createRunStatus(
   send: (text: string) => Promise<unknown>,
   { intervalMs = 3000, limit = 8, now = Date.now } = {},
