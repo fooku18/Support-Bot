@@ -402,9 +402,7 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
                 return;
               throw error;
             }
-            const control = REQUEST_CONTROL.test(
-              withoutAttribution(decision.request.canonicalText),
-            );
+            const control = REQUEST_CONTROL.test(withoutAttribution(decision.request.text));
             if (decideReply && current.autoReplies && current.delivered && !control) {
               const verdict = await decideReply(
                 decision.request.canonicalText,
@@ -505,10 +503,7 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
       slack: installation.slack,
     });
     const command = withoutAttribution(
-      decision.request.canonicalText.replace(
-        new RegExp(`<@${installation.identity.botUserId}>`, 'g'),
-        '',
-      ),
+      decision.request.text.replace(new RegExp(`<@${installation.identity.botUserId}>`, 'g'), ''),
     );
     try {
       if (REQUEST_CONTROL.test(command)) {

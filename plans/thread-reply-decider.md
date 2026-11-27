@@ -132,6 +132,11 @@ A stricter criteria wording was worse on both sets (14/18, 40/43).
     the cluster), so the timeout is now 5 s. `status` posted through
     Claude's Slack app ("status _Sent using_ <@app>") went to the model
     instead of the control path; controls now ignore the attribution.
+    After that fix (`7585b1c`) `status` still went to the model: for a
+    short message `canonicalText` repeats the block text on a second line
+    ("status _Sent using_ <@app>
+    status"), because the dedupe skips keys
+    under 20 characters. Controls are now read from the plain event text.
 - Deterministic, Windows 11, Node 26.13.1, Docker Desktop 29.9.3:
   - T0 on `1b33a18`: pass.
   - T1 and T2 on `1b33a18`: the Slack package (163 tests, 19 new) and
