@@ -250,7 +250,7 @@ export async function startNativeAnswerProcess(
               },
             },
           ),
-        instructions: nativeInstructions,
+        instructions: nativeInstructions(limits),
         ...(storageDir && cli
           ? {
               coding: nativeCoding({

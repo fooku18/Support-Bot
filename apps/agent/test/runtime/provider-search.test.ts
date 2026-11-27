@@ -81,7 +81,7 @@ async function setup(assigned = true, respond?: Parameters<typeof fixture>[0]) {
   const runtime = createNativeRuntime({
     storage: new InMemoryStore(),
     model: f.request,
-    instructions: nativeInstructions,
+    instructions: nativeInstructions({ maxSteps: 3, timeoutMs: 120000 }),
     tools: {},
     beforeDispatch: async () => {},
     ...(assigned ? { webSearch: { authorize } } : {}),

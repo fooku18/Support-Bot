@@ -309,7 +309,7 @@ export async function createNativeStudio(options: {
     coding,
     codeMode,
     instructions: [
-      nativeInstructions,
+      nativeInstructions(service.limits),
       current.channel.systemPrompt ?? '',
       instructions,
       'This is a local Studio test session. Do not post or upload to Slack. Coding chats share this Studio workspace; exported snapshots are retained locally and files can be downloaded from the Workspace tab.',
