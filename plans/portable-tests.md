@@ -33,7 +33,7 @@ container.
 - The agent's Workspace and publication code runs only in the Linux image. It
   needs POSIX symlinks and directory `fsync`; `deploy/docker/admin-backup.sh`
   is a Linux VM script. Their tests stay as they are. T1 and T2 need a Linux
-  or macOS host ([testing](../docs/testing.md#t0-to-t2)), and on Windows
+  host ([testing](../docs/testing.md#t0-to-t2)), and on Windows
   they run in a Linux container.
 - The T3 driver reads `NATIVE_TEST_DOCKER_LOOPBACK` (default `127.0.0.1`), the
   address at which it reaches ports the daemon publishes on loopback. That
