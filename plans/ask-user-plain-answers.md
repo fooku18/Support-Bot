@@ -23,8 +23,10 @@ the run stayed suspended. Three defects:
 - The inspection projection keeps the option labels. The question notice lists
   them as bullets and reads "Reply in this thread with your answer, or `cancel`
   to stop."
-- While the thread's current run is suspended on `ask_user`, the requester's
-  next unmentioned text reply is the answer. It skips the reply decider and
+- `/agents/thread` returns `question`: the tool call of a suspended question
+  whose notice was posted and not cancelled. It reads the snapshot only for
+  threads without a delivered answer. While it is set, the requester's next
+  unmentioned text reply is the answer. It skips the reply decider and
   works with automatic replies off, like `continue`. Replies from others,
   replies with files and replies that mention the bot keep their current routes.
   The service still checks `task.steer` at resume. A refused resume gets the usual
@@ -45,12 +47,14 @@ the run stayed suspended. Three defects:
 
 ## Verification
 
-- Deterministic (2026-11-27, `ed9479f` working tree): T0 passes. T1, T2 and T3
-  `application` (81 records) pass in a Linux container. New tests cover the
-  projection, the notice text, the adapter route (the requester answers, others
-  are ignored, mentions are not handled twice, a refused resume gets the notice)
-  and the harness.
-- T4 (stub suite on the local test instance, real Slack test app): 7 of 8 pass.
+- Deterministic (2026-11-27): T0 passes. T1, T2 and T3 `application` (82
+  records) pass in a Linux container. New tests cover the projection, the notice
+  text, the adapter route (the requester answers, others are ignored, mentions are
+  not handled twice, a refused resume gets the notice) and the harness. The T3
+  check `thread-offers-only-a-posted-open-question` covers the thread lookup
+  before the notice, after it and after a cancel.
+- T4 (stub suite on the local test instance, real Slack test app, before the
+  review fixes moved the open-question check into `/agents/thread`): 7 of 8 pass.
   `stub-ask-user-suspension-and-resume` passes with a plain unmentioned
   `teal-42` (3 model requests). `stub-cancel-control-stops-a-held-run` fails with
   `expected_answer_fact_missing`, as it does on `main` since `cccd7a9` (unrelated
@@ -63,6 +67,11 @@ the run stayed suspended. Three defects:
 
 Pending: merge, digest bump in the deployment repo, staging live check.
 
+Review follow-ups left out (YAGNI): option descriptions and a multi-select hint
+in the notice; a hint that only the requester can answer with a plain reply;
+binding a resume to the Slack event id (a redelivered answer could answer a later
+question; the `continue` path has the same gap).
+
 ## Open items
 
-- [ ] T1 to T4 results, T5.
+- [ ] T5 and the staging live check.

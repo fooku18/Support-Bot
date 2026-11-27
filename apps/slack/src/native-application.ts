@@ -34,17 +34,6 @@ function controlText(request: { text: string; canonicalText: string }) {
   );
 }
 
-async function resumeQuestion(
-  adapter: ReturnType<typeof createNativeAgentAdapter>,
-  who: { runId: string; owner: string; actor: string },
-  answer: string,
-) {
-  const inspected = (await adapter.inspect(who)) as { suspended?: { toolCallId: string } };
-  if (!inspected.suspended) return false;
-  await adapter.resume({ ...who, toolCallId: inspected.suspended.toolCallId, answer });
-  return true;
-}
-
 class NativeTransportRefusal extends Error {
   constructor(readonly code: string) {
     super('native request refused');
@@ -424,6 +413,7 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
               delivered: boolean;
               requester: boolean;
               requesterId: string;
+              question?: string;
             };
             try {
               current = (await transport('/agents/thread', {
@@ -442,15 +432,14 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
             }
             const typed = controlText(decision.request);
             const control = REQUEST_CONTROL.test(typed);
-            if (
-              current.requester &&
-              !current.delivered &&
-              !control &&
-              typed &&
-              !event.files?.length &&
-              (await answerQuestion(current, typed, normalized, installation))
-            )
-              return;
+            if (current.requester && current.question && !control && typed && !event.files?.length)
+              return answerQuestion(
+                { ...current, question: current.question },
+                typed,
+                decision.request.rootTs,
+                normalized,
+                installation,
+              );
             if (decideReply && current.autoReplies && current.delivered && !control) {
               const verdict = await decideReply(
                 decision.request.canonicalText,
@@ -535,8 +524,9 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
   }
 
   async function answerQuestion(
-    current: { runId: string; owner: string; requesterId: string },
+    current: { runId: string; owner: string; requesterId: string; question: string },
     answer: string,
+    rootTs: string,
     event: MentionEvent,
     installation: Installation,
   ) {
@@ -548,14 +538,16 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
     });
     const who = { runId: current.runId, owner: current.owner, actor: current.requesterId };
     try {
-      if (!(await resumeQuestion(adapter, who, answer))) return false;
-    } catch {
-      await refuse(installation, event.channel, who.actor, event.thread_ts ?? event.ts);
-      return true;
+      await adapter.resume({ ...who, toolCallId: current.question, answer });
+    } catch (error) {
+      log.info(
+        `question answer refused reason=${error instanceof NativeAgentRefusal ? error.code : error instanceof Error ? error.message : 'unknown'} run_id=${current.runId} message_ts=${event.ts}`,
+      );
+      await refuse(installation, event.channel, who.actor, rootTs);
+      return;
     }
     log.info(`question answered by thread reply run_id=${current.runId} message_ts=${event.ts}`);
     void present(current, who.actor, { event, installation });
-    return true;
   }
 
   async function refuse(installation: Installation, channel: string, user: string, rootTs: string) {
@@ -603,8 +595,13 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
         else if (/^continue(?:\s|$)/i.test(command)) {
           const answer = command.slice('continue'.length).trim();
           if (!answer) throw new Error('native continuation requires an answer');
-          if (!(await resumeQuestion(adapter, who, answer)))
-            throw new Error('no native question awaits an answer');
+          const inspected = (await adapter.inspect(who)) as { suspended?: { toolCallId: string } };
+          if (!inspected.suspended) throw new Error('no native question awaits an answer');
+          await adapter.resume({
+            ...who,
+            toolCallId: inspected.suspended.toolCallId,
+            answer,
+          });
         }
         void present(
           current,

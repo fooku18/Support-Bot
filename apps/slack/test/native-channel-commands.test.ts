@@ -409,7 +409,7 @@ describe('native startup command routing at the Socket Mode call site', () => {
       THREAD_REPLY_DECIDER_URL: 'https://decider/v1/systemone',
       THREAD_REPLY_DECIDER_MODEL: 'clef-flash',
     });
-    const thread = (requester: boolean) =>
+    const thread = (requester: boolean, question?: string) =>
       responses.set('/agents/thread', () =>
         Response.json({
           runId: 'synthetic-run',
@@ -418,10 +418,10 @@ describe('native startup command routing at the Socket Mode call site', () => {
           delivered: false,
           requester,
           requesterId: 'U1',
+          question,
         }),
       );
-    thread(true);
-    responses.set('/agents/inspect', () => Response.json({ suspended: { toolCallId: 'tool-1' } }));
+    thread(true, 'tool-1');
     const reply = (text: string, changes: Partial<MentionEvent> = {}) =>
       send(text, { type: 'message', thread_ts: '1792940000.000001', ...changes });
     const resumes = () => calls.filter((c) => c.path === '/agents/resume');
@@ -431,13 +431,17 @@ describe('native startup command routing at the Socket Mode call site', () => {
     ]);
     expect(calls.filter((c) => c.path === '/v1/systemone')).toEqual([]);
     expect(calls.filter((c) => c.path === '/agents/followup')).toEqual([]);
+    expect(calls.filter((c) => c.path === '/agents/inspect')).toEqual([]);
     await reply('<@UBOT> De');
     expect(resumes()).toHaveLength(1);
-    thread(false);
+    thread(false, 'tool-1');
     await reply('PL', { user: 'U2' });
     expect(resumes()).toHaveLength(1);
-    expect(postEphemeral).not.toHaveBeenCalled();
     thread(true);
+    await reply('still there?');
+    expect(resumes()).toHaveLength(1);
+    expect(postEphemeral).not.toHaveBeenCalled();
+    thread(true, 'tool-1');
     responses.set('/agents/resume', () =>
       Response.json({ error: 'execution_policy_changed' }, { status: 409 }),
     );
