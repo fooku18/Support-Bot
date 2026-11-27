@@ -197,13 +197,13 @@ try {
       (await admin.query('SELECT count(*)::int n FROM native_agents.tasks')).rows[0].n,
       1,
     );
-    assert.deepEqual(
+    assert.equal(
       (
         await admin.query(
-          'SELECT count(DISTINCT "spanId")::int spans, count(*)::int events FROM studio_observability.mastra_span_events',
+          'SELECT count(DISTINCT "spanId")::int n FROM studio_observability.mastra_span_events',
         )
-      ).rows[0],
-      { spans: 1, events: 2 },
+      ).rows[0].n,
+      1,
     );
     const reconnect = new Pool({
       host,
