@@ -404,6 +404,48 @@ describe('native startup command routing at the Socket Mode call site', () => {
     );
   });
 
+  it("answers a suspended question with the requester's plain reply only", async () => {
+    const { send, calls, responses, postEphemeral } = await setup({
+      THREAD_REPLY_DECIDER_URL: 'https://decider/v1/systemone',
+      THREAD_REPLY_DECIDER_MODEL: 'clef-flash',
+    });
+    const thread = (requester: boolean) =>
+      responses.set('/agents/thread', () =>
+        Response.json({
+          runId: 'synthetic-run',
+          owner: 'owner',
+          autoReplies: false,
+          delivered: false,
+          requester,
+          requesterId: 'U1',
+        }),
+      );
+    thread(true);
+    responses.set('/agents/inspect', () => Response.json({ suspended: { toolCallId: 'tool-1' } }));
+    const reply = (text: string, changes: Partial<MentionEvent> = {}) =>
+      send(text, { type: 'message', thread_ts: '1792940000.000001', ...changes });
+    const resumes = () => calls.filter((c) => c.path === '/agents/resume');
+    await reply('De');
+    expect(resumes().map((c) => c.body)).toEqual([
+      { runId: 'synthetic-run', owner: 'owner', actor: 'U1', toolCallId: 'tool-1', answer: 'De' },
+    ]);
+    expect(calls.filter((c) => c.path === '/v1/systemone')).toEqual([]);
+    expect(calls.filter((c) => c.path === '/agents/followup')).toEqual([]);
+    await reply('<@UBOT> De');
+    expect(resumes()).toHaveLength(1);
+    thread(false);
+    await reply('PL', { user: 'U2' });
+    expect(resumes()).toHaveLength(1);
+    expect(postEphemeral).not.toHaveBeenCalled();
+    thread(true);
+    responses.set('/agents/resume', () =>
+      Response.json({ error: 'execution_policy_changed' }, { status: 409 }),
+    );
+    await reply('CZ');
+    expect(resumes()).toHaveLength(2);
+    expect(postEphemeral).toHaveBeenCalledOnce();
+  });
+
   it.each([
     ['replies are disabled', { autoReplies: false, delivered: true }],
     ['the answer is not delivered yet', { autoReplies: true, delivered: false }],

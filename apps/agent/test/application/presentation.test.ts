@@ -100,15 +100,17 @@ describe('native presentation', () => {
   });
 
   it('withdraws a question whose continue the changed settings would refuse', async () => {
-    const question = { question: 'Which?', toolCallId: 'call-1' };
-    // Unchanged settings: the question is posted and can be continued.
+    const question = { question: 'Which?', toolCallId: 'call-1', options: ['DE', 'All markets'] };
+    // Unchanged settings: the question is posted with its options and can be answered.
     const kept = fixture({ active: false, suspended: question });
     const send = vi.fn<NativeAgentSender>(async () => ({ ts: '1794866400.000400' }));
     expect(await kept.service.present(runId, 'UOWNER', owner, send)).toEqual({
       notice: 'notice:question:call-1',
       outcome: 'delivered',
     });
-    expect(send.mock.calls[0]![0].text).toContain('continue <answer>');
+    expect(send.mock.calls[0]![0].text).toBe(
+      'Which?\n• DE\n• All markets\n\nReply in this thread with your answer, or `cancel` to stop.',
+    );
     // Changed settings: a continue would be refused, so the user never waits
     // on the question; the failure notice asks for a fresh request.
     const changed = fixture({ active: false, suspended: question }, async () => false);

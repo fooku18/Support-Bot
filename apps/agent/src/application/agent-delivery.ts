@@ -124,7 +124,7 @@ export function createNativeAgentDelivery(
           const text = cancelled
             ? 'Stopped. Unconfirmed work will not restart or deliver.'
             : question
-              ? `${answerPreview(question.question)}\n\nMention me in this thread with \`continue <answer>\` or \`cancel\`.`
+              ? `${answerPreview([question.question, ...(question.options ?? []).map((o) => `• ${o}`)].join('\n'))}\n\nReply in this thread with your answer, or \`cancel\` to stop.`
               : 'No confirmed answer. Execution stopped or was refused; no automatic replay. Submit a fresh authorized request.';
           const action = cancelled
             ? 'notice:cancel'

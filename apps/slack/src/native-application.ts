@@ -430,6 +430,15 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
               throw error;
             }
             const control = REQUEST_CONTROL.test(controlText(decision.request));
+            const typed = controlText(decision.request).trim();
+            if (
+              current.requester &&
+              !current.delivered &&
+              !control &&
+              typed &&
+              !event.files?.length
+            )
+              if (await answerQuestion(current, typed, normalized, installation)) return;
             if (decideReply && current.autoReplies && current.delivered && !control) {
               const verdict = await decideReply(
                 decision.request.canonicalText,
@@ -513,6 +522,41 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
     return earlier.slice(-3);
   }
 
+  async function answerQuestion(
+    current: { runId: string; owner: string; requesterId: string },
+    answer: string,
+    event: MentionEvent,
+    installation: Installation,
+  ) {
+    const adapter = createNativeAgentAdapter({
+      baseUrl,
+      token,
+      identity: installation.identity,
+      slack: installation.slack,
+    });
+    const who = { runId: current.runId, owner: current.owner, actor: current.requesterId };
+    const inspected = (await adapter.inspect(who)) as { suspended?: { toolCallId: string } };
+    if (!inspected.suspended) return false;
+    try {
+      await adapter.resume({ ...who, toolCallId: inspected.suspended.toolCallId, answer });
+    } catch {
+      await refuse(installation, event.channel, current.requesterId, event.thread_ts!);
+      return true;
+    }
+    log.info(`question answered by thread reply run_id=${current.runId} message_ts=${event.ts}`);
+    void present(current, who.actor, { event, installation });
+    return true;
+  }
+
+  async function refuse(installation: Installation, channel: string, user: string, rootTs: string) {
+    await postEphemeral(installation.slack, {
+      channel,
+      user,
+      thread_ts: rootTs,
+      text: 'Request refused or unavailable. Continue, cancel, and status are available for active threads. No automatic replay.',
+    }).catch(() => log.warn('native refusal notice unconfirmed; no automatic resend'));
+  }
+
   async function intake(
     event: MentionEvent,
     eventId: string | undefined,
@@ -583,12 +627,7 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
       }
       // Ephemeral refusal is outside durable result delivery. It never claims
       // acceptance or retries a model/tool/send. Contents carry no raw errors.
-      await postEphemeral(installation.slack, {
-        channel: event.channel,
-        user: decision.request.userId,
-        thread_ts: decision.request.rootTs,
-        text: 'Request refused or unavailable. Continue, cancel, and status are available for active threads. No automatic replay.',
-      }).catch(() => log.warn('native refusal notice unconfirmed; no automatic resend'));
+      await refuse(installation, event.channel, decision.request.userId, decision.request.rootTs);
     }
   }
 }

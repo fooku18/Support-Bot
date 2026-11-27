@@ -121,6 +121,16 @@ function nativeSuspension(snapshot: WorkflowRunState | undefined) {
     payload.toolName === 'ask_user' &&
     typeof payload.toolCallId === 'string' &&
     typeof payload.toolCallSuspended?.question === 'string'
-  )
-    return { toolCallId: payload.toolCallId, question: payload.toolCallSuspended.question };
+  ) {
+    const options: string[] = Array.isArray(payload.toolCallSuspended.options)
+      ? payload.toolCallSuspended.options
+          .map((o: unknown) => (o as { label?: unknown } | null)?.label)
+          .filter((label: unknown): label is string => typeof label === 'string' && !!label.trim())
+      : [];
+    return {
+      toolCallId: payload.toolCallId,
+      question: payload.toolCallSuspended.question,
+      ...(options.length ? { options } : {}),
+    };
+  }
 }

@@ -4,11 +4,12 @@
   "steps": [
     {
       "prompt": "STUB_ASK Which colour code should I use?",
-      "contains": ["Which colour code should I use?", "continue"],
+      "contains": ["Which colour code should I use?", "Reply in this thread"],
       "question": true
     },
     {
-      "prompt": "continue teal-42",
+      "prompt": "teal-42",
+      "mention": false,
       "contains": ["STUB_ASK_RESULT", "teal-42"],
       "resume": true
     }

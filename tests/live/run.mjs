@@ -227,14 +227,14 @@ export function validateScenario(value) {
   )
     fail('invalid_native_scenario');
   // A question step expects the run to suspend with an ask_user question; the
-  // next step answers it (`continue <answer>`) and the same run resumes.
+  // next step answers it (a plain reply or `continue <answer>` with a mention)
+  // and the same run resumes.
   for (const [index, step] of value.steps.entries()) {
     if (isChangeStep(step)) continue;
     if (
       step.resume &&
       (!value.steps[index - 1]?.question ||
-        !/^continue\s+\S/i.test(step.prompt ?? '') ||
-        step.mention === false ||
+        !(step.mention === false ? /\S/ : /^continue\s+\S/i).test(step.prompt ?? '') ||
         step.attachments)
     )
       fail('invalid_native_scenario');
