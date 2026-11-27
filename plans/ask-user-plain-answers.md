@@ -1,6 +1,6 @@
 # ask_user: options in the notice, plain replies, sensible defaults
 
-Status: In progress
+Status: Done
 
 ## Summary
 
@@ -61,11 +61,22 @@ the run stayed suspended. Three defects:
   instance state, under investigation).
 - T5: BLOCKED (no gateway test instance with the needed tools). Live acceptance
   on staging in #test-1234 after deployment.
-- Live: pending.
+- Live (staging, #test-1234, 2026-11-27, image `2af60bf`): the PDP question
+  "today per hour compared to yesterday, as a line chart" was answered in 68 s
+  (7 model requests, all 200) without a question. The answer named its
+  defaults: all nine `www.kaufland.*` zones, UTC calendar days. It included the chart. A forced
+  `ask_user` with three options posted the question with the options as bullets
+  and "Reply in this thread with your answer, or `cancel` to stop." The
+  requester's plain unmentioned reply resumed the run, answered 7 s later. Not
+  live-checked: a reply from another person (one human sender available);
+  covered by the adapter test.
 
 ## Rollout
 
-Pending: merge, digest bump in the deployment repo, staging live check.
+Merged as `2af60bf` (#35). Deployed to staging with deployment MR !21
+(merge `7097195`, 2026-11-27 19:09 UTC, image
+`sha256:26ad55a6f01213d9041ff6320219b731e8340be457f1e1be2bca440e9b248126`).
+Rollback: pin the previous digest `sha256:21c83371…` (upstream `cccd7a9`).
 
 Review follow-ups left out (YAGNI): option descriptions and a multi-select hint
 in the notice; a hint that only the requester can answer with a plain reply;
@@ -74,4 +85,5 @@ question; the `continue` path has the same gap).
 
 ## Open items
 
-- [ ] T5 and the staging live check.
+- [ ] T5 (gateway test instance) when it becomes available.
+- [ ] T4 rerun on the merged revision; the recorded run predates the last commit.
