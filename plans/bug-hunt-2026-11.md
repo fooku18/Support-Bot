@@ -1,6 +1,6 @@
 # Bug hunt, November 2026
 
-Status: In progress
+Status: Done
 
 ## Summary
 
@@ -96,14 +96,26 @@ binding, admin login hardening, the step-limit failure notice).
     `97efb3c` and `8d2c2fb` without this branch (twice each), though
     `8d2c2fb` passed it at the #13 T4, so the cause is the test instance
     state, not this change.
-- Live: T5 is required before release for findings 1, 2 and 10 (Slack
-  intake, inference). BLOCKED until the designated test instance has a
-  gateway key with budget.
+- Live: T5 for findings 1, 2 and 10 (Slack intake, inference) is BLOCKED:
+  the designated test instance has no gateway key with budget. Staging
+  check after the deploy: a top-level mention in #test-1234
+  (`1795808896.334519`, 2026-11-27 19:48 UTC) asked for today's merged
+  deployment MRs; lumi answered in 21 s from GitLab with all twelve, newest
+  first, and 4 model requests since the deploy, all 200.
 
 ## Rollout
 
 No stored data, policy hash or compiled document changes. Follow the
 deployment repository's rollout runbook with a drained deploy.
+
+- Merged as [#33](https://github.com/fooku18/Support-Bot/pull/33) (rebase,
+  `750386f`); image `ghcr.io/fooku18/support-bot:main@sha256:7e224c8a…`.
+- Deployment repo MR !22, merged 2026-11-27 19:42 UTC right after an idle
+  reading, deployed 19:44 UTC (`194e4cc1`, pipeline 2842679, deploy
+  child 2842680). All four app pods on the new digest with 0 restarts, the
+  bootstrap Job complete, config version unchanged, one Socket Mode
+  connection; the deployed bundles contain the fixes. Rollback: pin
+  `sha256:26ad55a6…` (upstream `2af60bf`) in the deployment repository.
 
 Behaviour changes operators can see:
 
