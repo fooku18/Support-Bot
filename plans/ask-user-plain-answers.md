@@ -45,9 +45,18 @@ the run stayed suspended. Three defects:
 
 ## Verification
 
-- Deterministic: T0; tests for the projection, the notice text, the adapter
-  route (requester answers, others ignored, mentions not double-handled, refused
-  resume notified) and the harness.
+- Deterministic (2026-11-27, `ed9479f` working tree): T0 passes. T1, T2 and T3
+  `application` (81 records) pass in a Linux container. New tests cover the
+  projection, the notice text, the adapter route (the requester answers, others
+  are ignored, mentions are not handled twice, a refused resume gets the notice)
+  and the harness.
+- T4 (stub suite on the local test instance, real Slack test app): 7 of 8 pass.
+  `stub-ask-user-suspension-and-resume` passes with a plain unmentioned
+  `teal-42` (3 model requests). `stub-cancel-control-stops-a-held-run` fails with
+  `expected_answer_fact_missing`, as it does on `main` since `cccd7a9` (unrelated
+  instance state, under investigation).
+- T5: BLOCKED (no gateway test instance with the needed tools). Live acceptance
+  on staging in #test-1234 after deployment.
 - Live: pending.
 
 ## Rollout
