@@ -58,6 +58,23 @@ export function nativeAgentConfiguration(options: NativeAgentConfiguration, time
       return { providerOptions: { ...providerOptions, supportAgent: { runId: id } } };
     },
   };
+  const lastStepProcessor: InputProcessor = {
+    id: 'answer-on-last-step',
+    processInputStep({ stepNumber, systemMessages }) {
+      if (stepNumber < options.maxSteps - 1) return;
+      return {
+        toolChoice: 'none',
+        systemMessages: [
+          ...systemMessages,
+          {
+            role: 'system',
+            content:
+              'This is the last step of this run and no more tool calls are possible. Answer now from what you have found so far, and say what you could not check.',
+          },
+        ],
+      };
+    },
+  };
   function runBinding(request: Parameters<typeof model.doStream>[0]) {
     const { supportAgent, ...providerOptions } = request.providerOptions ?? {};
     if (!forRun || typeof supportAgent?.runId !== 'string')
@@ -111,6 +128,7 @@ export function nativeAgentConfiguration(options: NativeAgentConfiguration, time
     },
     inputProcessors: [
       ...(forRun ? [attributionProcessor] : []),
+      lastStepProcessor,
       new ContextBudgetProcessor(options.contextTokens),
     ],
     outputProcessors: [
