@@ -113,6 +113,15 @@ A stricter criteria wording was worse on both sets (14/18, 40/43).
 
 ## Verification
 
+- Every participant, history and readable mentions, on `71285ac`:
+  - T0: pass. Slack package: 169 tests pass. Agent package: no failure
+    beyond the 55 of `origin/main` on this machine. T3 `application`: the
+    same 69 checks pass and the same `input-context-tripwire` check fails
+    as on `origin/main`.
+  - The real `reply-decider.ts` against clef-flash, with history as the
+    adapter builds it: 10 of 10 (requester and other participants;
+    thanks, follow-ups, questions to a colleague, `@here`).
+  - Live: pending deployment.
 - Deterministic, Windows 11, Node 26.13.1, Docker Desktop 29.9.3:
   - T0 on `1b33a18`: pass.
   - T1 and T2 on `1b33a18`: the Slack package (163 tests, 19 new) and
