@@ -487,6 +487,10 @@ describe('native startup command routing at the Socket Mode call site', () => {
             ts: '1792940000.000002',
             thread_ts: '1792940000.000001',
             text: 'Which market?',
+            blocks: [
+              { type: 'markdown', text: 'Which market?' },
+              { type: 'actions', block_id: blockId, elements: [] },
+            ],
           },
           actions: [
             { type: 'button', action_id: `${QUESTION_ACTION}:1`, block_id: blockId, value: 'PL' },

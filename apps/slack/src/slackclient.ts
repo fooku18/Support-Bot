@@ -184,6 +184,26 @@ function choiceBlock(choices: QuestionChoices) {
   };
 }
 
+/** Replaces a question notice's buttons with the chosen answer. Throws SlackPostError on failure. */
+export async function markQuestionAnswered(
+  deps: SlackDeps,
+  args: { channel: string; ts: string; question: string; answer: string },
+): Promise<void> {
+  try {
+    await deps.webClient.chat.update({
+      channel: args.channel,
+      ts: args.ts,
+      text: previewText(args.question),
+      blocks: [
+        ...replyBlocks(args.question),
+        { type: 'context', elements: [{ type: 'plain_text', text: `✓ ${args.answer}` }] },
+      ] as never,
+    });
+  } catch (err) {
+    throw asSlackPostError(err);
+  }
+}
+
 /** Posts a reply in a thread. Throws SlackPostError on failure. */
 export async function postMessage(
   deps: SlackDeps,

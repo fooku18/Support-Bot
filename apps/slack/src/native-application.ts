@@ -18,11 +18,17 @@ import { SLACK_MARKDOWN_CHARS } from './generated/long-answer.js';
 import { assertPrivateWorkspaceChannel } from './file-upload.js';
 import { isChannelMember } from './membership.js';
 import { readLinkedMessage, readThreadContext } from './message-reads.js';
-import { fetchRepliesPage, postEphemeral, addReaction, QUESTION_ACTION } from './slackclient.js';
+import {
+  fetchRepliesPage,
+  postEphemeral,
+  addReaction,
+  markQuestionAnswered,
+  QUESTION_ACTION,
+} from './slackclient.js';
 import { buildTaskKey, parseTaskKey, type TaskIdentity } from './taskkey.js';
 import { ChannelCommandHandler, CommandClient } from './channel-commands.js';
 import { createReplyDecider, withoutAttribution, type ThreadMessage } from './reply-decider.js';
-import { flattenMessageContent } from './generated/slack-message-content.js';
+import { flattenMessageContent, flattenOwnAnswer } from './generated/slack-message-content.js';
 
 const STEP_MEMBERSHIP_MS = 60_000;
 const STEP_MEMBERSHIP_ENTRIES = 10_000;
@@ -33,6 +39,16 @@ function controlText(request: { text: string; canonicalText: string }) {
     request.text ? flattenMessageContent({ text: request.text }) : request.canonicalText,
   );
 }
+
+type ThreadState = {
+  runId: string;
+  owner: string;
+  autoReplies: boolean;
+  delivered: boolean;
+  requester: boolean;
+  requesterId: string;
+  question?: string;
+};
 
 class NativeTransportRefusal extends Error {
   constructor(readonly code: string) {
@@ -407,20 +423,12 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
             if (decision.kind !== 'accept') return;
             // Silence unrelated threads and other participants. The service rechecks
             // current authorization and the owner atomically at admission.
-            let current: {
-              runId: string;
-              owner: string;
-              autoReplies: boolean;
-              delivered: boolean;
-              requester: boolean;
-              requesterId: string;
-              question?: string;
-            };
+            let current: ThreadState;
             try {
               current = (await transport('/agents/thread', {
                 ...decision.request,
                 anyParticipant: Boolean(decideReply),
-              })) as typeof current;
+              })) as ThreadState;
             } catch (error) {
               if (
                 error instanceof NativeTransportRefusal &&
@@ -433,22 +441,14 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
             }
             const typed = controlText(decision.request);
             const control = REQUEST_CONTROL.test(typed);
-            if (
-              current.requester &&
-              current.question &&
-              !control &&
-              typed &&
-              !event.files?.length
-            ) {
-              await answerQuestion(
+            if (current.requester && current.question && !control && typed && !event.files?.length)
+              return void (await answerQuestion(
                 { ...current, question: current.question },
                 typed,
                 decision.request.rootTs,
                 normalized,
                 installation,
-              );
-              return;
-            }
+              ));
             if (decideReply && current.autoReplies && current.delivered && !control) {
               const verdict = await decideReply(
                 decision.request.canonicalText,
@@ -555,7 +555,7 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
       await refuse(installation, event.channel, who.actor, rootTs);
       return false;
     }
-    log.info(`question answered by thread reply run_id=${current.runId} message_ts=${event.ts}`);
+    log.info(`question answered run_id=${current.runId} message_ts=${event.ts}`);
     void present(current, who.actor, { event, installation });
     return true;
   }
@@ -566,7 +566,7 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
       user?: { id?: string };
       channel?: { id?: string };
       container?: { message_ts?: string; thread_ts?: string };
-      message?: { text?: string; thread_ts?: string };
+      message?: { text?: string; thread_ts?: string; blocks?: unknown[] };
       actions?: Array<{ action_id?: string; block_id?: string; value?: string }>;
     };
     const action = b.actions?.find((a) => a.action_id?.startsWith(`${QUESTION_ACTION}:`));
@@ -597,15 +597,9 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
     };
     const decision = decideMention(event, installation.identity);
     if (decision.kind !== 'accept') return true;
-    let current: {
-      runId: string;
-      owner: string;
-      requester: boolean;
-      requesterId: string;
-      question?: string;
-    };
+    let current: ThreadState;
     try {
-      current = (await transport('/agents/thread', decision.request)) as typeof current;
+      current = (await transport('/agents/thread', decision.request)) as ThreadState;
     } catch (error) {
       log.info(
         `question click ignored reason=${error instanceof NativeTransportRefusal ? error.code : 'unavailable'} message_ts=${ts}`,
@@ -613,27 +607,21 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
       return true;
     }
     if (!current.requester || current.question !== action.block_id) return true;
-    const question = b.message?.text || answer;
     if (
       await answerQuestion(
-        { ...current, question: current.question },
+        { ...current, question: action.block_id },
         answer,
         rootTs,
         event,
         installation,
       )
     )
-      await installation.slack.webClient.chat
-        .update({
-          channel,
-          ts,
-          text: question,
-          blocks: [
-            { type: 'markdown', text: question },
-            { type: 'context', elements: [{ type: 'plain_text', text: `✓ ${answer}` }] },
-          ] as never,
-        })
-        .catch(() => log.warn(`question buttons not removed message_ts=${ts}`));
+      await markQuestionAnswered(installation.slack, {
+        channel,
+        ts,
+        question: flattenOwnAnswer(b.message ?? {}) || answer,
+        answer,
+      }).catch(() => log.warn(`question buttons not removed message_ts=${ts}`));
     return true;
   }
 

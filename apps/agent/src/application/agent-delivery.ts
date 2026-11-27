@@ -22,7 +22,7 @@ function buttonChoices(question: NonNullable<Inspection['suspended']>) {
     options.length > 0 &&
     options.length <= 25 &&
     options.every((o) => o.length <= 75)
-    ? options
+    ? { toolCallId: question.toolCallId, options }
     : undefined;
 }
 
@@ -136,11 +136,10 @@ export function createNativeAgentDelivery(
             ? 'Stopped. Unconfirmed work will not restart or deliver.'
             : question
               ? answerPreview(
-                  choices
-                    ? question.question
-                    : [question.question, ...(question.options ?? []).map((o) => `• ${o}`)].join(
-                        '\n',
-                      ),
+                  [
+                    question.question,
+                    ...(choices ? [] : (question.options ?? []).map((o) => `• ${o}`)),
+                  ].join('\n'),
                 )
               : 'No confirmed answer. Execution stopped or was refused; no automatic replay. Submit a fresh authorized request.';
           const action = cancelled
@@ -168,9 +167,7 @@ export function createNativeAgentDelivery(
               rootTs: r.accepted.rootTs,
               requesterUserId: r.accepted.userId,
               text,
-              ...(choices && question
-                ? { choices: { toolCallId: question.toolCallId, options: choices } }
-                : {}),
+              choices,
             });
             await authorize(r, 'task.read');
             if (sent.ts) await admit(r, `ack:${action}`);

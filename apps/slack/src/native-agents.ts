@@ -129,7 +129,7 @@ export function nativeAgentSender(slack: SlackDeps) {
         ? longAnswerMessage(value.text, value.answerFileReceipt.attached)
         : value.text,
       footer: value.footer ?? null,
-      ...(value.choices ? { choices: value.choices } : {}),
+      choices: value.choices,
       delivery: {
         operationId: value.operationId,
         answer: true,
