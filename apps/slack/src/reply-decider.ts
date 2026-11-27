@@ -2,7 +2,7 @@ export type ReplyDecision =
   | { reply: true; reason: 'decider' | 'files_only'; probability?: number; failure?: undefined }
   | {
       reply: false;
-      reason: 'decider' | 'mentions_others' | 'empty';
+      reason: 'decider' | 'empty';
       probability?: number;
       failure?: undefined;
     }
@@ -21,7 +21,6 @@ export type ReplyDecider = (
 ) => Promise<ReplyDecision>;
 
 const APP_ATTRIBUTION = /\*?Sent using\*?\s*<@[UW][A-Z0-9]+(\|[^>]*)?>/gi;
-const MENTIONS_OTHERS = /<@[UW][A-Z0-9]+(\|[^>]*)?>|<!subteam\^|<!(channel|here|everyone)\b/;
 const MAX_TEXT = 2000;
 const MAX_RECENT = 3;
 const MAX_RECENT_TEXT = 500;
@@ -36,6 +35,9 @@ function readable(text: string) {
     .replace(APP_ATTRIBUTION, '')
     .replace(/<@[UW][A-Z0-9]+\|([^>]+)>/g, '@$1')
     .replace(/<@[UW][A-Z0-9]+>/g, '@someone')
+    .replace(/<!subteam\^[A-Z0-9]+\|([^>]+)>/g, '$1')
+    .replace(/<!subteam\^[A-Z0-9]+>/g, '@group')
+    .replace(/<!(channel|here|everyone)(\|[^>]*)?>/g, '@$1')
     .trim();
 }
 
@@ -82,8 +84,7 @@ export function createReplyDecider(env: NodeJS.ProcessEnv): ReplyDecider | null 
   if (!model) throw new Error('THREAD_REPLY_DECIDER_MODEL required');
   const clientId = env.THREAD_REPLY_DECIDER_CLIENT_ID?.trim();
   return async (text, hasFiles, requester, recent = []) => {
-    const message = text.replace(APP_ATTRIBUTION, '').trim();
-    if (MENTIONS_OTHERS.test(message)) return { reply: false, reason: 'mentions_others' };
+    const message = readable(text);
     if (!message)
       return hasFiles && requester
         ? { reply: true, reason: 'files_only' }

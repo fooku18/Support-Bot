@@ -277,9 +277,6 @@ describe('native startup command routing at the Socket Mode call site', () => {
     choice = 'reply';
     await reply('and for yesterday?');
     expect(calls.filter((c) => c.path === '/agents/followup')).toHaveLength(1);
-    await reply('<@U2> can you look?');
-    expect(calls.filter((c) => c.path === '/v1/systemone')).toHaveLength(2);
-    expect(calls.filter((c) => c.path === '/agents/followup')).toHaveLength(1);
     await reply('cancel');
     expect(calls.filter((c) => c.path === '/v1/systemone')).toHaveLength(2);
     expect(calls.filter((c) => c.path === '/agents/cancel')).toHaveLength(1);

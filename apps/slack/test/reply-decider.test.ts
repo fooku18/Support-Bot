@@ -60,18 +60,17 @@ it('stays silent when the model says so', async () => {
 });
 
 it.each([
-  '<@U024MNGC32P> can you check?',
-  '<@U024MNGC32P|jakob> can you check?',
-  'fyi <!subteam^S01|payments>',
-  '<!here> resolved',
-  '<!channel> resolved',
-])('stays silent without a model call for a message to others: %j', async (text) => {
-  const fetch = vi.spyOn(globalThis, 'fetch');
-  await expect(createReplyDecider(env)!(text, false, true)).resolves.toEqual({
-    reply: false,
-    reason: 'mentions_others',
-  });
-  expect(fetch).not.toHaveBeenCalled();
+  ['<@U024MNGC32P> can you check?', '@someone can you check?'],
+  ['<@U024MNGC32P|jakob> can you check?', '@jakob can you check?'],
+  ['fyi <!subteam^S01|@payments>', 'fyi @payments'],
+  ['fyi <!subteam^S01>', 'fyi @group'],
+  ['<!here> resolved', '@here resolved'],
+  ['<!channel|channel> resolved', '@channel resolved'],
+])('shows the model mentions as readable text: %j', async (text, shown) => {
+  const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(answer('silent'));
+  await createReplyDecider(env)!(text, false, true);
+  const state = JSON.parse(String(fetch.mock.calls[0]![1]?.body)).state as string;
+  expect(state.endsWith(`:\n${shown}`)).toBe(true);
 });
 
 it('gives the model the last three thread messages with readable mentions', async () => {

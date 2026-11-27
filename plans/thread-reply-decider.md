@@ -28,10 +28,14 @@ the current behaviour.
   clones. One `choice` question, `reply` or `silent`. The bot replies when
   the model's choice is `reply`. Only the message text is sent, bounded to
   2,000 characters.
-- **Mentions of others:** a message that mentions another user, a user group,
-  `@channel`, `@here` or `@everyone` is meant for them. It stays silent
-  without calling the model. In the evaluation the model misread such
-  messages as requests.
+- **Mentions:** shown to the model as readable text (`@name`, `@someone`,
+  `@group`, `@here`), with the "Sent using @app" attribution removed. The
+  first version kept every message that mentioned someone else silent
+  without asking the model, because raw ids (`<@U024MNGC32P>`) scored
+  0.6–0.83 for `reply`. With readable mentions and the thread history the
+  model kept all 10 messages aimed at someone else silent (2026-11-27), so
+  that rule was dropped in a YAGNI pass; it had also caused the
+  "Sent using" bug.
 - **Files without text** (a screenshot) start the follow-up without calling
   the model. An empty message without files stays silent.
 - **Request controls** (`continue <answer>`, `cancel`, `status`) skip the

@@ -28,18 +28,15 @@ messages of everyone in the thread, not only the requester's. A message
 starts a follow-up only when the model judges it meant for the bot: a
 request, a question, a correction or an answer. The follow-up runs as the
 person who wrote it, with their authorization, and they become the
-thread's requester for the request controls. Thanks, reactions, remarks
-and small talk stay silent. A message that mentions someone else, a user
-group, `@channel`, `@here` or `@everyone` stays silent without a model call;
-the "Sent using @app" attribution of a Slack app posting for the person does
-not count.
+thread's requester for the request controls. Thanks, reactions, remarks,
+small talk and messages meant for someone else stay silent.
+
 Files without text from the requester and the request controls above skip
 the model; files without text from others and controls from anyone but the
-requester stay silent. The model is also skipped
-for a message that would not start a follow-up anyway (replies disabled, or
-the current answer not yet delivered). When the
-model fails or takes longer than 2 seconds, the message stays silent; a
-mention still starts a run.
+requester stay silent. The model is also skipped for a message that would
+not start a follow-up anyway (replies disabled, or the current answer not
+yet delivered). When the model fails or takes longer than 2 seconds, the
+message stays silent; a mention still starts a run.
 
 The decider is any model that serves the Jev API (`POST /v1/systemone`),
 such as Jev or a self-hosted clone like clef-flash. Configure it on the
@@ -53,8 +50,9 @@ adapter:
 
 The URL must use `https`. The adapter sends the message text (up to 2,000
 characters) and the three thread messages before it (up to 500 characters
-each), labelled as the assistant, the requester or another person, with
-mentions as readable names. It reads them with one `conversations.replies`
+each), labelled as the assistant, the requester or another person. Mentions
+appear as readable text (`@name`, `@someone`, `@here`), and the "Sent using
+@app" attribution of a Slack app posting for a person is removed. It reads them with one `conversations.replies`
 call; if that fails, the model sees the message alone. The adapter logs
 the decision, its probability and a failure code (`http_<status>`,
 `timeout`, `network`, `malformed`) without any text. In Compose, the egress
