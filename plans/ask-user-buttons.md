@@ -1,6 +1,6 @@
 # ask_user: options as Slack buttons
 
-Status: In progress
+Status: Done
 
 ## Summary
 
@@ -57,7 +57,7 @@ the guards. The design below is their common minimum.
 - [x] Tests: projection, notice text and fallbacks, blocks, click routing (requester,
       stale, other person, no open question, refused resume).
 - [x] T0 to T3 `application`, PR [#38](https://github.com/fooku18/Support-Bot/pull/38).
-- [ ] Deploy, live click in #test-1234.
+- [x] Deploy, live click in #test-1234.
 
 ## Verification
 
@@ -66,9 +66,18 @@ the guards. The design below is their common minimum.
   records). The click test fails without the handler.
 - T4: not run. The shared local test instance was locked by another session, and
   the stub suite cannot click a button; `ask-resume.json` only drops the hint text.
-- Live: T5 BLOCKED (no gateway test instance with the needed tools). The click is
-  verified live on staging in #test-1234 after the deploy.
+- Live: T5 BLOCKED (no gateway test instance with the needed tools). Staging,
+  #test-1234, 2026-11-27, image `4eca9d8`: a forced `ask_user` with three options
+  (Germany, Poland, Czechia) was posted 7 s after the mention as the question with
+  three buttons and no hint line. The requester's click on Germany resumed the run
+  (adapter `question answered`, 23:21:37 UTC), the notice showed the choice in place
+  of the buttons (no `question buttons not removed` warning), and the answer "You
+  picked Germany." followed 4 s later. Not live-checked: a click by another person
+  (one human sender available); covered by the adapter test.
 
 ## Rollout
 
-Pending.
+Merged as `4eca9d8` (#38). Deployed to staging with deployment MR !23 (merge
+`6da43e05`, 2026-11-27 23:14 UTC, image
+`sha256:17a7d17504f1678e5c6da48a63a37be6269b3413946da5585cadfdbf28cce774`).
+Rollback: pin the previous digest `sha256:7e224c8a…` (upstream `750386f`).
