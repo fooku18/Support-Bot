@@ -11,15 +11,16 @@ the dead code it finds, so the check starts green.
 
 ## Decisions and approach
 
-- Knip `6.45.1`, pinned like the other dev tools. That release is two weeks
-  old; newer releases were less than a week old.
+- Knip `6.45.1`, pinned like the other dev tools.
 - `ignoreExportsUsedInFile`: an export that its own file uses is not
   reported. Only symbols that nothing uses are reported.
 - Entry points that Knip cannot infer are declared in `knip.json`: the esbuild
   entries of `apps/agent` (`main`, `provision`, `telemetry`, Studio
   observability), the deploy guard hook, the root CLI scripts, the T3
   verticals and qualification scripts, and two test fixtures that tests bundle.
-- Generated mirrors are ignored, since their exports serve another app. Their
+- Generated mirrors are ignored, since their exports serve another app:
+  `src/generated/` plus `apps/slack/src/taskkey.ts` and
+  `deploy/lib/model-catalog.mjs`, which the generator writes elsewhere. Their
   canonical sources stay checked, except for five files whose exports only
   their mirror's app uses (`channel-commands`, `slack-message-content`,
   `slack-messages`, `tool-kinds`, `slack-charts`). For those, exports and
