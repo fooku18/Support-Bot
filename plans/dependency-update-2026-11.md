@@ -56,9 +56,17 @@ separate change.
 
 ## Verification
 
-- Deterministic: pending
-- Live: pending (inference path changes, so T5 before release)
-- Evidence: pending
+- Deterministic (2026-11-28, branch `chore/update-deps`): T0 passes. T1
+  and T2 pass in a Linux container. T3 passes all six suites: discovery 13,
+  application 82, coding 22, backup 22, telemetry 8 (three runs), tools 19
+  records. `tests/integration/runtime-image.sh` passes.
+- Upgrade from the deployed store: a store provisioned by the published image
+  `main@sha256:7e224c8…` had none of the five new framework columns. One
+  deployment bootstrap with this branch's image added all five and granted
+  them to the runtime.
+- Live: BLOCKED until the shared test instance is free (T4 stub suite, T5
+  `answer-continuity`).
+- Evidence: T3 run folders in the local runner volume; not retained in Git.
 
 ## Rollout
 
