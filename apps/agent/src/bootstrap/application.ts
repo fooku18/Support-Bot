@@ -172,7 +172,9 @@ export async function startNativeAnswerProcess(
         redirect: 'error',
         headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-        signal: AbortSignal.timeout(route === '/native-delivery' ? 180000 : 90000),
+        signal: AbortSignal.timeout(
+          route === '/native-delivery' ? 180000 : route === '/native-status' ? 10000 : 90000,
+        ),
       });
       if (!response.ok) throw new Error('native adapter authority unavailable');
       return response.json();
@@ -264,6 +266,7 @@ export async function startNativeAnswerProcess(
           : {}),
         inputs: createNativeInputClient({ baseUrl: adapterUrl, token }),
         messages,
+        status: (value) => adapter('/native-status', value),
         services: nativeReadServices({
           configuration,
           cli,

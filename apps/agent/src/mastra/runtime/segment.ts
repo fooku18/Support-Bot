@@ -3,13 +3,17 @@ import type { DurableAgentStreamResult } from '@mastra/core/agent/durable';
 import { providerSearchReceipts } from '../tools/provider-search.js';
 
 /** One framework segment; a question closes only after its native snapshot persists. */
-export async function runNativeSegment(segment: DurableAgentStreamResult) {
+export async function runNativeSegment(
+  segment: DurableAgentStreamResult,
+  onToolCall?: (toolName: string, args: unknown) => void,
+) {
   const progress: unknown[] = [];
   let suspended: unknown;
   let failed = false;
   let rejected = false;
   try {
     for await (const chunk of segment.output.fullStream) {
+      if (chunk.type === 'tool-call') onToolCall?.(chunk.payload.toolName, chunk.payload.args);
       if (chunk.type === 'tool-call-suspended') suspended = chunk.payload;
       if (chunk.type === 'error' || chunk.type === 'abort') failed = true;
       if (chunk.type === 'tripwire') rejected = true;
