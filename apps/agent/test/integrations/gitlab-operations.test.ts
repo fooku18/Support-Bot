@@ -32,6 +32,8 @@ import {
   fakeJobTrace,
   runtimeTraceAnswer,
 } from './helpers/gitlab.js';
+import { createServiceToolDefinitions } from '../../src/integrations/tools/service-catalog.js';
+import { createReadServiceTools } from '../../src/mastra/tools/read-services.js';
 
 const request = (operation: string, args: Record<string, unknown>) =>
   buildGitlabRequest(validateGitlabOperation(operation, args));
@@ -39,7 +41,7 @@ const request = (operation: string, args: Record<string, unknown>) =>
 describe('typed GitLab operations (contract v5)', () => {
   it('exposes the read and write catalog under contract v5', () => {
     expect(GITLAB_CONTRACT_VERSION).toBe(6);
-    expect(GITLAB_READ_OPERATIONS).toHaveLength(21);
+    expect(GITLAB_READ_OPERATIONS).toHaveLength(23);
     expect(GITLAB_READ_OPERATIONS).toContain('get_job_trace');
     expect(GITLAB_WRITE_OPERATIONS).toEqual([
       'create_merge_request_note',
@@ -50,7 +52,7 @@ describe('typed GitLab operations (contract v5)', () => {
       'retry_job',
       'create_pipeline',
     ]);
-    expect(GITLAB_OPERATIONS).toHaveLength(28);
+    expect(GITLAB_OPERATIONS).toHaveLength(30);
     for (const name of GITLAB_OPERATIONS) expect(isGitlabOperationName(name)).toBe(true);
     for (const name of GITLAB_WRITE_OPERATIONS) expect(isGitlabWriteOperation(name)).toBe(true);
     expect(isGitlabWriteOperation('get_project')).toBe(false);
@@ -1309,5 +1311,353 @@ describe('get_job_trace', () => {
     expect(rendered).not.toContain('[truncated');
     const cut = renderGitlabResultText({ ...result, data: [...issues, ...issues] });
     expect(cut).toContain('[truncated');
+  });
+});
+
+describe('change detection (commits, merged merge requests, deployments in a window)', () => {
+  const described = (name: string) =>
+    GITLAB_OPERATION_METADATA.find((entry) => entry.name === name)?.description ?? '';
+  const person = (id: number) => ({
+    id,
+    username: `user${id}`,
+    name: `User ${id}`,
+    public_email: `user${id}@example.com`,
+    avatar_url: 'https://h/a.png',
+  });
+
+  it('are model reads', () => {
+    for (const name of ['list_commits', 'list_deployments']) {
+      expect(GITLAB_READ_OPERATIONS).toContain(name);
+      expect(isGitlabWriteOperation(name)).toBe(false);
+      expect(described(name)).not.toBe('');
+    }
+  });
+
+  it('registers every model operation as a tool with its own schema', () => {
+    const broker = new Proxy({}, { get: () => async () => ({ ok: true, output: '' }) });
+    const names = createServiceToolDefinitions(broker as never, new Set(), { gitlab: true }).map(
+      (definition) => definition.name,
+    );
+    expect([...names].sort()).toEqual([...GITLAB_OPERATIONS].sort());
+  });
+
+  it('refuses a misspelled filter at the model tool instead of dropping it', async () => {
+    const calls: unknown[] = [];
+    const services = {
+      gitlab: async (_operation: string, args: unknown) => {
+        calls.push(args);
+        return { ok: true, output: '' };
+      },
+    };
+    const tools = createReadServiceTools({
+      services: services as never,
+      enabled: new Set(),
+      catalog: { gitlab: true },
+      authorize: async () => {},
+    }) as Record<string, { execute(args: unknown, context: unknown): Promise<unknown> }>;
+    const refused = await tools.list_commits!.execute({ project: 'g/p', ref_name: 'release' }, {});
+    expect(JSON.stringify(refused)).toMatch(/ref_name/);
+    expect(calls).toEqual([]);
+    await tools.list_commits!.execute({ project: 'g/p', ref: 'release' }, {});
+    expect(calls).toEqual([{ project: 'g/p', ref: 'release' }]);
+  });
+
+  describe('list_commits', () => {
+    it('lists a project window on a ref and path as GET repository/commits', () => {
+      const built = request('list_commits', {
+        project: 'group/app',
+        ref: 'release/2026.11',
+        path: 'src/a b.ts',
+        since: '2026-11-27T00:00:00Z',
+        until: '2026-11-27T12:00:00+01:00',
+        per_page: 50,
+      });
+      expect(built).toMatchObject({
+        method: 'GET',
+        body: null,
+        resourceIdentity: 'commits@group/app',
+      });
+      expect(built.endpoint).toBe(
+        'projects/group%2Fapp/repository/commits?ref_name=release%2F2026.11&path=src%2Fa%20b.ts&since=2026-11-27T00%3A00%3A00Z&until=2026-11-27T12%3A00%3A00%2B01%3A00&page=1&per_page=50',
+      );
+      expect(request('list_commits', { project: 7 }).endpoint).toBe(
+        'projects/7/repository/commits?page=1&per_page=20',
+      );
+    });
+
+    it('validates project, ref, path and the window strictly', () => {
+      expect(() => validateGitlabOperation('list_commits', {})).toThrow(/project/);
+      for (const unknown of ['author', 'first_parent', 'with_stats', 'ref_name', 'all']) {
+        expect(
+          () => validateGitlabOperation('list_commits', { project: 'g/p', [unknown]: true }),
+          unknown,
+        ).toThrow(`list_commits: unknown argument "${unknown}"`);
+      }
+      expect(() =>
+        validateGitlabOperation('list_commits', { project: 'g/p', since: '2026-11-27' }),
+      ).toThrow(/since must be an RFC 3339 timestamp/);
+      expect(() => validateGitlabOperation('list_commits', { project: 'g/p', ref: 'a b' })).toThrow(
+        /ref contains unsupported characters/,
+      );
+      expect(() =>
+        validateGitlabOperation('list_commits', {
+          project: 'g/p',
+          since: '2026-11-27T12:00:00Z',
+          until: '2026-11-27T11:00:00Z',
+        }),
+      ).toThrow('list_commits: since must not be later than until');
+      const validated = validateGitlabOperation('list_commits', {
+        project: 'g/p',
+        since: '2026-11-27T00:00:00Z',
+      });
+      expect(validateTransportGitlabArgs('list_commits', validated)).toEqual(validated);
+    });
+
+    it('returns compact rows without the message or e-mail addresses', () => {
+      const listed = normalizeGitlabOutput({
+        operation: 'list_commits',
+        project: 'g/p',
+        httpStatus: 200,
+        status: 'completed',
+        output: JSON.stringify([
+          {
+            id: 'a'.repeat(40),
+            short_id: 'aaaaaaaa',
+            created_at: '2026-11-27T10:00:00Z',
+            parent_ids: ['b'.repeat(40)],
+            title: 'fix: checkout total',
+            message: 'fix: checkout total\n\nlong body',
+            author_name: 'Alex',
+            author_email: 'alex@example.com',
+            authored_date: '2026-11-27T09:00:00Z',
+            committer_name: 'GitLab',
+            committer_email: 'noreply@example.com',
+            committed_date: '2026-11-27T10:00:00Z',
+            trailers: {},
+            extended_trailers: {},
+            web_url: 'https://h/g/p/-/commit/aaa',
+          },
+        ]),
+      });
+      expect(listed.data).toEqual([
+        {
+          id: 'a'.repeat(40),
+          short_id: 'aaaaaaaa',
+          title: 'fix: checkout total',
+          author_name: 'Alex',
+          committed_date: '2026-11-27T10:00:00Z',
+          web_url: 'https://h/g/p/-/commit/aaa',
+        },
+      ]);
+    });
+  });
+
+  it('says when a page is full, so a busy window is not read as complete', () => {
+    const page = (rows: number, args: { page: number; per_page: number }) =>
+      normalizeGitlabOutput({
+        operation: 'list_commits',
+        project: 'g/p',
+        httpStatus: 200,
+        status: 'completed',
+        output: JSON.stringify(Array.from({ length: rows }, (_, id) => ({ id: String(id) }))),
+        ...args,
+      });
+    const full = page(2, { page: 3, per_page: 2 });
+    expect(full.pagination).toEqual({ page: 3, per_page: 2, next_page: 4 });
+    expect(full.warnings).toContain(
+      'page 3 is full (2 rows): more may exist; read page 4 before treating the list as complete',
+    );
+    expect(renderGitlabResultText(full)).toContain('read page 4');
+    const last = page(1, { page: 3, per_page: 2 });
+    expect(last.pagination.next_page).toBeNull();
+    expect(last.warnings).toEqual([]);
+    expect(
+      normalizeGitlabOutput({
+        operation: 'get_commit',
+        project: 'g/p',
+        httpStatus: 200,
+        status: 'completed',
+        output: JSON.stringify({ id: 'a' }),
+      }).pagination.next_page,
+    ).toBeNull();
+  });
+
+  describe('merge window on list_merge_requests', () => {
+    it('selects merges in the window and defaults the state to merged', () => {
+      const built = request('list_merge_requests', {
+        project: 'g/p',
+        merged_after: '2026-11-26T00:00:00Z',
+        merged_before: '2026-11-27T00:00:00Z',
+      });
+      expect(built.endpoint).toBe(
+        'projects/g%2Fp/merge_requests?state=merged&merged_after=2026-11-26T00%3A00%3A00Z&merged_before=2026-11-27T00%3A00%3A00Z&order_by=updated_at&sort=desc&page=1&per_page=20',
+      );
+      expect(
+        request('list_merge_requests', {
+          group: 'g',
+          state: 'all',
+          merged_after: '2026-11-26T00:00:00Z',
+        }).endpoint,
+      ).toBe(
+        'groups/g/merge_requests?merged_after=2026-11-26T00%3A00%3A00Z&order_by=updated_at&sort=desc&page=1&per_page=20',
+      );
+      expect(validateGitlabOperation('list_merge_requests', { project: 'g/p' })).toMatchObject({
+        state: 'opened',
+      });
+    });
+
+    it('refuses a state that cannot be merged, a reversed window and an unnarrowed instance', () => {
+      for (const state of ['opened', 'closed']) {
+        expect(() =>
+          validateGitlabOperation('list_merge_requests', {
+            project: 'g/p',
+            state,
+            merged_before: '2026-11-27T00:00:00Z',
+          }),
+        ).toThrow(
+          'list_merge_requests: merged_after/merged_before need state merged or all (default merged)',
+        );
+      }
+      expect(() =>
+        validateGitlabOperation('list_merge_requests', {
+          project: 'g/p',
+          merged_after: '2026-11-27T00:00:00Z',
+          merged_before: '2026-11-26T00:00:00Z',
+        }),
+      ).toThrow('list_merge_requests: merged_after must not be later than merged_before');
+      expect(() =>
+        validateGitlabOperation('list_merge_requests', { project: 'g/p', merged_after: 'today' }),
+      ).toThrow(/merged_after must be an RFC 3339 timestamp/);
+      expect(() =>
+        validateGitlabOperation('list_merge_requests', { merged_after: '2026-11-26T00:00:00Z' }),
+      ).toThrow(/covers the whole instance/);
+      const validated = validateGitlabOperation('list_merge_requests', {
+        project: 'g/p',
+        merged_after: '2026-11-26T00:00:00Z',
+      });
+      expect(validateTransportGitlabArgs('list_merge_requests', validated)).toEqual(validated);
+    });
+
+    it('describes the window as the way to find what was merged', () => {
+      expect(described('list_merge_requests')).toMatch(/merged_after\/merged_before/);
+    });
+  });
+
+  describe('list_deployments', () => {
+    it('lists a project window for an environment as GET deployments ordered by update', () => {
+      const built = request('list_deployments', {
+        project: 'g/p',
+        environment: 'prod/eu',
+        updated_after: '2026-11-27T00:00:00Z',
+        updated_before: '2026-11-27T12:00:00Z',
+      });
+      expect(built).toMatchObject({
+        method: 'GET',
+        body: null,
+        resourceIdentity: 'deployments@g/p',
+      });
+      expect(built.endpoint).toBe(
+        'projects/g%2Fp/deployments?environment=prod%2Feu&updated_after=2026-11-27T00%3A00%3A00Z&updated_before=2026-11-27T12%3A00%3A00Z&order_by=updated_at&sort=desc&page=1&per_page=20',
+      );
+      expect(request('list_deployments', { project: 'g/p' }).endpoint).toBe(
+        'projects/g%2Fp/deployments?order_by=updated_at&sort=desc&page=1&per_page=20',
+      );
+    });
+
+    it('validates the environment and the window strictly', () => {
+      expect(() => validateGitlabOperation('list_deployments', {})).toThrow(/project/);
+      expect(() =>
+        validateGitlabOperation('list_deployments', { project: 'g/p', per_page: 21 }),
+      ).toThrow('list_deployments: per_page must be an integer between 1 and 20');
+      expect(
+        validateGitlabOperation('list_deployments', { project: 'g/p', per_page: 20, page: 3 }),
+      ).toMatchObject({ page: 3, per_page: 20 });
+      for (const unknown of ['status', 'sort', 'order_by', 'finished_after', 'environment_id']) {
+        expect(
+          () => validateGitlabOperation('list_deployments', { project: 'g/p', [unknown]: 'x' }),
+          unknown,
+        ).toThrow(`list_deployments: unknown argument "${unknown}"`);
+      }
+      for (const bad of ['', '   ', 'a\u0000b', 'a\nb', 'x'.repeat(256), 5]) {
+        expect(
+          () => validateGitlabOperation('list_deployments', { project: 'g/p', environment: bad }),
+          JSON.stringify(bad),
+        ).toThrow('list_deployments: environment must be an environment name up to 255 characters');
+      }
+      expect(() =>
+        validateGitlabOperation('list_deployments', {
+          project: 'g/p',
+          updated_after: '2026-11-27T12:00:00Z',
+          updated_before: '2026-11-27T11:00:00Z',
+        }),
+      ).toThrow('list_deployments: updated_after must not be later than updated_before');
+      const validated = validateGitlabOperation('list_deployments', {
+        project: 'g/p',
+        environment: 'prod',
+      });
+      expect(validateTransportGitlabArgs('list_deployments', validated)).toEqual(validated);
+    });
+
+    it('reduces each deployment to what changed, where, when and by whom', () => {
+      const listed = normalizeGitlabOutput({
+        operation: 'list_deployments',
+        project: 'g/p',
+        httpStatus: 200,
+        status: 'completed',
+        output: JSON.stringify([
+          {
+            id: 1255926,
+            iid: 41,
+            ref: 'main',
+            sha: 'e4e143a9'.padEnd(40, '0'),
+            status: 'success',
+            created_at: '2026-11-27T11:41:43Z',
+            updated_at: '2026-11-27T11:43:15Z',
+            user: person(1),
+            environment: {
+              id: 84483,
+              name: 'prod',
+              slug: 'prod',
+              external_url: 'https://example.com',
+              created_at: '2026-11-22T00:00:00Z',
+            },
+            deployable: {
+              id: 53525614,
+              status: 'success',
+              stage: 'deploy',
+              name: 'deploy:k8s',
+              started_at: '2026-11-27T11:41:45Z',
+              finished_at: '2026-11-27T11:43:14Z',
+              web_url: 'https://h/g/p/-/jobs/53525614',
+              user: person(1),
+              commit: { id: 'e4e143a9', message: 'long', author_email: 'a@example.com' },
+              pipeline: { id: 2840420, iid: 9, sha: 'e4e143a9', web_url: 'https://h/p/2840420' },
+              runner: { id: 1, ip_address: '10.0.0.1' },
+              artifacts: [{ file_type: 'trace' }],
+            },
+          },
+        ]),
+      });
+      expect(listed.data).toEqual([
+        {
+          id: 1255926,
+          iid: 41,
+          ref: 'main',
+          sha: 'e4e143a9'.padEnd(40, '0'),
+          status: 'success',
+          created_at: '2026-11-27T11:41:43Z',
+          updated_at: '2026-11-27T11:43:15Z',
+          user: { id: 1, username: 'user1', name: 'User 1' },
+          environment: { name: 'prod' },
+          deployable: {
+            id: 53525614,
+            status: 'success',
+            finished_at: '2026-11-27T11:43:14Z',
+            web_url: 'https://h/g/p/-/jobs/53525614',
+            pipeline: { id: 2840420 },
+          },
+        },
+      ]);
+    });
   });
 });

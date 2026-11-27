@@ -159,6 +159,8 @@ export function buildGitlabRequest(validated: ValidatedGitlabArgs): GitlabReques
         created_before: validated.created_before,
         updated_after: validated.updated_after,
         updated_before: validated.updated_before,
+        merged_after: validated.merged_after,
+        merged_before: validated.merged_before,
         order_by: validated.order_by,
         sort: validated.sort,
         page: validated.page,
@@ -283,6 +285,16 @@ export function buildGitlabRequest(validated: ValidatedGitlabArgs): GitlabReques
       return get(
         `${base}/repository/commits/${encodeURIComponent(validated.sha)}`,
         `commit ${validated.sha.slice(0, 12)}${at}`,
+      );
+    case 'list_commits':
+      return get(
+        `${base}/repository/commits${query({ ref_name: validated.ref, path: validated.path, since: validated.since, until: validated.until, page: validated.page, per_page: validated.per_page })}`,
+        `commits${at}`,
+      );
+    case 'list_deployments':
+      return get(
+        `${base}/deployments${query({ environment: validated.environment, updated_after: validated.updated_after, updated_before: validated.updated_before, order_by: 'updated_at', sort: 'desc', page: validated.page, per_page: validated.per_page })}`,
+        `deployments${at}`,
       );
     case 'create_merge_request_note':
       return write(
@@ -813,9 +825,20 @@ export function normalizeGitlabOutput(args: {
     if (truncated && !warnings.some((w) => w.includes('truncated'))) {
       warnings.push('output truncated to the model bound with explicit markers');
     }
+    const rows = Array.isArray(parsed) ? parsed.length : 0;
+    const nextPage =
+      args.page !== undefined && args.per_page !== undefined && rows >= args.per_page
+        ? args.page + 1
+        : null;
+    if (nextPage !== null) {
+      warnings.push(
+        `page ${args.page} is full (${rows} rows): more may exist; read page ${nextPage} before treating the list as complete`,
+      );
+    }
     return {
       ...base,
       ok: true,
+      pagination: { ...base.pagination, next_page: nextPage },
       data: JSON.parse(serialized) as unknown,
       truncated,
       warnings,
@@ -1191,6 +1214,10 @@ function boundEntry(
       ]);
     case 'list_repository_tree':
       return pick(bounded, ['id', 'name', 'type', 'path', 'mode']);
+    case 'list_commits':
+      return pick(bounded, ['id', 'short_id', 'title', 'author_name', 'committed_date', 'web_url']);
+    case 'list_deployments':
+      return normalizeDeployment(bounded);
     case 'get_commit':
       return pick(bounded, [
         'id',
@@ -1210,6 +1237,26 @@ function boundEntry(
     default:
       return bounded;
   }
+}
+
+function normalizeDeployment(entry: Record<string, unknown>): Record<string, unknown> {
+  const out = pick(entry, ['id', 'iid', 'ref', 'sha', 'status', 'created_at', 'updated_at']);
+  const record = (value: unknown): Record<string, unknown> | null =>
+    typeof value === 'object' && value !== null && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : null;
+  const user = record(entry.user);
+  if (user !== null) out.user = pick(user, PERSON_FIELDS);
+  const environment = record(entry.environment);
+  if (environment !== null) out.environment = pick(environment, ['name']);
+  const job = record(entry.deployable);
+  if (job !== null) {
+    const deployable = pick(job, ['id', 'status', 'finished_at', 'web_url']);
+    const pipeline = record(job.pipeline);
+    if (pipeline !== null) deployable.pipeline = pick(pipeline, ['id']);
+    out.deployable = deployable;
+  }
+  return out;
 }
 
 const REPOSITORY_FILE_FIELDS = [

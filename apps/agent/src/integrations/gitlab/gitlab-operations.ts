@@ -47,6 +47,8 @@ export const GITLAB_READ_OPERATIONS = [
   'get_repository_file',
   'get_commit',
   'get_merge_request_pipelines',
+  'list_commits',
+  'list_deployments',
 ] as const;
 
 export const GITLAB_WRITE_OPERATIONS = [
@@ -116,6 +118,7 @@ const MAX_LABELS = 20;
 const MAX_LABEL_LENGTH = 100;
 const MAX_USER_IDS = 20;
 const MAX_MILESTONE_LENGTH = 255;
+const MAX_ENVIRONMENT_LENGTH = 255;
 
 /** GitLab's own username rule (filters take one username each, never a user ID). */
 export const GITLAB_USERNAME_PATTERN = /^[A-Za-z0-9_.][A-Za-z0-9_.-]{0,254}$/;
@@ -223,7 +226,13 @@ export interface PaginationArgs {
 /** Page size of `list_projects` without a search phrase. */
 export const LIST_PROJECTS_DEFAULT_PER_PAGE = 50;
 
-function parsePagination(input: Record<string, unknown>, operation: string): PaginationArgs {
+export const LIST_DEPLOYMENTS_MAX_PER_PAGE = 20;
+
+function parsePagination(
+  input: Record<string, unknown>,
+  operation: string,
+  maxPerPage = 100,
+): PaginationArgs {
   const rawPage = input.page ?? 1;
   const rawPerPage = input.per_page ?? 20;
   if (
@@ -238,9 +247,11 @@ function parsePagination(input: Record<string, unknown>, operation: string): Pag
     typeof rawPerPage !== 'number' ||
     !Number.isSafeInteger(rawPerPage) ||
     rawPerPage < 1 ||
-    rawPerPage > 100
+    rawPerPage > maxPerPage
   ) {
-    throw new GitlabOperationError(`${operation}: per_page must be an integer between 1 and 100`);
+    throw new GitlabOperationError(
+      `${operation}: per_page must be an integer between 1 and ${maxPerPage}`,
+    );
   }
   return { page: rawPage, per_page: rawPerPage };
 }
@@ -386,6 +397,35 @@ function parseTimestamp(value: unknown, operation: string, field: string): strin
     );
   }
   return value as string;
+}
+
+function assertWindow(
+  input: Record<string, string | undefined>,
+  operation: string,
+  start: string,
+  end: string,
+): void {
+  const from = input[start];
+  const to = input[end];
+  if (from !== undefined && to !== undefined && Date.parse(from) > Date.parse(to)) {
+    throw new GitlabOperationError(`${operation}: ${start} must not be later than ${end}`);
+  }
+}
+
+function parseEnvironment(value: unknown, operation: string): string | undefined {
+  if (value === undefined) return undefined;
+  if (
+    typeof value !== 'string' ||
+    value.trim().length === 0 ||
+    value.length > MAX_ENVIRONMENT_LENGTH ||
+    CONTROL_CHARACTERS.test(value) ||
+    /[\n\r\t]/.test(value)
+  ) {
+    throw new GitlabOperationError(
+      `${operation}: environment must be an environment name up to ${MAX_ENVIRONMENT_LENGTH} characters`,
+    );
+  }
+  return value;
 }
 
 function parseEnum<T extends string>(
@@ -582,6 +622,8 @@ export type ValidatedGitlabArgs =
       labels?: string[];
       milestone?: string;
       draft?: boolean;
+      merged_after?: string;
+      merged_before?: string;
       order_by: (typeof MR_ORDER_BY)[number];
       sort: SortDirection;
       page: number;
@@ -642,6 +684,25 @@ export type ValidatedGitlabArgs =
       kind: 'get_merge_request_pipelines';
       project: string;
       merge_request_iid: number;
+      page: number;
+      per_page: number;
+    }
+  | {
+      kind: 'list_commits';
+      project: string;
+      ref?: string;
+      path?: string;
+      since?: string;
+      until?: string;
+      page: number;
+      per_page: number;
+    }
+  | {
+      kind: 'list_deployments';
+      project: string;
+      environment?: string;
+      updated_after?: string;
+      updated_before?: string;
       page: number;
       per_page: number;
     }
@@ -851,6 +912,8 @@ export function validateGitlabOperation(operation: string, args: unknown): Valid
           'milestone',
           'draft',
           ...DATE_RANGE_FIELDS,
+          'merged_after',
+          'merged_before',
           'order_by',
           'sort',
           'page',
@@ -858,10 +921,22 @@ export function validateGitlabOperation(operation: string, args: unknown): Valid
         ],
         operation,
       );
-      const state = input.state ?? 'opened';
+      const mergeWindow = {
+        merged_after: parseTimestamp(input.merged_after, operation, 'merged_after'),
+        merged_before: parseTimestamp(input.merged_before, operation, 'merged_before'),
+      };
+      assertWindow(mergeWindow, operation, 'merged_after', 'merged_before');
+      const windowed =
+        mergeWindow.merged_after !== undefined || mergeWindow.merged_before !== undefined;
+      const state = input.state ?? (windowed ? 'merged' : 'opened');
       if (typeof state !== 'string' || !(MR_STATES as readonly string[]).includes(state)) {
         throw new GitlabOperationError(
           'list_merge_requests: state must be one of opened, closed, merged, all',
+        );
+      }
+      if (windowed && state !== 'merged' && state !== 'all') {
+        throw new GitlabOperationError(
+          'list_merge_requests: merged_after/merged_before need state merged or all (default merged)',
         );
       }
       if (input.draft !== undefined && typeof input.draft !== 'boolean') {
@@ -885,6 +960,7 @@ export function validateGitlabOperation(operation: string, args: unknown): Valid
         state: state as MergeRequestState,
         ...definedOnly(filters),
         ...parseDateRange(input, operation),
+        ...definedOnly(mergeWindow),
         order_by: parseOrderBy(input.order_by, operation, MR_ORDER_BY, 'updated_at'),
         sort: parseSort(input.sort, operation, 'desc'),
         ...parsePagination(input, operation),
@@ -1005,6 +1081,46 @@ export function validateGitlabOperation(operation: string, args: unknown): Valid
         throw new GitlabOperationError('get_commit: sha must be 4-64 hexadecimal characters');
       }
       return { kind: 'get_commit', project: project(), sha: input.sha };
+    }
+    case 'list_commits': {
+      assertNoUnknownKeys(
+        input,
+        ['project', 'ref', 'path', 'since', 'until', 'page', 'per_page'],
+        operation,
+      );
+      const window = {
+        since: parseTimestamp(input.since, operation, 'since'),
+        until: parseTimestamp(input.until, operation, 'until'),
+      };
+      assertWindow(window, operation, 'since', 'until');
+      return {
+        kind: 'list_commits',
+        project: project(),
+        ...definedOnly({
+          ref: parseRef(input.ref, operation, false),
+          path: parsePath(input.path, operation, false, 'path'),
+          ...window,
+        }),
+        ...parsePagination(input, operation),
+      };
+    }
+    case 'list_deployments': {
+      assertNoUnknownKeys(
+        input,
+        ['project', 'environment', 'updated_after', 'updated_before', 'page', 'per_page'],
+        operation,
+      );
+      const window = {
+        updated_after: parseTimestamp(input.updated_after, operation, 'updated_after'),
+        updated_before: parseTimestamp(input.updated_before, operation, 'updated_before'),
+      };
+      assertWindow(window, operation, 'updated_after', 'updated_before');
+      return {
+        kind: 'list_deployments',
+        project: project(),
+        ...definedOnly({ environment: parseEnvironment(input.environment, operation), ...window }),
+        ...parsePagination(input, operation, LIST_DEPLOYMENTS_MAX_PER_PAGE),
+      };
     }
     case 'create_merge_request_note': {
       assertNoUnknownKeys(input, ['project', 'merge_request_iid', 'body'], operation);
@@ -1269,7 +1385,7 @@ export const GITLAB_OPERATION_METADATA: GitlabOperationMeta[] = [
   },
   {
     name: 'list_merge_requests',
-    description: `List merge requests, most recently updated first by default (state opened by default; also closed, merged, all). ${LIST_SCOPE_NOTE(formatList(MR_NARROWING_FILTERS))} Filters: author_username, assignee_username, reviewer_username, search, labels, milestone (title, or None/Any), draft, source_branch, target_branch, date ranges; order_by created_at or updated_at, sort asc or desc. Results include author, assignees, reviewers and merge status. ${DATE_NOTE} ${PROJECT_NOTE}`,
+    description: `List merge requests, most recently updated first by default (state opened by default; also closed, merged, all). ${LIST_SCOPE_NOTE(formatList(MR_NARROWING_FILTERS))} Filters: author_username, assignee_username, reviewer_username, search, labels, milestone (title, or None/Any), draft, source_branch, target_branch, date ranges; order_by created_at or updated_at, sort asc or desc. merged_after/merged_before (RFC 3339) list what was merged in that window (state defaults to merged): use them, not updated_*, for "what changed". Results include author, assignees, reviewers and merge status. ${DATE_NOTE} ${PROJECT_NOTE}`,
   },
   {
     name: 'get_merge_request',
@@ -1322,6 +1438,14 @@ export const GITLAB_OPERATION_METADATA: GitlabOperationMeta[] = [
   {
     name: 'get_merge_request_pipelines',
     description: `List a merge request's pipelines. ${PROJECT_NOTE}`,
+  },
+  {
+    name: 'list_commits',
+    description: `List a project's commits, newest first, on the default branch or ref, optionally only those touching path, and within since/until (RFC 3339). Rows: SHA, title, author name, committed date, URL; get_commit has the message. For "what changed" in a window combine it with list_merge_requests (merged_after/merged_before) and list_deployments. ${PROJECT_NOTE}`,
+  },
+  {
+    name: 'list_deployments',
+    description: `List a project's deployments, most recently updated first, optionally for one environment (its name, e.g. prod; every row names its environment, so list without it to see which exist) and within updated_after/updated_before (RFC 3339). At most 20 per page. Rows: status, ref, SHA, environment, who deployed, the deploy job (for get_job_trace) and pipeline. updated_at selects the window; only a success row means its SHA went live, at deployable.finished_at. A merged change is live only once a successful deployment carries it. ${PROJECT_NOTE}`,
   },
   {
     name: 'create_merge_request_note',

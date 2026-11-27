@@ -7,6 +7,7 @@ import {
   GITLAB_USERNAME_PATTERN,
   INSTANCE_SEARCH_SCOPES,
   ISSUE_ORDER_BY,
+  LIST_DEPLOYMENTS_MAX_PER_PAGE,
   MR_ORDER_BY,
   PIPELINE_STATUSES,
   RFC3339_PATTERN,
@@ -228,6 +229,8 @@ export function createServiceToolDefinitions(
       milestone,
       draft: z.boolean().optional().describe('true: drafts only, false: no drafts'),
       ...dateRange,
+      merged_after: timestamp('Merged at or after (state defaults to merged)'),
+      merged_before: timestamp('Merged at or before (state defaults to merged)'),
       order_by: z.enum(MR_ORDER_BY).optional().describe('Sort key (default updated_at)'),
       sort,
       page: pageSchema,
@@ -295,6 +298,44 @@ export function createServiceToolDefinitions(
         .string()
         .regex(/^[0-9a-fA-F]{4,64}$/)
         .describe('Commit SHA (4-64 hex characters)'),
+    });
+    registerGitlab('list_commits', {
+      project: projectArg,
+      ref: z
+        .string()
+        .min(1)
+        .max(256)
+        .optional()
+        .describe('Branch, tag or SHA (default: the default branch)'),
+      path: z
+        .string()
+        .min(1)
+        .max(1024)
+        .optional()
+        .describe('Only commits touching this file or directory'),
+      since: timestamp('Committed at or after'),
+      until: timestamp('Committed at or before'),
+      page: pageSchema,
+      per_page: perPageSchema,
+    });
+    registerGitlab('list_deployments', {
+      project: projectArg,
+      environment: z
+        .string()
+        .min(1)
+        .max(255)
+        .optional()
+        .describe('Environment name, e.g. prod (omit for every environment)'),
+      updated_after: timestamp('Deployment updated at or after'),
+      updated_before: timestamp('Deployment updated at or before'),
+      page: pageSchema,
+      per_page: z
+        .number()
+        .int()
+        .min(1)
+        .max(LIST_DEPLOYMENTS_MAX_PER_PAGE)
+        .optional()
+        .describe(`Results per page (default 20, max ${LIST_DEPLOYMENTS_MAX_PER_PAGE})`),
     });
     registerGitlab('create_merge_request_note', {
       project: projectArg,
