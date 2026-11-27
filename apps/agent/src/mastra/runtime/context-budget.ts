@@ -9,11 +9,15 @@ type Prompt = ProcessLLMRequestArgs['prompt'];
 type PromptMessage = Prompt[number];
 type ToolMessage = Extract<PromptMessage, { role: 'tool' }>;
 type ToolResultOutput = ToolMessage['content'][number]['output'];
+type FilePart = Extract<
+  Extract<PromptMessage, { role: 'user' }>['content'][number],
+  { type: 'file' }
+>;
 
 /** Deliberately high: JSON tool output tokenizes densely, and over-counting is the safe side. */
 const CHARS_PER_TOKEN = 3;
 const MESSAGE_TOKENS = 4;
-/** Flat cost of an image or file part; its base64 length says nothing about tokens. */
+/** Flat cost of an image or other non-text file part; its base64 length says nothing about tokens. */
 const MEDIA_TOKENS = 1600;
 
 /** Replaces the turns left out of a request, so the model knows history is missing. */
@@ -27,6 +31,12 @@ export const omittedToolResult = (tokens: number) =>
   `[Tool result left out to fit the context budget (about ${tokens} tokens). Call the tool again if you need it.]`;
 
 const textTokens = (text: string) => Math.ceil(text.length / CHARS_PER_TOKEN);
+
+function fileTokens({ data, mediaType }: FilePart) {
+  if (!mediaType.startsWith('text/') || data instanceof URL) return MEDIA_TOKENS;
+  const bytes = typeof data === 'string' ? Buffer.byteLength(data, 'base64') : data.byteLength;
+  return Math.ceil(bytes / CHARS_PER_TOKEN);
+}
 
 function resultTokens(output: ToolResultOutput) {
   if (output.type === 'content')
@@ -44,7 +54,7 @@ export function estimatePromptTokens(message: PromptMessage): number {
   let tokens = MESSAGE_TOKENS;
   for (const part of message.content) {
     if (part.type === 'text' || part.type === 'reasoning') tokens += textTokens(part.text);
-    else if (part.type === 'file') tokens += MEDIA_TOKENS;
+    else if (part.type === 'file') tokens += fileTokens(part);
     else if (part.type === 'tool-call')
       tokens += textTokens(
         part.toolName + (typeof part.input === 'string' ? part.input : JSON.stringify(part.input)),

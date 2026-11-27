@@ -127,4 +127,18 @@ describe('context budget', () => {
   it('refuses a current request that cannot fit on its own', () => {
     expect(() => fitContext([system, user('z'.repeat(30_000))], 1_000)).toThrow(TripWire);
   });
+
+  it('counts a text attachment by its size and other media at a flat cost', () => {
+    const file = (data: string | Uint8Array, mediaType: string): Message => ({
+      role: 'user',
+      content: [{ type: 'file', data, mediaType }],
+    });
+    const bytes = Buffer.alloc(30_000, 'x');
+    expect(estimatePromptTokens(file(bytes.toString('base64'), 'text/plain'))).toBe(10_004);
+    expect(estimatePromptTokens(file(new Uint8Array(bytes), 'text/plain'))).toBe(10_004);
+    expect(estimatePromptTokens(file(bytes.toString('base64'), 'image/png'))).toBe(1_604);
+    expect(() => fitContext([system, file(bytes.toString('base64'), 'text/plain')], 8_000)).toThrow(
+      TripWire,
+    );
+  });
 });
