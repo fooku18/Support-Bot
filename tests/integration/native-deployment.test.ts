@@ -88,7 +88,8 @@ if(a.includes('up')&&fs.existsSync(root+'/up-stderr.txt')){process.stderr.write(
       {
         env: {
           FAKE_DOCKER: path.join(dir, 'docker.cjs'),
-          DOCKER_HOST: 'tcp://127.0.0.1:9',
+          DOCKER_HOST: process.env.DOCKER_HOST,
+          PATH: process.env.PATH,
           NATIVE_IMAGE_TAG: 'ambient-wrong',
           SUPPORT_AGENT_SERVICE_TOKEN: 'ambient-private',
           Compose_File: 'ambient-compose',

@@ -86,6 +86,7 @@ function setup(envLines?: string[]): Setup {
     log,
     env: {
       PATH: [bin, process.env.PATH].join(path.delimiter),
+      DOCKER_HOST: process.env.DOCKER_HOST,
       FAKE_LOG: log,
       FAKE_STORE_DIR: store,
     },

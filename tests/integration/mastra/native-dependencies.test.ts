@@ -284,7 +284,7 @@ describe('Studio workspace deployment', () => {
     // the Node probes so host realpaths cannot hide missing container ancestors.
     for (let i = 0; i < create.length; i++) {
       if (create[i] !== '-v') continue;
-      const [, source, target] = create[i + 1]!.match(/^(.+):(\/[^:]*)(?::ro)?$/) ?? [];
+      const [, source, target] = create[i + 1]!.match(/^(.+):(\/[^:]*)(?::[\w,]+)?$/) ?? [];
       if (!target?.endsWith('/node_modules')) continue;
       const destination = path.join(state, path.relative('/studio', target));
       fs.mkdirSync(path.dirname(destination), { recursive: true });

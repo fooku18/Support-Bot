@@ -80,6 +80,7 @@ function run(args: string[] = [], env: NodeJS.ProcessEnv = {}) {
     encoding: 'utf8',
     env: {
       PATH: [bin, process.env.PATH].join(path.delimiter),
+      DOCKER_HOST: process.env.DOCKER_HOST,
       FAKE_LOG: log,
       FAKE_STATE: root,
       ...env,
