@@ -1,6 +1,6 @@
 # Cloudflare GraphQL refusal and last-step answers
 
-Status: In progress
+Status: Done
 
 ## Summary
 
@@ -68,14 +68,23 @@ unknown argument datasets`. The agent validates the call with
   - T3 `tools`: BLOCKED. The driver calls `process.getuid`, which Windows
     lacks, and this machine has no Linux Docker host. The round-trip unit
     test runs the same `validateCloudflareRequest` the tool runtime uses.
-- Live: pending. The deployment check repeats the traffic question in the
-  test channel. T5 is not run (no gateway test instance for these tools).
+- Live, 2026-11-27 16:15 UTC on the deployment (upstream `97efb3c`): the
+  same traffic question in the test channel was answered in 107 s from
+  Cloudflare GraphQL counts for nine zones, 10 model requests, all
+  successful. The run finished in 10 of 12 steps, so the last-step path was
+  not exercised live; the tests above cover it. T5 is not run (no gateway
+  test instance for these tools).
+- Seen in the same run and left for follow-up: the text of a tool-calling
+  step is joined to the answer without a separator, and Code Mode reads
+  return nested JSON strings that cost the model several steps to unwrap.
 
 ## Rollout
 
-Merge to `main`, then the deployment repository's digest bump.
+Merged as `97efb3c` (#25) and deployed together with #24 and #13 by
+deployment MR !16 (`f4537ba9`, 2026-11-27 15:57 UTC; pipeline 2842177).
+Rollback: pin the previous image digest `sha256:0d599f40…` (upstream
+`8815054`) in the deployment repository.
 
 ## Open items
 
-- [ ] Record T0–T3 results.
-- [ ] Live check after deployment.
+- [ ] T3 `tools` on a Linux Docker host.
