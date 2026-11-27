@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   assertCodeModeRuntime,
   CODE_MODE_LIMITS,
+  CODE_MODE_READ_SHAPE,
+  codeModeReadResult,
   createNativeCodeMode,
 } from '../../src/mastra/tools/code-mode.js';
 import { createReadServiceTools } from '../../src/mastra/tools/read-services.js';
@@ -67,6 +69,42 @@ describe('Code Mode in isolated-vm', () => {
     });
   });
 
+  it('gives a script one compact read result and states its shape', async () => {
+    const reply = (result: Partial<BrokerToolResult>) => ({
+      result: { operationId: 'r', ...result },
+      content: [{ type: 'text', text: 'model copy' }],
+    });
+    expect(codeModeReadResult(reply({ ok: true, output: '{"a":1}' }))).toEqual({
+      ok: true,
+      data: { a: 1 },
+    });
+    expect(codeModeReadResult(reply({ ok: true, output: '[1]', data: { b: 2 } }))).toEqual({
+      ok: true,
+      data: { b: 2 },
+    });
+    expect(
+      codeModeReadResult(
+        reply({ ok: true, output: '[1]', data: [1], warnings: ['page 1 is full (1 rows)'] }),
+      ),
+    ).toEqual({ ok: true, data: [1], warnings: ['page 1 is full (1 rows)'] });
+    expect(codeModeReadResult(reply({ ok: true, output: 'plain text' }))).toEqual({
+      ok: true,
+      output: 'plain text',
+    });
+    expect(
+      codeModeReadResult(reply({ ok: false, output: '{"errors":["x"]}', data: { errors: ['x'] } })),
+    ).toEqual({ ok: false, output: '{"errors":["x"]}' });
+    expect(codeModeReadResult({ other: true })).toEqual({ other: true });
+    const f = setup();
+    expect(f.tool.description).toContain(CODE_MODE_READ_SHAPE);
+    const out = await f.run(`return await external_get_project({ project: 'g/p' });`);
+    expect(out).toMatchObject({
+      success: true,
+      result: { ok: true, data: { path_with_namespace: 'g/p' } },
+    });
+    expect(Object.keys(out.result as object)).toEqual(['ok', 'data']);
+  });
+
   it('refuses to build without --no-node-snapshot', () => {
     expect(() => assertCodeModeRuntime([], '--max-old-space-size=512')).toThrow(
       /--no-node-snapshot/,
@@ -86,9 +124,9 @@ describe('Code Mode in isolated-vm', () => {
         external_get_project({ project: 'g/p' }),
         external_list_branches({ project: 'g/p' }),
       ]);
-      console.log('branches', branches.result.data.length);
-      return { project: project.result.data.path_with_namespace,
-        branches: branches.result.data.map((b: { name: string }) => b.name) };
+      console.log('branches', branches.data.length);
+      return { project: project.data.path_with_namespace,
+        branches: branches.data.map((b: { name: string }) => b.name) };
     `);
     expect(out).toMatchObject({
       success: true,
@@ -165,7 +203,7 @@ describe('Code Mode in isolated-vm', () => {
     const out = await f.run(`
       const project = await external_get_project({ project: 'g/p' });
       try { await external_list_branches({ project: 'g/p' }); return 'second read allowed'; }
-      catch (e) { return { project: project.result.ok, refused: (e as Error).message }; }
+      catch (e) { return { project: project.ok, refused: (e as Error).message }; }
     `);
     expect(out).toMatchObject({
       success: true,
@@ -186,9 +224,9 @@ describe('Code Mode in isolated-vm', () => {
       result: { refused: 10, why: 'a script may make at most 50 read calls' },
     });
     expect(f.calls).toHaveLength(50);
-    expect(
-      await f.run(`return (await external_get_project({ project: 'g/p' })).result.ok;`),
-    ).toEqual(expect.objectContaining({ success: true, result: true }));
+    expect(await f.run(`return (await external_get_project({ project: 'g/p' })).ok;`)).toEqual(
+      expect.objectContaining({ success: true, result: true }),
+    );
   });
 
   it('refuses a result or log output beyond the bound without returning any of it', async () => {

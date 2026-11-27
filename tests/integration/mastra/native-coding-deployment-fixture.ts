@@ -17,7 +17,7 @@ export const CODE_MODE_PROBES = [
     external_get_project({ project: 'fixture/project' }),
     external_list_branches({ project: 'fixture/project' }),
   ]);
-  return { combined: JSON.stringify(project).includes('ASSEMBLED_SERVICE_FACT') && branches.result.ok };`,
+  return { combined: JSON.stringify(project).includes('ASSEMBLED_SERVICE_FACT') && branches.ok };`,
   `const exposed = ['require', 'process', 'fetch', 'setTimeout', 'Buffer']
 .filter((name) => typeof (globalThis as Record<string, unknown>)[name] !== 'undefined');
   const modules = [];

@@ -195,7 +195,7 @@ describe('fixed test Studio ingress', () => {
           { execute(args: { code: string }, context: object): Promise<unknown> }
         >
       ).execute_typescript!;
-      const code = `return (await external_get_project({ project: 'g/p' })).result.output;`;
+      const code = `return (await external_get_project({ project: 'g/p' })).data;`;
       expect(await tool.execute({ code }, {})).toMatchObject({ success: true, result: 'FACT' });
       authority.mockRejectedValueOnce(new Error('membership revoked'));
       await expect(tool.execute({ code }, {})).rejects.toThrow('membership revoked');
