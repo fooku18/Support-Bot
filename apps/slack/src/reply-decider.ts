@@ -45,14 +45,18 @@ function readable(text: string) {
     .trim();
 }
 
+function head(text: string, max: number) {
+  return text.slice(0, max).replace(/[\uD800-\uDBFF]$/, '');
+}
+
 function describe(message: string, requester: boolean, recent: ThreadMessage[]) {
   const who = requester ? 'The person who asked the assistant' : 'Someone in the thread';
   const history = recent
     .slice(-MAX_RECENT)
-    .map((m) => ({ ...m, text: readable(m.text).slice(0, MAX_RECENT_TEXT) }))
+    .map((m) => ({ ...m, text: head(readable(m.text), MAX_RECENT_TEXT) }))
     .filter((m) => m.text)
     .map((m) => `${AUTHOR[m.author]}: ${m.text}`);
-  const text = message.slice(0, MAX_TEXT);
+  const text = head(message, MAX_TEXT);
   if (!history.length)
     return `A Slack thread with an AI assistant. ${who} wrote this new message${requester ? ' in the thread' : ''}, without mentioning the assistant:\n${text}`;
   return `A Slack thread with an AI assistant. Recent messages, oldest first:\n${history.join('\n')}\n\n${who} now wrote this new message, without mentioning the assistant:\n${text}`;

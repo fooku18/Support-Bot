@@ -135,3 +135,16 @@ it.each([
     failure,
   });
 });
+
+it('bounds the message and recent history without splitting a surrogate pair', async () => {
+  const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(answer('reply', 0.9));
+  const message = `${'x'.repeat(1999)}🙂 and what about Poland?`;
+  const earlier = `${'y'.repeat(499)}🙂 earlier answer`;
+  await createReplyDecider(env)!(message, false, true, [{ author: 'assistant', text: earlier }]);
+  const state = JSON.parse(String(fetch.mock.calls[0]![1]?.body)).state as string;
+  expect(state).not.toMatch(
+    /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/,
+  );
+  expect(state).toContain('x'.repeat(1999));
+  expect(state).toContain('y'.repeat(499));
+});
