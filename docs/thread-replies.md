@@ -30,8 +30,7 @@ With a decision model configured, the bot considers the unmentioned
 messages of everyone in the thread, not only the requester's. A message
 starts a follow-up only when the model judges it meant for the bot: a
 request, a question, a correction or an answer. The follow-up runs as the
-person who wrote it, with their authorization, and they become the
-thread's requester for the request controls. Thanks, reactions, remarks,
+person who wrote it, with their authorization. Thanks, reactions, remarks,
 small talk and messages meant for someone else stay silent.
 
 Files without text from the requester and the request controls above skip
