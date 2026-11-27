@@ -53,9 +53,10 @@ export function time(ms: number | null): string {
 
 /** Thousands with separators, large counts shortened (18.4M). */
 export function count(value: number): string {
-  if (value >= 10_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
-  if (value >= 100_000) return `${(value / 1_000).toFixed(0)}k`;
+  const hundredths = Math.round(value / 10_000);
+  if (hundredths >= 1_000) return `${(Math.round(value / 100_000) / 10).toFixed(1)}M`;
+  if (Math.round(value / 1_000) >= 1_000) return `${(hundredths / 100).toFixed(2)}M`;
+  if (value >= 100_000) return `${Math.round(value / 1_000)}k`;
   return value.toLocaleString('en-US');
 }
 
