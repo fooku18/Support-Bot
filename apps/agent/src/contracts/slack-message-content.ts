@@ -34,7 +34,10 @@ export interface SlackMessageParts {
   blocks?: unknown;
 }
 
-export function flattenMessageContent(message: SlackMessageParts): string {
+export function flattenMessageContent(
+  message: SlackMessageParts,
+  maxBytes = MAX_MESSAGE_CONTENT_BYTES,
+): string {
   const segments: Segment[] = [];
   const text = asString(message.text);
   if (text !== null) segments.push(mrkdwnSegment(text));
@@ -43,7 +46,7 @@ export function flattenMessageContent(message: SlackMessageParts): string {
     segments.push(...attachmentSegments(attachment));
   }
   segments.push(...blockSegments(message.blocks));
-  return capContent(dedupe(segments).join('\n'));
+  return capContent(dedupe(segments).join('\n'), maxBytes);
 }
 
 /**

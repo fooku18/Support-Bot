@@ -3,6 +3,7 @@ import { postMessage, type SlackDeps } from './slackclient.js';
 import { fileDescriptors } from './file-descriptors.js';
 import { nativeInputFiles } from './generated/native-inputs.js';
 import { longAnswerMessage, type AnswerFileReceipt } from './generated/long-answer.js';
+import { flattenMessageContent } from './generated/slack-message-content.js';
 
 export class NativeAgentRefusal extends Error {
   constructor(
@@ -20,14 +21,14 @@ export function nativeThreadReply(event: MentionEvent, identity: BotIdentity): M
     event.type !== 'message' ||
     !event.thread_ts ||
     event.thread_ts === event.ts ||
-    (event.subtype && !['file_share', 'bot_message'].includes(event.subtype))
+    (event.subtype && !['file_share', 'bot_message', 'thread_broadcast'].includes(event.subtype))
   )
     return null;
   const normalized = { ...event, type: 'app_mention' };
   const decision = decideMention(normalized, identity);
   if (
     decision.kind !== 'accept' ||
-    decision.request.canonicalText.includes(`<@${identity.botUserId}>`) ||
+    flattenMessageContent(event, Infinity).includes(`<@${identity.botUserId}>`) ||
     // Reserved channel commands require a direct mention. Never turn an
     // unmentioned command or typo into an automatic model follow-up.
     /^\s*!/.test(decision.request.canonicalText)
