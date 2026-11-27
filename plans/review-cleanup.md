@@ -36,7 +36,6 @@ In scope:
 | A5  | admin        | The cost group error names the real groups.                                                           |
 | I1  | integrations | Atlassian reads cap the upstream body separately from the model output bound.                         |
 | I2  | integrations | A truncated GitLab JSON body reports its size instead of "malformed JSON".                            |
-| I3  | integrations | GitLab results stay within the model bound and mark truncation.                                       |
 | I4  | integrations | Datadog argument validation stops growing Ajv's schema cache on every catalog refresh.                |
 | I5  | integrations | Datadog tool errors keep their text unless they are an exact refusal.                                 |
 | I6  | integrations | A malformed tool instance listing keeps the previous listing and cannot crash the process.            |
@@ -75,7 +74,7 @@ Left out, with the reason:
   pending questions at deploy.
 - GitLab `credentialVersion` binding on reads: reads may follow the current
   credential on purpose. Needs the maintainer's call.
-- Run limits (enforce or drop), `files`/`localExec`, `skill.use`/`mcp.use`,
+- `files`/`localExec`, `skill.use`/`mcp.use`,
   unused admission and inference config: product decisions or stored data.
 - `isLegacyWebSearch`: a fail-closed guard, not a compatibility path.
 - Thread reply path defects (refusal notice on unmentioned chat, control
@@ -92,7 +91,8 @@ Left out, with the reason:
 - [x] Q2 (plus the `LiveOptions['limits']` type the new test typecheck
       exposed)
 - [x] A1 to A5
-- [x] I1 to I7, I10, I18
+- [x] I1, I2, I4 to I7, I10, I18. I3 (compact GitLab JSON with a marked cut)
+      landed on `main` with #19, so its commit was dropped here.
 - [x] E6, E7, S8, S15, T10
 - [x] O3, O4 (segment and ingress failure reasons, warnings to stderr), C10
 - [x] D1 to D4, D8 to D12. D1 also removed every other `protocol.ts` export
@@ -112,11 +112,12 @@ are folded into those commits.
 - Deterministic, Linux (`node:26.13.1-bookworm` container):
   - Every commit on the branch: `npm run typecheck:all`, `npm run lint` and
     `npm run format:check` pass.
-  - Head: `npm run test:packages` and `npm test` pass (agent 664, admin 138
-    and 1 skipped, slack 171, egress 31, model-stub 19, root 135).
-  - Base `1365d82` (rebased over #11 and #12).
+  - Head: `npm run test:packages` and `npm test` pass (agent 693, admin 137
+    and 1 skipped, slack 178, egress 31, model-stub 19, root 135).
+  - Base `dcb297b` (rebased over #11, #12, #14, #17, thread context, #19, #20,
+    #22, #23 and #24).
 - Images: `runtime`, `cli-runtime`, `egress` and `native-coding` build from
-  the branch head, and
+  the branch on `1365d82`, and
   `tests/integration/runtime-image.sh --prebuilt` passes on the `runtime`
   image.
 - T3 `tools` and `coding` (those images): pass.
@@ -128,10 +129,10 @@ are folded into those commits.
   the context budget since `fbf252f` raised the default to 64,000 tokens,
   and a 400 KB file already exceeds the input bounds. The later
   `application` phases did not run. See the open item.
-- T4 stub suite: BLOCKED. The only local test instance was in use by
-  another session's stack and Studio run, and its images would have to be
-  rebuilt from this branch. Run `--suite stub --run --switch-mode` on the
-  test instance before merging.
+- T4 stub suite (`--suite stub --run --switch-mode`, tools all): 8 of 8
+  passed on the local test instance with all six images built from
+  `3083d2e` (this branch on `03ec828`); the model mode switched to stub and
+  back to gateway. Summary `suite-4652d3f4-7e05-49d0-9e1f-e50003b2ca88`.
 - T5: not required. No change touches Slack intake or delivery,
   orchestration, context, inference, coding or publication.
 
