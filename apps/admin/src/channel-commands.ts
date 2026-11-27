@@ -1,6 +1,7 @@
 /** Persistent command state lives beside configuration, outside runtime purge stores. */
 import { createHash, randomUUID } from 'node:crypto';
 import { AdminStore, StoreError } from './store.js';
+import { TOOL_HELP_EXAMPLES, TOOL_KIND_TITLES } from './generated/tool-kinds.js';
 import {
   evaluateAuthorization,
   parseAuthorizationPolicy,
@@ -299,6 +300,25 @@ export class ChannelCommands {
           this.now() + 15 * 60000,
         );
         outcome = { id, kind: 'configure', grant };
+      } else if (command.kind === 'capabilities') {
+        const assignment = (await this.store.currentDocument())?.toolAssignments.find(
+          (a) => a.teamId === team && a.channelId === channel,
+        );
+        const kinds = [
+          ...new Set(assignment?.tools.filter((tool) => tool.ready).map((t) => t.kind)),
+        ];
+        const examples = [
+          ...kinds.map((kind) => TOOL_HELP_EXAMPLES[kind]),
+          'What did we decide in this thread?',
+          'Can you chart these numbers?',
+        ].slice(0, 3);
+        receipt = [
+          'I can summarize this thread and make charts from numbers you share.',
+          ...(kinds.length
+            ? [`Tools assigned here: ${kinds.map((k) => TOOL_KIND_TITLES[k]).join(', ')}.`]
+            : []),
+          ...examples.map((q) => `• ${q}`),
+        ].join('\n');
       } else if (command.kind !== 'help' && command.kind !== 'invalid') {
         const before = await this.readSnapshot(team, channel);
         if (command.kind === 'list') {

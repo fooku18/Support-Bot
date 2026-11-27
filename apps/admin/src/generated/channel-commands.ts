@@ -1,6 +1,7 @@
 /** GENERATED from apps/agent/src/contracts/channel-commands.ts; run npm run generate:protocol. */
 /** exact, deterministic commands; shared by intake and history filtering. */
 export type ChannelCommand =
+  | { kind: 'capabilities' }
   | { kind: 'help' }
   | { kind: 'configure' }
   | { kind: 'invalid' }
@@ -11,9 +12,11 @@ export type ChannelCommand =
 
 /** @public */
 export function classifyChannelCommand(text: string, botUserId: string): ChannelCommand | null {
-  const mention = /^\s*<@([A-Z0-9]+)>\s*(![\s\S]*)$/.exec(text);
+  const mention = /^\s*<@([A-Z0-9]+)>\s*([\s\S]*)$/.exec(text);
   if (!mention || mention[1] !== botUserId) return null;
   const input = mention[2]!;
+  if (/^(?:help|what can you do here)\??\s*$/i.test(input)) return { kind: 'capabilities' };
+  if (!input.startsWith('!')) return null;
   if (/^!help\s*$/i.test(input)) return { kind: 'help' };
   if (/^!config\s*$/i.test(input)) return { kind: 'configure' };
   const list = /^!memory(?:\s+list(?:\s+([1-9][0-9]*))?)?\s*$/i.exec(input);

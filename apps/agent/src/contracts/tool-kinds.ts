@@ -25,6 +25,20 @@ export const TOOL_KINDS = [
 export type ToolKind = (typeof TOOL_KINDS)[number];
 
 /** @public */
+export const TOOL_HELP_EXAMPLES: Record<ToolKind, string> = {
+  gitlab: 'Why did this pipeline fail?',
+  atlassian: 'What does this ticket or wiki page say?',
+  datadog: 'Which errors appeared in the last hour?',
+  cloudflare: 'How did traffic change for this zone?',
+  slack: 'Has anyone reported this error before?',
+  webSearch: 'Can you find the official docs for this error?',
+  webFetch: 'Can you summarize this web page?',
+  codeMode: 'Can you compare these tool results?',
+  files: 'What is in this task file?',
+  localExec: 'Can you run the project tests?',
+};
+
+/** @public */
 export const TOOL_KIND_TITLES: Record<ToolKind, string> = {
   gitlab: 'GitLab',
   atlassian: 'Jira/Confluence',

@@ -73,6 +73,25 @@ async function setup(dbPath = ':memory:') {
   };
 }
 describe('channel command grammar', () => {
+  it('answers both help questions from the current channel assignment', async () => {
+    const { commands, source, store } = await setup();
+    await commands.execute(source('help'));
+    const first = (await commands.claimReceipt())!;
+    expect(first.body).toContain('chart');
+    expect(first.body).not.toContain('Web search');
+    await commands.reportReceipt(first.id, first.lease, 'delivered', '1792940000.123456');
+    const { instance } = await store.createToolInstance('test', 'T1', {
+      kind: 'webSearch',
+      label: 'Search',
+    });
+    await store.assignTool('test', 'T1', 'C1', 'webSearch', instance.id);
+    await commands.execute(source('what can you do here?'));
+    const second = (await commands.claimReceipt())!;
+    expect(second.body).toContain('Web search');
+    expect(second.body).toContain('official docs');
+    expect(second.body).not.toContain('GitLab');
+    expect(classifyChannelCommand('<@UBOT> help me debug this', 'UBOT')).toBeNull();
+  });
   it('only reserves direct bot-leading commands; recognizes malformed/unknown commands without inference', () => {
     for (const text of [
       'example <@UBOT> !memory',
