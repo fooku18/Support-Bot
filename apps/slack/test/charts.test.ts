@@ -1,12 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { WebClient } from '@slack/web-api';
-import {
-  CHART_NOT_SHOWN,
-  CHART_REJECTED,
-  CHARTS_OVER_LIMIT,
-  chartBlock,
-  replyParts,
-} from '../src/charts.js';
+import { CHART_NOT_SHOWN, chartBlock, replyParts } from '../src/generated/slack-charts.js';
 import { postMessage, replyBlocks } from '../src/slackclient.js';
 import { flattenOwnAnswer } from '../src/generated/slack-message-content.js';
 
@@ -165,26 +159,18 @@ describe('reply parts', () => {
       'chart',
       CHART_NOT_SHOWN,
       'chart',
-      CHARTS_OVER_LIMIT,
+      CHART_NOT_SHOWN,
     ]);
   });
 
-  it('reads a posted chart back as the same fence, which renders the same block again', () => {
-    const text = `Traffic is up.\n\n${fence(line)}`;
-    const readBack = flattenOwnAnswer({ text: 'Traffic is up.', blocks: replyBlocks(text) });
-    expect(readBack).toBe(`Traffic is up.
-${fence(line)}`);
-    expect(replyBlocks(readBack)).toEqual(replyBlocks(text));
-  });
+  it('reads a posted chart back as its title', () => {
+    const text = `Traffic is up.
 
-  it('reads a posted pie back as a chart fence', () => {
-    const pie = {
-      type: 'pie',
-      title: 'Share',
-      categories: ['DE', 'PL'],
-      series: [{ name: 'Share', values: [3, 1] }],
-    };
-    expect(flattenOwnAnswer({ blocks: replyBlocks(fence(pie)) })).toBe(fence(pie));
+${fence(line)}`;
+    expect(flattenOwnAnswer({ text: 'Traffic is up.', blocks: replyBlocks(text) })).toBe(
+      'Traffic is up.
+[Chart: PDP requests per hour (M)]',
+    );
   });
 });
 
@@ -220,8 +206,8 @@ describe('posting charts', () => {
     expect(result.ts).toBe('1.2');
     expect(post).toHaveBeenCalledTimes(2);
     expect(post.mock.calls[1]?.[0]).toMatchObject({
-      text: `Traffic is up.\n\n${CHART_REJECTED}`,
-      blocks: [{ type: 'markdown', text: `Traffic is up.\n\n${CHART_REJECTED}` }],
+      text: `Traffic is up.\n\n${CHART_NOT_SHOWN}`,
+      blocks: [{ type: 'markdown', text: `Traffic is up.\n\n${CHART_NOT_SHOWN}` }],
     });
   });
 

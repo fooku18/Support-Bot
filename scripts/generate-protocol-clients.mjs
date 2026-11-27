@@ -324,19 +324,21 @@ async function main() {
           'utf8',
         ),
     ],
-    ...['native-inputs', 'native-exports', 'long-answer', 'file-inputs'].map((name) => {
-      const source = ['native-exports', 'long-answer'].includes(name)
-        ? `domain/delivery/${name}.ts`
-        : `domain/files/${name}.ts`;
-      return [
-        `apps/slack/src/generated/${name}.ts`,
-        `/** GENERATED from apps/agent/src/${source}; run npm run generate:protocol. */\n` +
-          readFileSync(path.join(REPO_ROOT, 'apps/agent/src', source), 'utf8').replace(
-            /(['"])(?:\.\.\/)+contracts\/dto\.js\1/g,
-            "'./protocol.js'",
-          ),
-      ];
-    }),
+    ...['native-inputs', 'native-exports', 'long-answer', 'slack-charts', 'file-inputs'].map(
+      (name) => {
+        const source = ['native-exports', 'long-answer', 'slack-charts'].includes(name)
+          ? `domain/delivery/${name}.ts`
+          : `domain/files/${name}.ts`;
+        return [
+          `apps/slack/src/generated/${name}.ts`,
+          `/** GENERATED from apps/agent/src/${source}; run npm run generate:protocol. */\n` +
+            readFileSync(path.join(REPO_ROOT, 'apps/agent/src', source), 'utf8').replace(
+              /(['"])(?:\.\.\/)+contracts\/dto\.js\1/g,
+              "'./protocol.js'",
+            ),
+        ];
+      },
+    ),
     [
       'apps/slack/src/taskkey.ts',
       '/** GENERATED from apps/agent/src/contracts/task-key.ts; run npm run generate:protocol. */\n' +

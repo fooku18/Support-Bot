@@ -21,26 +21,36 @@ two per message; only `chat:write`). Answers should use it.
 - **Model-friendly JSON**: `categories` plus `series[].values`, one number
   per category. The adapter builds Slack's `data` points and pie
   `segments`.
+- **One module owns the format.** `apps/agent/src/domain/delivery/slack-charts.ts`
+  holds the limits, the parser, the block builder and the instruction
+  paragraph built from the same limits; it is generated into the adapter.
 - **Validate against Slack's limits before sending.** A fence that breaks a
-  limit, and charts after the second, become a short note, never raw JSON.
+  limit, and charts after the second, become "Chart not shown", never raw
+  JSON. One note for every case: the reason does not help the reader.
 - **Fallback on `invalid_blocks`.** It is a definite rejection (nothing was
   posted), so the adapter posts once more with notes in place of the charts.
   Every other failure keeps the existing one-shot classification.
-- **Read back as the same fence.** `flattenOwnAnswer` turns a
-  `data_visualization` block (ours or another app's) into the fence, so a
-  fresh session sees the chart data in the model's own format.
+- **Read back as `[Chart: <title>]`.** Thread memory keeps the full answer
+  with the fence; only thread context and a fresh session read the posted
+  message, and the key numbers stay in the text. A full read-back of the
+  chart data (YAGNI review) would add a second format direction and up to
+  about 700 tokens per chart on every read. Add it if follow-ups in fresh
+  sessions need the chart data.
 - Rejected: rendering PNGs in the agent (native dependency, fonts, file
   upload, blocked in shared channels) and hosted chart services (send
   internal data out).
 
 ## Work
 
-- [x] `apps/slack/src/charts.ts`: fence parser, validation, block builder.
+- [x] `apps/agent/src/domain/delivery/slack-charts.ts` (mirrored to
+      `apps/slack/src/generated/`): fence parser, validation, block builder,
+      instruction paragraph.
 - [x] `postMessage`/`replyBlocks`: chart blocks in place, chart-free
       notification text, one repost without charts on `invalid_blocks`.
 - [x] `flattenOwnAnswer`/`flattenMessageContent`: `data_visualization` read
-      back as a `chart` fence (contract and generated mirror).
+      back as `[Chart: <title>]`.
 - [x] Instructions paragraph with the format and limits.
+- [x] Review pass: simplify (4 angles) and YAGNI; fixes applied.
 - [x] Docs: [slack-files.md](../docs/slack-files.md#charts).
 - [x] Tests: `apps/slack/test/charts.test.ts`.
 

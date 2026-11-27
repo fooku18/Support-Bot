@@ -58,17 +58,19 @@ with the language `chart` holding one JSON object:
 ```
 ````
 
-The adapter (`apps/slack/src/charts.ts`) replaces each fence with the block
+The adapter replaces each fence with the block
 at the same place, between the answer's Markdown blocks. The notification
-text names the chart instead. Slack's limits apply: title 50 characters,
+text names the chart instead. The format, the limits and the instruction
+paragraph come from one module, `apps/agent/src/domain/delivery/slack-charts.ts`,
+generated into the adapter. Slack's limits apply: title 50 characters,
 category and series names 20, axis labels 50, 1 to 20 categories, 1 to 12
 series with one finite number per category, and a pie has one series of
 positive values. A fence that breaks a limit, and every chart after the
-second, is replaced with a short note. When Slack rejects the blocks
-(`invalid_blocks`, so nothing was posted), the reply is posted once more
-with notes in place of the charts.
+second, is replaced with the note "Chart not shown". When Slack rejects the
+blocks (`invalid_blocks`, so nothing was posted), the reply is posted once
+more with that note in place of the charts.
 
 The chart stays part of the answer text, so thread memory, the answer hash
-and the long-answer file keep the fence. A later fresh session reads a
-posted chart back as the same fence (`flattenOwnAnswer`). A chart past the
-preview of a long answer is only in `answer.md`.
+and the long-answer file keep the fence. Thread context and a later fresh
+session read a posted chart, this app's or another's, as `[Chart: <title>]`.
+A chart past the preview of a long answer is only in `answer.md`.
