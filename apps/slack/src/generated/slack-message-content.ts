@@ -221,6 +221,11 @@ function blockSegments(blocks: unknown): Segment[] {
         if (alt !== null) segments.push(segment(alt));
         break;
       }
+      case 'data_visualization': {
+        const title = asString(block.title);
+        if (title !== null) segments.push(segment(`[Chart: ${title}]`));
+        break;
+      }
       default:
         break;
     }
