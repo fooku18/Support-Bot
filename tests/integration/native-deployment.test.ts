@@ -14,6 +14,7 @@ import { parseModelCatalog as deploymentCatalog } from '../../deploy/lib/model-c
 import { deployment } from '../../deploy/lib/native-deployment.mjs';
 // @ts-expect-error operational JavaScript
 import { checkEnvParity } from '../../scripts/env-parity.mjs';
+import { fakeDockerImport } from './fake-docker.js';
 
 const repo = process.cwd();
 const root = path.join(repo, 'artifacts', 'native-deployment', randomUUID());
@@ -22,8 +23,6 @@ function fixture() {
   const dir = path.join(root, randomUUID());
   fs.mkdirSync(dir);
   fs.mkdirSync(path.join(dir, 'admin-store'));
-  fs.mkdirSync(path.join(dir, 'bin'));
-  fs.writeFileSync(path.join(dir, 'bin/package.json'), '{"type":"commonjs"}');
   fs.writeFileSync(path.join(dir, 'runtime'), 'synthetic');
   fs.writeFileSync(path.join(dir, 'gateway'), 'synthetic');
   const env: Record<string, string> = {
@@ -73,30 +72,34 @@ function fixture() {
     ]),
   );
   fs.writeFileSync(
-    path.join(dir, 'bin/docker'),
-    `#!/usr/bin/env node
-const fs=require('fs'),path=require('path'),root=path.dirname(__dirname),a=process.argv.slice(2);
+    path.join(dir, 'docker.cjs'),
+    `const fs=require('fs'),root=__dirname,a=process.argv.slice(2);
 fs.appendFileSync(root+'/calls.jsonl',JSON.stringify({args:a,env:Object.keys(process.env),stub:process.env.NATIVE_MODEL_STUB})+String.fromCharCode(10));
 if(a[0]==='ps') console.log('owned');
 else if(a[0]==='inspect') console.log(fs.readFileSync(root+'/services.json','utf8'));
 else if(a.includes('exec')) console.log(fs.readFileSync(root+'/state.json','utf8'));
 if(a.includes('up')&&fs.existsSync(root+'/up-stderr.txt')){process.stderr.write(fs.readFileSync(root+'/up-stderr.txt','utf8'));process.exit(1);}
 `,
-    { mode: 0o755 },
   );
   const run = (script: string, args: string[]) =>
-    spawnSync(process.execPath, [path.join(repo, 'scripts', script), ...args], {
-      env: {
-        PATH: path.join(dir, 'bin') + ':' + process.env.PATH,
-        NATIVE_IMAGE_TAG: 'ambient-wrong',
-        SUPPORT_AGENT_SERVICE_TOKEN: 'ambient-private',
-        Compose_File: 'ambient-compose',
-        native_model_stub: '1',
-        SERVICE_TOKEN: 'ambient-passthrough',
-        HOST_TOOLING_DIR: 'ambient-host',
+    spawnSync(
+      process.execPath,
+      ['--import', fakeDockerImport, path.join(repo, 'scripts', script), ...args],
+      {
+        env: {
+          FAKE_DOCKER: path.join(dir, 'docker.cjs'),
+          DOCKER_HOST: process.env.DOCKER_HOST,
+          PATH: process.env.PATH,
+          NATIVE_IMAGE_TAG: 'ambient-wrong',
+          SUPPORT_AGENT_SERVICE_TOKEN: 'ambient-private',
+          Compose_File: 'ambient-compose',
+          native_model_stub: '1',
+          SERVICE_TOKEN: 'ambient-passthrough',
+          HOST_TOOLING_DIR: 'ambient-host',
+        },
+        encoding: 'utf8',
       },
-      encoding: 'utf8',
-    });
+    );
   const calls = (): Array<{ args: string[]; env: string[]; stub?: string }> =>
     fs.existsSync(path.join(dir, 'calls.jsonl'))
       ? fs

@@ -112,7 +112,7 @@ describe.each([
     const env = { ...process.env };
     delete env.CLAUDE_PROJECT_DIR;
     if (provider === 'Claude') env.CLAUDE_PROJECT_DIR = repo;
-    return spawnSync('/bin/sh', ['-c', commands[0]!], {
+    return spawnSync('sh', ['-c', commands[0]!], {
       // Both a path with spaces and a session started below the Git root.
       cwd: nested,
       env,

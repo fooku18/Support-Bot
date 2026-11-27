@@ -14,6 +14,7 @@ export default defineConfig({
       'tests/integration/admin-backup-script.test.ts',
       'tests/integration/docker-gc-script.test.ts',
     ],
+    env: { DOCKER_HOST: 'tcp://127.0.0.1:9' },
     testTimeout: 30000,
     hookTimeout: 30000,
     fileParallelism: false,

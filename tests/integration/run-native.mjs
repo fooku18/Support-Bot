@@ -198,7 +198,7 @@ async function startPg(name, { tcp = false, socket, hba, password } = {}) {
   const inspected = JSON.parse(docker('inspect', name))[0];
   const host = remote
     ? new URL(process.env.DOCKER_HOST.replace('tcp://', 'http://')).hostname
-    : '127.0.0.1';
+    : process.env.NATIVE_TEST_DOCKER_LOOPBACK || '127.0.0.1';
   return { host, port: inspected.NetworkSettings.Ports['5432/tcp'][0].HostPort };
 }
 

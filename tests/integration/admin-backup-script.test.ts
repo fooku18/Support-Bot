@@ -19,9 +19,10 @@ import {
 } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 
-const REPO_ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../..');
+const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const SCRIPT = path.join(REPO_ROOT, 'deploy/docker', 'admin-backup.sh');
 const SECRET = 'f'.repeat(64);
 
@@ -84,7 +85,8 @@ function setup(envLines?: string[]): Setup {
     envFile,
     log,
     env: {
-      PATH: `${bin}:${process.env.PATH}`,
+      PATH: [bin, process.env.PATH].join(path.delimiter),
+      DOCKER_HOST: process.env.DOCKER_HOST,
       FAKE_LOG: log,
       FAKE_STORE_DIR: store,
     },

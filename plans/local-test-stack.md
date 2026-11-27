@@ -104,7 +104,6 @@ deployment is needed.
 
 ## Open items
 
-- [ ] `tests/integration/native-deployment.test.ts` and three driver tests
-      in `native-live.test.ts` cannot run on Windows: their fake `docker`
-      is a `#!/usr/bin/env node` script, which Windows cannot spawn
-      without a shell. Out of scope here.
+- [x] The fake `docker` of `native-deployment.test.ts` and `native-live.test.ts`
+      no longer depends on `PATH` or a shebang; see
+      [portable tests](portable-tests.md).
