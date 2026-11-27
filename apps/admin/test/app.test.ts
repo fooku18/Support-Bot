@@ -977,30 +977,9 @@ describe('admin app', () => {
       expect((await api(`/installations/T0TEAM1/tools/${secondId}`, 'DELETE')).status).toBe(200);
       expect(await store.toolInstance(secondId)).toBeNull();
 
-      // Run limits: one deployment-wide set (not per channel), back to defaults.
-      expect(
-        (await api('/installations/T0TEAM1/channels/C0GENERAL/limits', 'PUT', { limits: {} }))
-          .status,
-      ).toBe(404);
-      const limits = await api('/run-limits', 'PUT', {
-        runLimits: { maxToolCalls: 5, maxCostUsd: 2.5 },
-      });
-      expect(limits.status).toBe(200);
-      expect(await limits.json()).toMatchObject({
-        customized: true,
-        runLimits: { maxToolCalls: 5, maxCostUsd: 2.5, maxActiveMinutes: 30 },
-      });
-      expect((await store.currentDocument())?.runLimits).toMatchObject({ maxToolCalls: 5 });
-      expect((await store.listAudit(1))[0]?.action).toBe('run.limits');
-      expect((await api('/run-limits', 'PUT', { runLimits: { maxToolCalls: 0 } })).status).toBe(
-        400,
-      );
-      await api('/run-limits', 'PUT', { runLimits: null });
-      const reset = (await (await api('/run-limits')).json()) as {
-        customized: boolean;
-        runLimits: { maxToolCalls: number };
-      };
-      expect(reset).toMatchObject({ customized: false, runLimits: { maxToolCalls: 300 } });
+      expect((await api('/run-limits')).status).toBe(404);
+      expect((await api('/run-limits', 'PUT', { runLimits: null })).status).toBe(404);
+      expect(await store.currentDocument()).not.toHaveProperty('runLimits');
 
       // Removing the workspace removes its instances and assignments.
       await api('/installations/T0TEAM1', 'DELETE');
@@ -1201,13 +1180,13 @@ describe('admin app', () => {
       expect((await store.listChannelTools('T0TEAM1', 'C0GENERAL')).map((row) => row.kind)).toEqual(
         ['datadog', 'gitlab'],
       );
-      await form('/config/run-limits', { csrf, maxToolCalls: '9', pauseWaitMinutes: '2' }, cookie);
-      expect(await store.runLimits()).toMatchObject({ maxToolCalls: 9, pauseWaitMinutes: 2 });
       const configPage = await page('/config');
-      expect(configPage).toContain('Run limits');
-      expect(configPage).toContain('&quot;maxToolCalls&quot;: 9');
-      await form('/config/run-limits', { csrf, maxCostUsd: '1.234' }, cookie);
-      expect(await page('/config')).toContain('two decimals');
+      expect(configPage).toContain('Configuration in force');
+      expect(configPage).not.toContain('Run limits');
+      expect(configPage).not.toContain('runLimits');
+      expect((await form('/config/run-limits', { csrf, maxToolCalls: '9' }, cookie)).status).toBe(
+        404,
+      );
       await form('/workspaces/T0TEAM1/tools/model', { csrf, key: 'opus' }, cookie);
       expect(await store.modelAssignment('T0TEAM1', null)).toBe('opus');
       expect(await page('/workspaces/T0TEAM1/tools')).toContain('Runs use opus');

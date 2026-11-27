@@ -1368,22 +1368,6 @@ export interface PriorAnswerDto {
   sourceTs?: string;
 }
 
-/**
- * Deployment-wide run limits (admin Configuration page, `runLimits` of the
- * admin document; the agent's defaults when no document carries them). Tool
- * calls, estimated cost and active time are soft limits of a coding run;
- * `pauseWaitMinutes` bounds the in-process wait before a pause parks; the
- * tool timeout and output cap are hard, per tool call.
- */
-export interface RunLimitsDto {
-  maxToolCalls: number;
-  maxCostUsd: number;
-  maxActiveMinutes: number;
-  pauseWaitMinutes: number;
-  toolTimeoutMs: number;
-  maxOutputBytes: number;
-}
-
 /** Soft-limit metric values in their units: calls, USD (estimated), ms. */
 export interface SoftLimitValuesDto {
   toolCalls: number;
@@ -1532,8 +1516,6 @@ export interface RunClaimResponse {
   runModel: RunModelDto | null;
   /** Tools of the task's channel now (refreshed on every heartbeat). */
   tools: ChannelToolsDto | null;
-  /** Deployment-wide run limits now. */
-  runLimits: RunLimitsDto;
   /** The run's last reported soft-limit state (null before its first report). */
   softLimits: SoftLimitStateDto | null;
   /** Pause ID its requester chose to continue (a parked run's continuation), else null. */

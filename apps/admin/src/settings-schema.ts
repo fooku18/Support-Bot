@@ -111,11 +111,6 @@ CREATE TABLE IF NOT EXISTS channel_tools (
   updated_at ${integer} NOT NULL,
   PRIMARY KEY (team_id, channel_id, kind)
 );
-CREATE TABLE IF NOT EXISTS run_limits (
-  id ${integer} PRIMARY KEY CHECK (id = 1),
-  limits_json TEXT NOT NULL,
-  updated_at ${integer} NOT NULL
-);
 CREATE TABLE IF NOT EXISTS model_assignments (
   team_id TEXT NOT NULL,
   channel_id TEXT NOT NULL,

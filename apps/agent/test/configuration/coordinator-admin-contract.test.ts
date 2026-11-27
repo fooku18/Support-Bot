@@ -65,8 +65,8 @@ function fixture(version = 7, status: 'whitelisted' | 'disabled' = 'whitelisted'
   return compileDocument(version, rows);
 }
 function rehash(input: ReturnType<typeof fixture>) {
-  const { version, installations, authorizationPolicy, toolAssignments, runLimits } = input;
-  const body = { version, installations, authorizationPolicy, toolAssignments, runLimits };
+  const { version, installations, authorizationPolicy, toolAssignments } = input;
+  const body = { version, installations, authorizationPolicy, toolAssignments };
   return { ...body, hash: createHash('sha256').update(JSON.stringify(body)).digest('hex') };
 }
 

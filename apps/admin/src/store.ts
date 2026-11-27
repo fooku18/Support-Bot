@@ -33,12 +33,9 @@ import {
   TOOL_INSTANCE_ID,
   validateToolCredential,
   validateToolInstance as validateContractToolInstance,
-  validateRunLimits,
   ToolKindError,
-  DEFAULT_RUN_LIMITS,
   type ToolInstanceState,
   type ToolKind,
-  type RunLimits,
   type ToolSettings,
 } from './generated/tool-kinds.js';
 
@@ -267,7 +264,6 @@ export class AdminStore {
       toolInstances: await this.listToolInstances(),
       toolStatuses: await this.listToolStatuses(),
       channelTools: await this.listChannelTools(),
-      runLimits: await this.runLimits(),
       modelAssignments: await this.listModelAssignments(),
       promptAssignments: await this.listPromptAssignments(),
       replySettings: await this.listReplySettings(),
@@ -717,21 +713,6 @@ export class AdminStore {
     }));
   }
 
-  /** The deployment-wide run limits (the defaults until an admin saves them). */
-  async runLimits(): Promise<RunLimits> {
-    const row = await this.get('SELECT limits_json FROM run_limits WHERE id = 1');
-    if (row === undefined) return { ...DEFAULT_RUN_LIMITS };
-    return {
-      ...DEFAULT_RUN_LIMITS,
-      ...(JSON.parse(String(row.limits_json)) as Partial<RunLimits>),
-    };
-  }
-
-  /** Whether an admin saved run limits (otherwise the defaults apply). */
-  async runLimitsCustomized(): Promise<boolean> {
-    return (await this.get('SELECT 1 AS present FROM run_limits WHERE id = 1')) !== undefined;
-  }
-
   async createToolInstance(
     actor: string,
     teamId: string,
@@ -1010,26 +991,6 @@ export class AdminStore {
       channelId,
       kind,
     );
-  }
-
-  /** Stores the deployment-wide run limits; `null` returns to the defaults. */
-  async setRunLimits(actor: string, limits: unknown): Promise<CompiledDocument> {
-    const validated = limits === null ? null : validateRunLimits(limits);
-    return (
-      await this.mutate(actor, 'run.limits', 'run-limits', { runLimits: validated }, async () => {
-        if (validated === null) {
-          await this.run('DELETE FROM run_limits WHERE id = 1');
-          return;
-        }
-        await this.run(
-          `INSERT INTO run_limits (id, limits_json, updated_at) VALUES (1, ?, ?)
-         ON CONFLICT (id) DO UPDATE SET limits_json = excluded.limits_json,
-           updated_at = excluded.updated_at`,
-          JSON.stringify(validated),
-          Date.now(),
-        );
-      })
-    ).document;
   }
 
   // -- models ----------------------------------------------------------------

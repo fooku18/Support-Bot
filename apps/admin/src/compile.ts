@@ -4,8 +4,7 @@
  * and exact blocked identities (support-agent-app/src/authorization-policy.ts). The second section, `toolAssignments`,
  * lists per enabled channel the assigned tool instances with their non-secret
  * settings and readiness, its effective model key and its effective system
- * prompt. The third, `runLimits`, holds the deployment-wide run limits. Bot
- * tokens and tool credentials never enter the document.
+ * prompt. Bot tokens and tool credentials never enter the document.
  */
 
 import { createHash } from 'node:crypto';
@@ -15,7 +14,6 @@ import {
 } from './generated/authorization-policy.js';
 import {
   ATLASSIAN_READ_OPERATIONS,
-  DEFAULT_RUN_LIMITS,
   kindNeedsProbe,
   MCP_KINDS,
   TOOL_KIND_CODES,
@@ -28,7 +26,6 @@ import {
   type FilesSettings,
   type ToolInstanceState,
   type ToolKind,
-  type RunLimits,
   type ToolSettings,
 } from './generated/tool-kinds.js';
 
@@ -132,8 +129,6 @@ export interface CompileRows {
   toolInstances?: ToolInstanceRow[];
   toolStatuses?: ToolStatusRow[];
   channelTools?: ChannelToolRow[];
-  /** The stored run limits; absent: the defaults. */
-  runLimits?: RunLimits;
   modelAssignments?: ModelAssignmentRow[];
   promptAssignments?: PromptAssignmentRow[];
   /** channels that saved "Automatic thread replies" (absent: on). */
@@ -146,8 +141,6 @@ export interface CompiledDocument {
   installations: CompiledInstallation[];
   authorizationPolicy: Record<string, unknown>;
   toolAssignments: ChannelToolAssignment[];
-  /** Deployment-wide run limits (one set, compiled once). */
-  runLimits: RunLimits;
 }
 
 export class CompileError extends Error {
@@ -427,13 +420,11 @@ export function compileDocument(version: number, rows: CompileRows): CompiledDoc
     trustedBotSender: row.trustedBotSender,
     installedAt: row.installedAt ?? null,
   }));
-  const runLimits = { ...(rows.runLimits ?? DEFAULT_RUN_LIMITS) };
   const body = {
     version,
     installations,
     authorizationPolicy,
     toolAssignments,
-    runLimits,
   };
   return { ...body, hash: documentHash(body) };
 }
@@ -446,7 +437,6 @@ export function contentHash(document: {
   installations: CompiledInstallation[];
   authorizationPolicy: Record<string, unknown>;
   toolAssignments?: ChannelToolAssignment[];
-  runLimits?: RunLimits;
 }): string {
   const policy = { ...document.authorizationPolicy, policyId: undefined };
   return sha256(
@@ -454,7 +444,6 @@ export function contentHash(document: {
       installations: document.installations,
       policy,
       toolAssignments: document.toolAssignments ?? [],
-      runLimits: document.runLimits ?? null,
     }),
   );
 }
@@ -464,7 +453,6 @@ function documentHash(body: {
   installations: CompiledInstallation[];
   authorizationPolicy: Record<string, unknown>;
   toolAssignments: ChannelToolAssignment[];
-  runLimits: RunLimits;
 }): string {
   return sha256(JSON.stringify(body));
 }
