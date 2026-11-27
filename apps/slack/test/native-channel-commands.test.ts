@@ -328,7 +328,7 @@ describe('native startup command routing at the Socket Mode call site', () => {
       expectedOwner: 'owner',
       anyParticipant: true,
     });
-    await reply('cancel');
+    await reply('cancel *Sent using* <@U0ABE2UQ8N4>');
     expect(calls.filter((c) => c.path === '/v1/systemone')).toHaveLength(1);
     expect(calls.filter((c) => c.path === '/agents/thread').at(-1)?.body).toMatchObject({
       userId: 'U2',

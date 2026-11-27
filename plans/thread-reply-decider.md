@@ -40,7 +40,7 @@ the current behaviour.
   the model. An empty message without files stays silent.
 - **Request controls** (`continue <answer>`, `cancel`, `status`) skip the
   model.
-- **Failure:** on a timeout (2 s), an HTTP error or a malformed answer,
+- **Failure:** on a timeout (5 s; 2 s until 2026-11-27, when two cold cluster calls timed out), an HTTP error or a malformed answer,
   the message stays silent (fail closed) and the adapter logs a warning
   with a failure code (`http_<status>`, `timeout`, `network`, `malformed`).
   The operator asked that the bot answer an unmentioned message only when
@@ -49,8 +49,8 @@ the current behaviour.
   Berlin time; outside those hours unmentioned follow-ups stay silent
   if it is off.
 - **Socket Mode:** the reply handler runs before the Slack acknowledgement,
-  as it already did for `/agents/thread` and admission. The 2 s bound adds
-  at most 2 s. A redelivered event that was admitted is deduplicated by the
+  as it already did for `/agents/thread` and admission. The 5 s bound adds
+  at most 5 s. A redelivered event that was admitted is deduplicated by the
   agent. A redelivered event that stayed silent asks the model again; with
   at most three Slack retries that load is accepted.
 - **Configuration:** adapter environment `THREAD_REPLY_DECIDER_URL` (full
@@ -125,7 +125,13 @@ A stricter criteria wording was worse on both sets (14/18, 40/43).
   - The real `reply-decider.ts` against clef-flash, with history as the
     adapter builds it: 10 of 10 (requester and other participants;
     thanks, follow-ups, questions to a colleague, `@here`).
-  - Live: pending deployment.
+  - Live after deployment `b9d0acae` (2026-11-27), in a thread another
+    person started: "Madrid" answered for the other participant
+    (p=0.562), the colleague's remarks stayed silent (p=0.085, 0.098). Two
+    calls timed out at the 2 s bound after idle gaps (cold connection from
+    the cluster), so the timeout is now 5 s. `status` posted through
+    Claude's Slack app ("status _Sent using_ <@app>") went to the model
+    instead of the control path; controls now ignore the attribution.
 - Deterministic, Windows 11, Node 26.13.1, Docker Desktop 29.9.3:
   - T0 on `1b33a18`: pass.
   - T1 and T2 on `1b33a18`: the Slack package (163 tests, 19 new) and

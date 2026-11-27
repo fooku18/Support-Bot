@@ -21,7 +21,7 @@ import { readLinkedMessage, readThreadRoot } from './message-reads.js';
 import { fetchRepliesPage, postEphemeral, addReaction } from './slackclient.js';
 import { buildTaskKey, parseTaskKey, type TaskIdentity } from './taskkey.js';
 import { ChannelCommandHandler, CommandClient } from './channel-commands.js';
-import { createReplyDecider, type ThreadMessage } from './reply-decider.js';
+import { createReplyDecider, withoutAttribution, type ThreadMessage } from './reply-decider.js';
 
 const REQUEST_CONTROL = /^(continue(?:\s|$)|cancel$|status$)/i;
 
@@ -402,7 +402,9 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
                 return;
               throw error;
             }
-            const control = REQUEST_CONTROL.test(decision.request.canonicalText.trim());
+            const control = REQUEST_CONTROL.test(
+              withoutAttribution(decision.request.canonicalText),
+            );
             if (decideReply && current.autoReplies && current.delivered && !control) {
               const verdict = await decideReply(
                 decision.request.canonicalText,
@@ -502,9 +504,12 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
       identity: installation.identity,
       slack: installation.slack,
     });
-    const command = decision.request.canonicalText
-      .replace(new RegExp(`<@${installation.identity.botUserId}>`, 'g'), '')
-      .trim();
+    const command = withoutAttribution(
+      decision.request.canonicalText.replace(
+        new RegExp(`<@${installation.identity.botUserId}>`, 'g'),
+        '',
+      ),
+    );
     try {
       if (REQUEST_CONTROL.test(command)) {
         if (event.files?.length) throw new Error('native controls do not accept attachments');
