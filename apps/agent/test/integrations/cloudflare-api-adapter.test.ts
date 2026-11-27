@@ -16,6 +16,7 @@ import {
   tokenizeGraphql,
   validateCloudflareGet,
   validateCloudflareGraphql,
+  validateCloudflareRequest,
   type CloudflareFetch,
   type CloudflareScope,
 } from '../../src/integrations/cloudflare/cloudflare-api-adapter.js';
@@ -134,14 +135,17 @@ describe('Cloudflare GraphQL validation', () => {
       { query: HOURLY, variables: { zoneTag: ZONE_A.id, start: 'a', end: 'b' } },
       SCOPE,
     );
-    expect(named.datasets).toEqual(['httpRequestsAdaptiveGroups']);
+    expect(named).toEqual({
+      query: HOURLY,
+      variables: { zoneTag: ZONE_A.id, start: 'a', end: 'b' },
+    });
     const anonymous = validateCloudflareGraphql(
       {
         query: `{ viewer { zones(filter: {zoneTag: "${ZONE_A.id}"}) { a: firewallEventsAdaptiveGroups(limit: 5) { count dimensions { action } } } } }`,
       },
       SCOPE,
     );
-    expect(anonymous.datasets).toEqual(['firewallEventsAdaptiveGroups']);
+    expect(anonymous.query).toContain('firewallEventsAdaptiveGroups');
     expect(
       validateCloudflareGraphql(
         {
@@ -156,10 +160,10 @@ describe('Cloudflare GraphQL validation', () => {
       { query: '{ __type(name: "ZoneHttpRequestsAdaptiveGroups") { fields { name } } }' },
       SCOPE,
     );
-    expect(introspection.datasets).toEqual(['__type']);
+    expect(introspection.query).toContain('__type');
     expect(
-      validateCloudflareGraphql({ query: '{ __schema { queryType { name } } }' }).datasets,
-    ).toEqual(['__schema']);
+      validateCloudflareGraphql({ query: '{ __schema { queryType { name } } }' }).query,
+    ).toContain('__schema');
   });
 
   it('refuses mutations, subscriptions and multi-operation documents', () => {
@@ -236,7 +240,7 @@ describe('Cloudflare GraphQL validation', () => {
     );
     // Unfiltered zones: fine for "every zone the token sees", refused for a subset.
     const unfiltered = '{ viewer { zones { x(limit: 1) { count } } } }';
-    expect(validateCloudflareGraphql({ query: unfiltered }, SCOPE).datasets).toEqual(['x']);
+    expect(validateCloudflareGraphql({ query: unfiltered }, SCOPE).query).toBe(unfiltered);
     const restricted = { ...SCOPE, restrictedZones: true };
     expect(() => validateCloudflareGraphql({ query: unfiltered }, restricted)).toThrow(
       /filter zones by zoneTag/,
@@ -248,8 +252,8 @@ describe('Cloudflare GraphQL validation', () => {
       ),
     ).toThrow(/filter zones by zoneTag/);
     expect(
-      validateCloudflareGraphql({ query: zones(`{zoneTag: "${ZONE_A.id}"}`) }, restricted).datasets,
-    ).toEqual(['x']);
+      validateCloudflareGraphql({ query: zones(`{zoneTag: "${ZONE_A.id}"}`) }, restricted).query,
+    ).toContain(ZONE_A.id);
     // Account-level datasets need a configured account and its tag.
     const accounts = (filter: string) =>
       `{ viewer { accounts${filter} { y(limit: 1) { count } } } }`;
@@ -257,8 +261,8 @@ describe('Cloudflare GraphQL validation', () => {
       validateCloudflareGraphql(
         { query: accounts(`(filter: {accountTag: "${ACCOUNT_ID}"})`) },
         SCOPE,
-      ).datasets,
-    ).toEqual(['y']);
+      ).query,
+    ).toContain(ACCOUNT_ID);
     expect(() => validateCloudflareGraphql({ query: accounts('') }, SCOPE)).toThrow(
       /filter accounts by accountTag/,
     );
@@ -278,8 +282,18 @@ describe('Cloudflare GraphQL validation', () => {
           query: `{ viewer { zones(filter: {zoneTag: "${ZONE_A.id}"}) { x(limit: 1) { dimensions { zoneTag } } } } }`,
         },
         restricted,
-      ).datasets,
-    ).toEqual(['x']);
+      ).query,
+    ).toContain('dimensions { zoneTag }');
+  });
+
+  it('accepts its own validated request again, as the tool runtime re-validates it', () => {
+    const validated = validateCloudflareGraphql(
+      { query: HOURLY, variables: { zoneTag: ZONE_A.id, start: 'a', end: 'b' } },
+      SCOPE,
+    );
+    expect(validateCloudflareRequest('graphql', validated, SCOPE)).toEqual(validated);
+    const get = validateCloudflareGet({ path: `/zones/${ZONE_A.id}`, query: {} }, SCOPE);
+    expect(validateCloudflareRequest('get', get, SCOPE)).toEqual(get);
   });
 
   it('checks raw argument names for the guard', () => {

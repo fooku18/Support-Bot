@@ -344,8 +344,6 @@ export function tokenizeGraphql(source: string): GraphqlToken[] {
 export interface ValidatedCloudflareGraphql {
   query: string;
   variables: Record<string, unknown>;
-  /** Datasets (zone/account-level root fields) and introspection fields queried, for evidence. */
-  datasets: string[];
 }
 
 const ZONE_TAG_KEYS = ['zoneTag', 'zoneTag_in'];
@@ -434,12 +432,9 @@ export function validateCloudflareGraphql(
 
   // Top-level structure: definitions are operations or fragments.
   const operations: string[] = [];
-  const datasets: string[] = [];
   let depth = 0;
   let parens = 0;
   let expectingDefinition = true;
-  let definition: 'operation' | 'fragment' | null = null;
-  let root = '';
   for (let i = 0; i < tokens.length; i += 1) {
     const token = tokens[i]!;
     if (token.kind === 'punct') {
@@ -448,43 +443,25 @@ export function validateCloudflareGraphql(
       else if (parens === 0 && token.value === '{') {
         if (depth === 0 && expectingDefinition) {
           operations.push('query');
-          definition = 'operation';
           expectingDefinition = false;
         }
         depth += 1;
       } else if (parens === 0 && token.value === '}') {
         depth -= 1;
-        if (depth === 0) {
-          expectingDefinition = true;
-          definition = null;
-        }
+        if (depth === 0) expectingDefinition = true;
       }
       if (parens < 0 || depth < 0)
         throw new CloudflareRequestError('query has unbalanced brackets');
       continue;
     }
     if (depth === 0 && parens === 0 && token.kind === 'name' && expectingDefinition) {
-      if (['query', 'mutation', 'subscription'].includes(token.value)) {
-        operations.push(token.value);
-        definition = 'operation';
-      } else if (token.value === 'fragment') definition = 'fragment';
-      else
+      if (['query', 'mutation', 'subscription'].includes(token.value)) operations.push(token.value);
+      else if (token.value !== 'fragment')
         throw new CloudflareRequestError(
           `query is not valid GraphQL (unexpected ${token.value.slice(0, 40)} at top level)`,
         );
       expectingDefinition = false;
       continue;
-    }
-    // Field names of the operation (not arguments, not after a colon alias).
-    if (token.kind === 'name' && parens === 0 && definition === 'operation') {
-      const next = tokens[i + 1];
-      if (next?.kind === 'punct' && next.value === ':') continue;
-      if (depth === 1) {
-        root = token.value;
-        if (root.startsWith('__')) datasets.push(root);
-      }
-      // viewer { zones|accounts { <dataset> } }
-      if (depth === 3 && root === 'viewer') datasets.push(token.value);
     }
   }
   if (depth !== 0 || parens !== 0)
@@ -560,11 +537,7 @@ export function validateCloudflareGraphql(
       if (scope.accountId === null || value !== scope.accountId)
         throw new CloudflareRequestError('accountTag is not the account this channel exposes');
   }
-  return {
-    query,
-    variables,
-    datasets: [...new Set(datasets.map((name) => name.slice(0, 64)))].slice(0, 8),
-  };
+  return { query, variables };
 }
 
 /** Validates either operation's request (broker and runtime). */
