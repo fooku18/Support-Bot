@@ -1,7 +1,5 @@
 /** JSON request/response contracts for private application service boundaries. */
 
-import type { SoftLimitMetric } from './protocol.js';
-
 export interface IntakeRequest {
   qualificationToken?: string;
   installationId: string;
@@ -53,28 +51,6 @@ export interface SlackFileDescriptorDto {
   bytes: number;
   revision: string;
   hosted: boolean;
-}
-
-/** Soft-limit metric values in their units: calls, USD (estimated), ms. */
-export interface SoftLimitValuesDto {
-  toolCalls: number;
-  costUsd: number;
-  activeMs: number;
-}
-
-/**
- * A coding run's soft-limit state, reported by the runner with progress and
- * on parking; returned on later claims of the same run so a continuation
- * inherits its counters and raised limits.
- */
-export interface SoftLimitStateDto {
-  /** Current limits (initial values plus every Continue's raise). */
-  limits: SoftLimitValuesDto;
-  usage: SoftLimitValuesDto;
-  /** Metrics an earlier Continue raised; the run message shows them. */
-  raised: SoftLimitMetric[];
-  /** The open pause (id and crossed metrics), null while the run works. */
-  pause: { pauseId: string; crossed: SoftLimitMetric[] } | null;
 }
 
 /**
@@ -145,14 +121,4 @@ export interface AcceptedRequestDto {
   userId: string;
   authorKind: 'human' | 'bot';
   botId: string | null;
-}
-
-/** Bounded aggregate admission view for PR-4 scrapes (read-only). */
-export interface AdmissionStatsResponse {
-  limits: { perThread: number; perActor: number; perWorkspace: number };
-  active: { total: number; reserved: number; committed: number };
-  /** Active reservations per key, top 10 per scope (bounded output). */
-  perActor: Array<{ key: string; count: number }>;
-  perWorkspace: Array<{ key: string; count: number }>;
-  counters: { admitted: number; rejected: number; expired: number; confirmFailures: number };
 }

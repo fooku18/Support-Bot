@@ -319,8 +319,3 @@ export function evaluateAuthorization(
   }
   return { allowed: false, reason: 'no_matching_grant', roles: roleNames };
 }
-
-export async function authorizationPolicyHash(policy: AuthorizationPolicy): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(policy.source));
-  return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, '0')).join('');
-}

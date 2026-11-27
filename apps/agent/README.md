@@ -2,7 +2,7 @@
 
 This package owns the shared Mastra agent and its application
 bindings. `src/mastra/index.ts` is the Studio entrypoint. Production executables
-live in `src/bootstrap`; importing `src/index.ts` starts no process.
+live in `src/bootstrap`.
 
 `mastra/agents` defines the agent and its bounded configuration. `application`
 composes authority, configuration, HTTP and Studio flows. `integrations` contains

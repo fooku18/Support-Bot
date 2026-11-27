@@ -5,7 +5,7 @@
 
 import type { WebClient } from '@slack/web-api';
 import type { BotIdentity } from '../../src/intake.js';
-import type { Installation, InstallationLookup } from '../../src/installations.js';
+import type { Installation } from '../../src/installations.js';
 
 export function testInstallation(identity: BotIdentity, webClient?: unknown): Installation {
   return {
@@ -39,9 +39,4 @@ export function testInstallation(identity: BotIdentity, webClient?: unknown): In
       botId: identity.botId,
     },
   };
-}
-
-export function staticInstallations(...installations: Installation[]): InstallationLookup {
-  const byTeam = new Map(installations.map((row) => [row.identity.teamId, row]));
-  return { get: (teamId) => byTeam.get(teamId) };
 }

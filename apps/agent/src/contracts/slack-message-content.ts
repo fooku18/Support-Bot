@@ -59,6 +59,8 @@ export function flattenMessageContent(
  * and an unmatched preview would add up to 3 900 characters to the answer.
  * The footer context line (check mark, model, notices) is agent-authored,
  * not part of the answer, and is skipped. Capped at the own-answer cap.
+ *
+ * @public
  */
 export function flattenOwnAnswer(message: SlackMessageParts): string {
   const blocks = asArray(message.blocks).filter(

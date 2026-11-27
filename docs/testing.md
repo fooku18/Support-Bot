@@ -8,7 +8,7 @@ is cheaper to find.
 
 | Tier                      | Command                                                                                                | Where it runs                                                    | What is real                                                                                                                                                                                           | Duration               | Cost                                   | When to run                                                                                                                    |
 | ------------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| **T0** Static checks      | `npm run typecheck:all`, `npm run lint`, `npm run format:check`                                        | Any machine                                                      | Source, types and generated protocol clients                                                                                                                                                           | about 18 s             | Free                                   | Before every commit                                                                                                            |
+| **T0** Static checks      | `npm run typecheck:all`, `npm run lint`, `npm run knip`, `npm run format:check`                        | Any machine                                                      | Source, types, generated protocol clients and dead code                                                                                                                                                | about 18 s             | Free                                   | Before every commit                                                                                                            |
 | **T1** Package tests      | `npm run test:packages`                                                                                | A Linux host                                                     | Units of every workspace; Slack, model providers and services are synthetic                                                                                                                            | about 46 s             | Free                                   | Before every commit                                                                                                            |
 | **T2** Root tests         | `npm test`                                                                                             | A Linux host                                                     | Compose files, env checks, agent hooks, stack and driver logic with a fake `docker`                                                                                                                    | about 5 s              | Free                                   | Before every commit                                                                                                            |
 | **T3** Native integration | `npm run test:native:integration -- --suite <suite>` (see [the suites](#native-integration-suites-t3)) | A Linux Docker host                                              | PostgreSQL, the Mastra agent and durable runs; for some suites the `native-coding` image; for `tools` the `cli-runtime` and `egress` images. Slack, providers, Git and the tool services are synthetic | 10 s to 40 s per suite | Free                                   | Before a commit that changes the agent, storage, policy, Slack intake or delivery, a tool, the egress proxy or the CLI runtime |
@@ -284,6 +284,7 @@ maps every BLOCKED code to its fix.
 ```sh
 npm run typecheck:all
 npm run lint
+npm run knip
 npm run format:check
 SUPPORT_AGENT_TEST_RETAIN_EVIDENCE=1 npm run test:packages
 SUPPORT_AGENT_TEST_RETAIN_EVIDENCE=1 npm test
@@ -294,6 +295,11 @@ npm run test:native:integration -- --suite backup --image-tag <tag>
 npm run test:native:integration -- --suite telemetry --image-tag <tag>
 npm run test:native:integration -- --suite tools --image-tag <tag>
 ```
+
+[Knip](https://knip.dev) reports unused files, exports, types and dependencies
+across the workspaces. Delete what it reports. Code that only a build script,
+hook, subprocess or generated mirror reaches is declared in `knip.json`:
+add new entry points there rather than keeping dead code.
 
 For changes to the unified Kubernetes image or dispatcher, run
 `sh tests/integration/runtime-image.sh support-agent/runtime:qualification`.

@@ -19,6 +19,7 @@ export type ReplyPart = { kind: 'text'; text: string } | { kind: 'chart'; block:
 
 const OPENING = /^ {0,3}(`{3,}|~{3,})(.*)$/;
 
+/** @public */
 export function replyParts(text: string): ReplyPart[] {
   if (!text.includes('```chart')) return [{ kind: 'text', text }];
   const lines = text.split('\n');
@@ -69,16 +70,19 @@ function isClosing(line: string, marker: string): boolean {
   return close !== undefined && close[0] === marker[0] && close.length >= marker.length;
 }
 
+/** @public */
 export function chartFreeText(parts: ReplyPart[]): string {
   return parts
     .map((part) => (part.kind === 'text' ? part.text : `[Chart: ${part.block.title}]`))
     .join('\n\n');
 }
 
+/** @public */
 export function hasCharts(parts: ReplyPart[]): boolean {
   return parts.some((part) => part.kind === 'chart');
 }
 
+/** @public */
 export function withoutCharts(parts: ReplyPart[]): ReplyPart[] {
   return mergeText(
     parts.map((part) => (part.kind === 'chart' ? { kind: 'text', text: CHART_NOT_SHOWN } : part)),

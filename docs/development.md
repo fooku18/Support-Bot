@@ -57,14 +57,14 @@ The application boundary has three focused collaborators:
 execution handle. The same PostgreSQL connection holds the task advisory lock
 from admission through segment completion. Moving these boundaries must preserve
 that lifetime, duplicate-event atomicity and the refusal to replay an uncertain
-start, resume, publication or send. Service contracts are in `agent-options.ts`;
-consumers import provisioning from the storage module directly.
+start, resume, publication or send. Service contracts are in `agent-options.ts`.
 
 ## Commands
 
 ```sh
 npm run typecheck:all
 npm run lint
+npm run knip
 npm run format:check
 SUPPORT_AGENT_TEST_RETAIN_EVIDENCE=1 npm run test:packages
 SUPPORT_AGENT_TEST_RETAIN_EVIDENCE=1 npm test
