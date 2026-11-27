@@ -66,7 +66,6 @@ export async function createSettingsFixture(file: string, key: Buffer): Promise<
       credential: `glpat-${randomBytes(16).toString('hex')}`,
     });
     await store.assignTool('fixture', 'T1', 'C1', 'gitlab', instance.id);
-    await store.setRunLimits('fixture', { ...(await store.runLimits()), maxToolCalls: 17 });
     const commands = new ChannelCommands(store, () => ['sonnet', 'opus']);
     await commands.execute({
       teamId: 'T1',
@@ -77,10 +76,30 @@ export async function createSettingsFixture(file: string, key: Buffer): Promise<
       text: '<@UBOT> !memory remember Fixture memory.',
     });
     await store.audit('fixture', 'fixture.retained', 'settings');
+    const runLimits = {
+      maxToolCalls: 17,
+      maxCostUsd: 10,
+      maxActiveMinutes: 30,
+      pauseWaitMinutes: 30,
+      toolTimeoutMs: 60_000,
+      maxOutputBytes: 200_000,
+    };
+    await store.run(
+      `CREATE TABLE IF NOT EXISTS run_limits (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        limits_json TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+      )`,
+    );
+    await store.run(
+      'INSERT INTO run_limits (id, limits_json, updated_at) VALUES (1, ?, ?)',
+      JSON.stringify(runLimits),
+      Date.now(),
+    );
     const document = (await store.currentDocument())!;
     await store.run(
       'UPDATE config_versions SET compiled_json = ? WHERE version = ?',
-      JSON.stringify({ ...document, feedbackIssues: null }),
+      JSON.stringify({ ...document, feedbackIssues: null, runLimits }),
       document.version,
     );
   } finally {

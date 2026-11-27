@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto';
 import { parseAuthorizationPolicy } from '../../domain/authorization/policy.js';
-import { parseRunLimits } from '../../domain/authorization/run-limits.js';
 import {
   parseToolAssignments,
   type ChannelToolAssignment,
@@ -21,7 +20,6 @@ export interface CoordinatorAdminDocument {
   installations: Installation[];
   authorizationPolicy: Record<string, unknown>;
   toolAssignments: ChannelToolAssignment[];
-  runLimits: ReturnType<typeof parseRunLimits>;
 }
 
 const TOOL_SETTINGS_FIELDS: Record<ChannelToolAssignment['tools'][number]['kind'], string[]> = {
@@ -45,14 +43,7 @@ const TOOL_SETTINGS_FIELDS: Record<ChannelToolAssignment['tools'][number]['kind'
 export function parseCoordinatorAdminDocument(value: unknown) {
   try {
     const input = object(value);
-    keys(input, [
-      'version',
-      'hash',
-      'installations',
-      'authorizationPolicy',
-      'toolAssignments',
-      'runLimits',
-    ]);
+    keys(input, ['version', 'hash', 'installations', 'authorizationPolicy', 'toolAssignments']);
     if (
       !Number.isSafeInteger(input.version) ||
       (input.version as number) < 1 ||
@@ -103,16 +94,14 @@ export function parseCoordinatorAdminDocument(value: unknown) {
         ]);
       }
     }
-    const limits = parseRunLimits(input.runLimits);
-    // These parsers historically default missing fields and drop unknown ones.
+    // This parser historically defaults missing fields and drops unknown ones.
     // A new coordinator accepts only the current complete compiler contract.
-    if (!same(input.toolAssignments, assignments) || !same(input.runLimits, limits)) fail();
+    if (!same(input.toolAssignments, assignments)) fail();
     const body = {
       version: input.version,
       installations: input.installations,
       authorizationPolicy: input.authorizationPolicy,
       toolAssignments: input.toolAssignments,
-      runLimits: input.runLimits,
     };
     const serialized = JSON.stringify(body);
     if (

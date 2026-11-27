@@ -102,10 +102,7 @@ export interface EffectiveGitlab {
   credentialVersion: number;
 }
 
-/**
- * The run's grant. Run limits are not part of it: changing them never
- * rotates a session or fails a recovery.
- */
+/** The run's grant. */
 export interface EffectiveToolProfile {
   tools: EffectiveTool[];
   gitlab: EffectiveGitlab | null;

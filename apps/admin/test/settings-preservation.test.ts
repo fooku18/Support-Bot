@@ -96,16 +96,15 @@ it('reopens SQLite without changing settings, auth, memory or encrypted bindings
     expect(await store.listChannelTools('T1', 'C1')).toMatchObject([
       { kind: 'gitlab', instanceId: instances[0]!.id },
     ]);
-    expect((await store.runLimits()).maxToolCalls).toBe(17);
     expect((await commands.snapshot('T1', 'C1')).entries.map((entry) => entry.text)).toEqual([
       'Fixture memory.',
     ]);
     expect((await store.listAudit(100)).some((entry) => entry.action === 'fixture.retained')).toBe(
       true,
     );
-    // The fixture includes the retired feedbackIssues section, so
-    // the first start recompiles once: one new version and its audit row.
-    // Every other table is unchanged.
+    // The fixture includes the retired feedbackIssues and runLimits sections
+    // and the retired run_limits table, so the first start recompiles once:
+    // one new version and its audit row. Every other table is unchanged.
     opened = snapshot(file);
     const appended = ['audit', 'config_versions'];
     // sqlite_sequence holds the audit autoincrement counter.
@@ -118,6 +117,8 @@ it('reopens SQLite without changing settings, auth, memory or encrypted bindings
         before.tables.find((t) => t.name === name)!.count + 1,
       );
     expect(await store.currentDocument()).not.toHaveProperty('feedbackIssues');
+    expect(await store.currentDocument()).not.toHaveProperty('runLimits');
+    expect(opened.tables.find((t) => t.name === 'run_limits')!.count).toBe(1);
     expect((await store.listAudit(1))[0]).toMatchObject({ action: 'config.recompile' });
 
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -129,6 +130,7 @@ it('reopens SQLite without changing settings, auth, memory or encrypted bindings
     expect(page.status).toBe(200);
     const html = await page.text();
     expect(html).toContain('<h1>Application settings</h1>');
+    expect(html).not.toContain('Run limits');
     expect(html).toContain('href="https://studio.example.test"');
     expect(html).toContain('Mastra Studio');
     expect(html).not.toContain('href="/threads"');
@@ -174,4 +176,72 @@ it('reopens SQLite without changing settings, auth, memory or encrypted bindings
     await reopened.close();
   }
   // Keep this synthetic database as local evidence; no teardown deletes state.
+});
+
+it('recompiles a stored document whose only retired section is runLimits', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'settings-run-limits-'));
+  const file = join(dir, 'admin.sqlite');
+  const key = randomBytes(32);
+  const first = await AdminStore.open({ path: file }, key);
+  let legacyVersion: number;
+  try {
+    const { version, installations, authorizationPolicy, toolAssignments } =
+      (await first.currentDocument())!;
+    legacyVersion = version;
+    const runLimits = {
+      maxToolCalls: 17,
+      maxCostUsd: 10,
+      maxActiveMinutes: 30,
+      pauseWaitMinutes: 30,
+      toolTimeoutMs: 60_000,
+      maxOutputBytes: 200_000,
+    };
+    const body = { version, installations, authorizationPolicy, toolAssignments, runLimits };
+    const hash = createHash('sha256').update(JSON.stringify(body)).digest('hex');
+    await first.run(
+      'UPDATE config_versions SET compiled_json = ?, hash = ? WHERE version = ?',
+      JSON.stringify({ ...body, hash }),
+      hash,
+      version,
+    );
+    await first.run(
+      `CREATE TABLE IF NOT EXISTS run_limits (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        limits_json TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+      )`,
+    );
+    await first.run(
+      'INSERT INTO run_limits (id, limits_json, updated_at) VALUES (1, ?, ?)',
+      JSON.stringify(runLimits),
+      Date.now(),
+    );
+  } finally {
+    await first.close();
+  }
+
+  const reopened = await AdminStore.open({ path: file }, key);
+  let recompiled;
+  try {
+    recompiled = (await reopened.currentDocument())!;
+    expect(recompiled.version).toBe(legacyVersion + 1);
+    expect(Object.keys(recompiled).sort()).toEqual([
+      'authorizationPolicy',
+      'hash',
+      'installations',
+      'toolAssignments',
+      'version',
+    ]);
+    expect((await reopened.listAudit(1))[0]).toMatchObject({ action: 'config.recompile' });
+    expect(await reopened.get('SELECT id FROM run_limits')).toEqual({ id: 1 });
+  } finally {
+    await reopened.close();
+  }
+
+  const again = await AdminStore.open({ path: file }, key);
+  try {
+    expect(await again.currentDocument()).toEqual(recompiled);
+  } finally {
+    await again.close();
+  }
 });

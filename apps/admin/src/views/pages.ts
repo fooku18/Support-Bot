@@ -23,18 +23,15 @@ import type {
 import {
   ATLASSIAN_READ_OPERATIONS,
   CREDENTIAL_KINDS,
-  DEFAULT_RUN_LIMITS,
   kindNeedsProbe,
   TOOL_KIND_TITLES,
   TOOL_KINDS,
-  RUN_LIMIT_BOUNDS,
   type AtlassianSettings,
   type ChannelToolAssignment,
   type CloudflareSettings,
   type DatadogSettings,
   type FilesSettings,
   type ToolKind,
-  type RunLimits,
 } from '../generated/tool-kinds.js';
 import {
   confirmButton,
@@ -716,8 +713,7 @@ ${(settings?.zones ?? []).join('\n')}</textarea
       return html`<p class="muted small">
         Code Mode: the model may run a short JavaScript program in a sandbox (no network, no
         credentials) that calls the channel's read-only service tools and returns one combined
-        result. No endpoint or key; assigning this instance to a channel admits it. Every nested
-        call counts against the run limits like a direct call.
+        result. No endpoint or key; assigning this instance to a channel admits it.
       </p>`;
     case 'files': {
       const settings = instance?.settings as FilesSettings | undefined;
@@ -1316,98 +1312,35 @@ export function auditPage(context: PageContext, entries: AuditEntry[], live?: Li
   );
 }
 
-/** Label, unit hint and input step of each run limit on the Configuration page. */
-const RUN_LIMIT_FIELDS: Record<keyof RunLimits, { label: string; step: string }> = {
-  maxToolCalls: { label: 'Tool calls', step: '1' },
-  maxCostUsd: { label: 'Estimated cost (USD)', step: '0.01' },
-  maxActiveMinutes: { label: 'Active time (min)', step: '1' },
-  pauseWaitMinutes: { label: 'Pause wait before parking (min)', step: '1' },
-  toolTimeoutMs: { label: 'Tool call timeout (ms)', step: '1' },
-  maxOutputBytes: { label: 'Tool output cap (bytes)', step: '1' },
-};
-
 export function configPage(
   context: PageContext,
   document: CompiledDocument,
-  runLimits: { limits: RunLimits; customized: boolean },
   live?: LiveRegion,
 ): string {
-  const fields = (Object.keys(DEFAULT_RUN_LIMITS) as Array<keyof RunLimits>).map(
-    (key) =>
-      html`<label class="field"
-        >${RUN_LIMIT_FIELDS[key].label}
-        <input
-          name="${key}"
-          type="number"
-          step="${RUN_LIMIT_FIELDS[key].step}"
-          min="${RUN_LIMIT_BOUNDS[key][0]}"
-          max="${RUN_LIMIT_BOUNDS[key][1]}"
-          value="${runLimits.limits[key]}"
-        />
-        <span class="sub">Default ${DEFAULT_RUN_LIMITS[key]}</span></label
-      >`,
-  );
   return page(
     'Application settings',
     context,
-    html`<form class="card" method="post" action="/config/run-limits">
-        <div class="card-h">
-          <h2>${icon('config')}Run limits</h2>
-          ${runLimits.customized
-            ? html`<span class="badge">Customized</span>`
-            : html`<span class="badge">Defaults</span>`}
-          <p>
-            For every coding run. Tool calls, estimated cost and active time are soft: a run that
-            reaches one pauses, and the person who started it chooses Continue (the limit rises by
-            its value here) or Cancel. An unanswered pause parks the run after the pause wait; it
-            can still be continued until the thread expires. Timeout and output cap apply to each
-            tool call.
-          </p>
-        </div>
-        <div class="card-b">
-          ${csrfField(context.csrf)}
-          <div class="fields">${fields}</div>
-        </div>
-        <div class="card-f">
-          <p class="hint">The agent and the adapter fetch a change within 2 seconds.</p>
-          <button type="submit">${icon('save')}Save run limits</button>
-        </div>
-      </form>
-      ${runLimits.customized
-        ? html`<p>
-            ${postButton(
-              '/config/run-limits',
-              'Reset run limits to defaults',
-              context.csrf,
-              {
-                reset: 'true',
-              },
-              'quiet',
-              { icon: 'reset' },
-            )}
-          </p>`
-        : html``}
-      <section class="card">
-        <div class="card-h">
-          <h2>${icon('shield')}Configuration in force</h2>
-          <p>
-            What the agent and the adapter enforce right now. They fetch it again at most 2 seconds
-            after a change here.
-          </p>
-        </div>
-        <div class="card-b">
-          <dl class="kv facts">
-            <dt>Version</dt>
-            <dd>${document.version}</dd>
-            <dt>Hash</dt>
-            <dd><span class="id">${document.hash}</span></dd>
-          </dl>
-          <details class="disclose">
-            <summary>${icon('chevron')}Compiled configuration</summary>
-            <pre>${JSON.stringify(document, null, 2)}</pre>
-          </details>
-        </div>
-      </section>`,
+    html`<section class="card">
+      <div class="card-h">
+        <h2>${icon('shield')}Configuration in force</h2>
+        <p>
+          What the agent and the adapter enforce right now. They fetch it again at most 2 seconds
+          after a change here.
+        </p>
+      </div>
+      <div class="card-b">
+        <dl class="kv facts">
+          <dt>Version</dt>
+          <dd>${document.version}</dd>
+          <dt>Hash</dt>
+          <dd><span class="id">${document.hash}</span></dd>
+        </dl>
+        <details class="disclose">
+          <summary>${icon('chevron')}Compiled configuration</summary>
+          <pre>${JSON.stringify(document, null, 2)}</pre>
+        </details>
+      </div>
+    </section>`,
     {
       section: 'config',
       ...(live === undefined

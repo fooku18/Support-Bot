@@ -6,7 +6,6 @@ import {
   validModelKey,
   type ResolvedModel,
 } from '../../contracts/model-catalog.js';
-import type { RunLimitsDto } from '../../contracts/dto.js';
 import { parseCoordinatorAdminDocument, type CoordinatorAdminDocument } from './admin-document.js';
 
 /** Deployment-owned settings are distinct from the admin's source identity. */
@@ -131,7 +130,6 @@ export interface CoordinatorRunConfiguration {
   /** Runtime-owned logical-run session pin, populated by the first session ACK. */
   nativeSession?: { id: string; resumed: boolean };
   channel: { modelKey: string | null; systemPrompt: string | null; autoReplies: boolean };
-  runLimits: RunLimitsDto;
   maxInferenceInvocations: number;
 }
 export function coordinatorRunConfiguration(
@@ -151,7 +149,6 @@ export function coordinatorRunConfiguration(
       autoReplies: channel?.autoReplies ?? false,
     },
     tools: structuredClone(channel?.tools ?? []),
-    runLimits: snapshot.runLimits,
     maxInferenceInvocations: config.execution.maxInferenceInvocations,
   };
 }

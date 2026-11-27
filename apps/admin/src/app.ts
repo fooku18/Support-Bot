@@ -56,13 +56,11 @@ import {
 } from './store.js';
 import {
   ATLASSIAN_READ_OPERATIONS,
-  DEFAULT_RUN_LIMITS,
   isToolKind,
   TOOL_INSTANCE_ID,
   TOOL_KINDS,
   ToolKindError,
   type ToolKind,
-  type RunLimits,
 } from './generated/tool-kinds.js';
 import type { PageContext } from './views/html.js';
 import { ADMIN_CLIENT_JS } from './views/admin-client.js';
@@ -939,23 +937,6 @@ export function createApp(deps: AppDeps): AdminApp {
       case 'GET /config':
         json(res, 200, await store.currentDocument());
         return;
-      case 'GET /run-limits':
-        json(res, 200, {
-          runLimits: await store.runLimits(),
-          customized: await store.runLimitsCustomized(),
-        });
-        return;
-      case 'PUT /run-limits': {
-        if (req.body.runLimits === undefined)
-          throw new HttpError(400, 'runLimits must be an object or null');
-        const document = await store.setRunLimits(actor, req.body.runLimits);
-        json(res, 200, {
-          runLimits: await store.runLimits(),
-          customized: await store.runLimitsCustomized(),
-          configVersion: document.version,
-        });
-        return;
-      }
       case 'GET /installations':
         json(res, 200, { installations: (await store.listInstallations()).map(installationView) });
         return;
@@ -1578,26 +1559,9 @@ export function createApp(deps: AppDeps): AdminApp {
         configPage(
           await pageContext(session),
           (await store.currentDocument())!,
-          { limits: await store.runLimits(), customized: await store.runLimitsCustomized() },
           liveRegion(['config']),
         ),
       );
-      return;
-    }
-    if (req.method === 'POST' && req.path === '/config/run-limits') {
-      try {
-        const document = await store.setRunLimits(
-          actor,
-          req.body.reset === 'true' ? null : runLimitsFromForm(req.body),
-        );
-        back('/config', 'ok', `Run limits saved (config v${document.version}).`);
-      } catch (err) {
-        if (err instanceof ToolKindError || err instanceof CompileError) {
-          back('/config', 'err', err.message);
-          return;
-        }
-        throw err;
-      }
       return;
     }
     throw new HttpError(404, 'not found');
@@ -1896,18 +1860,6 @@ function credentialFromForm(kind: ToolKind, body: Record<string, unknown>): unkn
   }
   const credential = String(body.credential ?? '').trim();
   return credential === '' ? undefined : credential;
-}
-
-/** Run limits from the UI form (empty fields take the defaults). */
-function runLimitsFromForm(
-  body: Record<string, unknown>,
-): Partial<Record<keyof RunLimits, string>> {
-  const result: Partial<Record<keyof RunLimits, string>> = {};
-  for (const key of Object.keys(DEFAULT_RUN_LIMITS) as Array<keyof RunLimits>) {
-    const value = String(body[key] ?? '').trim();
-    if (value !== '') result[key] = value;
-  }
-  return result;
 }
 
 function blockedCounts(people: Array<{ channelId: string }>): Map<string, number> {

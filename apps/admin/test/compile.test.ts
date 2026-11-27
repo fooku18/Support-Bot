@@ -15,12 +15,7 @@ import {
   type ToolInstanceRow,
   type ToolStatusRow,
 } from '../src/compile.js';
-import {
-  ATLASSIAN_READ_OPERATIONS,
-  DEFAULT_RUN_LIMITS,
-  TOOL_KINDS,
-  validateRunLimits,
-} from '../src/generated/tool-kinds.js';
+import { ATLASSIAN_READ_OPERATIONS, TOOL_KINDS } from '../src/generated/tool-kinds.js';
 
 const installation = {
   teamId: 'T0TEAM1',
@@ -497,10 +492,7 @@ describe('compileDocument tool assignments', () => {
       channelTools: [gitlab, atlassian, datadog, search, files].map((row) =>
         assign('C0CHAN1', row),
       ),
-      runLimits: { ...DEFAULT_RUN_LIMITS, maxToolCalls: 7 },
     });
-    // One deployment-wide set, not per channel.
-    expect(document.runLimits.maxToolCalls).toBe(7);
     const assignment = document.toolAssignments[0];
     expect(assignment).not.toHaveProperty('limits');
     expect(assignment?.tools).toEqual([
@@ -656,39 +648,15 @@ describe('compileDocument tool assignments', () => {
   });
 });
 
-describe('run limits', () => {
-  it('compiles the defaults until an admin saves limits', () => {
+describe('document sections', () => {
+  it('compiles exactly the sections the agent accepts', () => {
     const document = compileDocument(1, { installations: [], channels: [], blockedMembers: [] });
-    expect(document.runLimits).toEqual({
-      maxToolCalls: 300,
-      maxCostUsd: 10,
-      maxActiveMinutes: 30,
-      pauseWaitMinutes: 30,
-      toolTimeoutMs: 60_000,
-      maxOutputBytes: 200_000,
-    });
-  });
-
-  it('changes the content hash when a limit changes', () => {
-    const rows = { installations: [], channels: [], blockedMembers: [] };
-    const before = contentHash(compileDocument(1, rows));
-    const after = contentHash(
-      compileDocument(1, { ...rows, runLimits: { ...DEFAULT_RUN_LIMITS, maxCostUsd: 20 } }),
-    );
-    expect(after).not.toBe(before);
-  });
-
-  it('validates bounds, cents and unknown fields', () => {
-    expect(validateRunLimits({ maxToolCalls: '12', maxCostUsd: '2.5' })).toMatchObject({
-      maxToolCalls: 12,
-      maxCostUsd: 2.5,
-      maxActiveMinutes: 30,
-    });
-    expect(validateRunLimits({ maxCostUsd: 0.29 }).maxCostUsd).toBe(0.29);
-    expect(() => validateRunLimits({ maxToolCalls: 0 })).toThrow(/maxToolCalls/);
-    expect(() => validateRunLimits({ maxToolCalls: 1.5 })).toThrow(/integer/);
-    expect(() => validateRunLimits({ maxCostUsd: 1.234 })).toThrow(/two decimals/);
-    expect(() => validateRunLimits({ pauseWaitMinutes: 121 })).toThrow(/pauseWaitMinutes/);
-    expect(() => validateRunLimits({ runDeadlineMs: 1 })).toThrow();
+    expect(Object.keys(document).sort()).toEqual([
+      'authorizationPolicy',
+      'hash',
+      'installations',
+      'toolAssignments',
+      'version',
+    ]);
   });
 });

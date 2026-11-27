@@ -43,8 +43,8 @@ function document() {
 }
 
 function rehash(input: ReturnType<typeof document>) {
-  const { version, installations, authorizationPolicy, toolAssignments, runLimits } = input;
-  const body = { version, installations, authorizationPolicy, toolAssignments, runLimits };
+  const { version, installations, authorizationPolicy, toolAssignments } = input;
+  const body = { version, installations, authorizationPolicy, toolAssignments };
   return { ...body, hash: createHash('sha256').update(JSON.stringify(body)).digest('hex') };
 }
 
@@ -72,7 +72,7 @@ it('retains every compiled admin section, source identity and exact channel choi
 it('refuses malformed or omitted sections even when their document hash is recomputed', () => {
   const mutations: Array<(v: ReturnType<typeof document>) => void> = [
     (v) => {
-      Reflect.deleteProperty(v, 'runLimits');
+      Reflect.deleteProperty(v, 'toolAssignments');
     },
     (v) => {
       v.installations[0]!.trustedBotSender!.channelId = '*';
@@ -85,9 +85,6 @@ it('refuses malformed or omitted sections even when their document hash is recom
     },
     (v) => {
       v.toolAssignments[0]!.systemPrompt = '';
-    },
-    (v) => {
-      v.runLimits.maxCostUsd = -1;
     },
     (v) => {
       v.authorizationPolicy.defaults = { decision: 'allow' };
@@ -113,6 +110,23 @@ it('rejects stale hashes, unsupported top-level fields and duplicate or foreign 
   const foreign = document();
   foreign.toolAssignments[0]!.teamId = 'TFOREIGN';
   expect(() => parseCoordinatorAdminDocument(rehash(foreign))).toThrow();
+});
+
+it('refuses a document from the previous compiler that still carries runLimits', () => {
+  const { version, installations, authorizationPolicy, toolAssignments } = document();
+  const runLimits = {
+    maxToolCalls: 300,
+    maxCostUsd: 10,
+    maxActiveMinutes: 30,
+    pauseWaitMinutes: 30,
+    toolTimeoutMs: 60_000,
+    maxOutputBytes: 200_000,
+  };
+  const body = { version, installations, authorizationPolicy, toolAssignments, runLimits };
+  const hash = createHash('sha256').update(JSON.stringify(body)).digest('hex');
+  expect(() => parseCoordinatorAdminDocument({ ...body, hash })).toThrow(
+    'Invalid coordinator admin document',
+  );
 });
 
 it('accepts the real empty-admin deny-all document without inventing grants', () => {
