@@ -328,7 +328,18 @@ describe('native startup command routing at the Socket Mode call site', () => {
       expectedOwner: 'owner',
       anyParticipant: true,
     });
-    await reply('cancel *Sent using* <@U0ABE2UQ8N4>');
+    await send('cancel *Sent using* <@U0ABE2UQ8N4>', {
+      type: 'message',
+      user: 'U2',
+      thread_ts: '1792940000.000001',
+      blocks: [
+        {
+          type: 'rich_text',
+          elements: [{ type: 'rich_text_section', elements: [{ type: 'text', text: 'cancel' }] }],
+        },
+        { type: 'context', elements: [{ type: 'mrkdwn', text: '*Sent using* <@U0ABE2UQ8N4>' }] },
+      ],
+    } as Partial<MentionEvent>);
     expect(calls.filter((c) => c.path === '/v1/systemone')).toHaveLength(1);
     expect(calls.filter((c) => c.path === '/agents/thread').at(-1)?.body).toMatchObject({
       userId: 'U2',
