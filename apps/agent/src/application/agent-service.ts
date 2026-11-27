@@ -26,6 +26,7 @@ import { fail, digest, reason } from './agent-support.js';
 import { createNativeAgentStorage } from '../infrastructure/storage/agent-storage.js';
 import { createNativeAgentAuthority } from './agent-authority.js';
 import { createNativeAgentDelivery } from './agent-delivery.js';
+import { createRunStatus, RUN_STATUS_START, toolStatus } from '../domain/delivery/run-status.js';
 
 /** An admitted execution of this process, from admission until it settles. */
 type ActiveRun = { abort(): Promise<void>; completion?: Promise<unknown> };
@@ -363,7 +364,21 @@ export function createNativeAgentService(options: NativeAgentOptions) {
         void segment.abort('Execution deadline');
       }, options.limits.timeoutMs);
       timer.unref();
-      const result = await runNativeSegment(segment);
+      const status = createRunStatus(async (text) =>
+        options.status?.({
+          taskKey: r.task_key,
+          channel: r.accepted.channelId,
+          rootTs: r.accepted.rootTs,
+          requesterUserId: r.accepted.userId,
+          runId: r.run_id,
+          text,
+        }),
+      );
+      if (options.status) status.report(RUN_STATUS_START);
+      const result = await runNativeSegment(
+        segment,
+        options.status ? (name, args) => status.report(toolStatus(name, args)) : undefined,
+      ).finally(() => status.settled());
       if (thread.seen && !result.uncertain) await recordThreadSeen(r, conversation);
       await guard();
       // Searches and fetches already ran, each authorized at its dispatch. Record

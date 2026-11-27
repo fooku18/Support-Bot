@@ -18,6 +18,14 @@ export interface NativeAgentOptions {
   inputs?: NativeInputClient;
   /** Reads the request's own thread through the adapter. */
   messages?: Pick<NativeMessageClient, 'thread'>;
+  status?(value: {
+    taskKey: string;
+    channel: string;
+    rootTs: string;
+    requesterUserId: string;
+    runId: string;
+    text: string;
+  }): Promise<unknown>;
   /** Trusted workspace and publication binding. The binding is absent when GitLab is unavailable. */
   coding?: {
     version: string;

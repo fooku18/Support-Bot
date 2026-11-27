@@ -14,6 +14,7 @@ import {
 import { nativeInputHandler } from './native-inputs.js';
 import { sendNativeExports } from './native-exports.js';
 import { sendAnswerFile } from './long-answer.js';
+import { createRunStatuses, RUN_STATUS_CHARS } from './run-status.js';
 import { SLACK_MARKDOWN_CHARS } from './generated/long-answer.js';
 import { assertPrivateWorkspaceChannel } from './file-upload.js';
 import { isChannelMember } from './membership.js';
@@ -102,6 +103,7 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
   const pending = new Set<Promise<unknown>>();
   const presentations = new Map<string, Promise<unknown>>();
   const answering = new Set<string>();
+  const statuses = createRunStatuses();
   let stopping = false;
   let connected = false;
   let receiver: ReturnType<typeof createSocketModeReceiver> | undefined;
@@ -221,6 +223,7 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
             );
           return await transport('/agents/present', { ...handle, actor });
         } finally {
+          await statuses.clear(handle.runId);
           if (reaction)
             await working!.installation.slack.webClient.reactions
               .remove(reaction)
@@ -302,6 +305,22 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
           ? await readLinkedMessage(installation, identity, body.link)
           : await readThreadContext(installation, identity, body.after ?? null);
         if (resolve(identity) !== installation) throw new Error('installation replaced');
+      } else if (req.url === '/native-status') {
+        const identity = parseTaskKey(body.taskKey);
+        if (
+          !identity ||
+          identity.channelId !== body.channel ||
+          identity.rootTs !== body.rootTs ||
+          typeof body.runId !== 'string' ||
+          typeof body.text !== 'string' ||
+          body.text.length > RUN_STATUS_CHARS
+        )
+          throw new Error('status identity refused');
+        const installation = statuses.has(body.runId)
+          ? resolve(identity)
+          : await authority({ ...identity, userId: body.requesterUserId });
+        await statuses.show(body.runId, installation.slack, body.channel, body.rootTs, body.text);
+        result = { ok: true };
       } else if (req.url === '/native-delivery') {
         const identity = parseTaskKey(body.taskKey);
         if (
