@@ -14,6 +14,7 @@ import {
   StreamableHTTPError,
 } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
+import { canonicalJson, datadogOutputValidator } from './datadog-schema.js';
 
 export const DATADOG_ADAPTER = 'datadog-mcp-v1';
 export const DATADOG_CONTRACT_VERSION = 'datadog-read-v1';
@@ -332,20 +333,10 @@ export function partitionDatadogCatalog(rawTools: readonly unknown[]): DatadogCa
   return { tools, excludedTools: [...excluded].sort() };
 }
 
-function canonical(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(canonical);
-  const obj = record(value);
-  if (!obj) return value;
-  return Object.fromEntries(
-    Object.keys(obj)
-      .sort()
-      .map((key) => [key, canonical(obj[key])]),
-  );
-}
 /** Stable hash of the pinned catalog: names, descriptions, schemas and exclusions. */
 export function datadogCatalogHash(catalog: DatadogCatalog): string {
   return createHash('sha256')
-    .update(JSON.stringify(canonical(catalog)))
+    .update(JSON.stringify(canonicalJson(catalog)))
     .digest('hex')
     .slice(0, 32);
 }
@@ -439,7 +430,10 @@ export class DatadogMcpSession {
         maxRetries: 0,
       },
     });
-    const client = new Client(DATADOG_CLIENT_INFO, { capabilities: {} });
+    const client = new Client(DATADOG_CLIENT_INFO, {
+      capabilities: {},
+      jsonSchemaValidator: datadogOutputValidator,
+    });
     client.onerror = () => {};
     try {
       await client.connect(transport, { timeout: timeoutMs });
