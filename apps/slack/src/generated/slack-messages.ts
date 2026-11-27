@@ -33,6 +33,7 @@ export interface SlackThreadMessage {
   botName: string | null;
   /** The message the link points at. */
   linked?: true;
+  own?: true;
   text: string;
 }
 
@@ -48,6 +49,12 @@ export type SlackMessageRead =
       /** A message text was cut. */
       truncated: boolean;
     };
+
+export interface SlackThreadContext {
+  messages: SlackThreadMessage[];
+  omitted: number;
+  truncated: boolean;
+}
 
 /** Bounds of one read: the whole answer, one message and the pages scanned. */
 export const SLACK_READ_BYTES = 24_000;

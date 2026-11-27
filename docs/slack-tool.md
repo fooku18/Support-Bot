@@ -36,11 +36,21 @@ the linked message always comes first in that budget.
 
 ## Thread context
 
-A mention inside an existing thread supplies the thread's first message as
-untrusted context, so a question below an alert needs no link. This needs no
-tool assignment: it reads only the request's own thread, under the request's
-own authority. Each model conversation gets it once. If it cannot be read, the
-request runs without it. Other thread messages are not supplied.
+A request inside an existing thread supplies the thread's earlier messages as
+untrusted context, so a question below an alert or a long discussion needs no
+link. This needs no tool assignment: it reads only the request's own thread,
+under the request's own authority.
+
+Each model conversation gets a message once, as a rule. The first request of a
+conversation gets the thread before it: the first message and the most recent
+ones, within the read bounds above, in thread order, with the bot's own
+earlier posts marked. Up to 2,000 replies are scanned; a longer thread is
+marked truncated. Messages the bounds leave out are not offered later. A
+later request gets only what was posted since the previous one, without the
+bot's own posts, which the conversation already holds. A changed channel model
+starts a new conversation, which gets the thread again. If the thread cannot
+be read, the request runs without it, and the next request reads that range
+again, which can repeat a message the conversation already holds.
 
 ## User lookup
 

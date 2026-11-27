@@ -55,12 +55,14 @@ async function setup(
     targetMembers?: string[];
     thread?: Array<Record<string, unknown>>;
     origin?: Array<Record<string, unknown>>;
+    originPages?: Array<Array<Record<string, unknown>>>;
     originChannel?: Channel;
     originMembers?: string[];
     replies?: () => Promise<unknown>;
   } = {},
 ) {
   const reads: string[] = [];
+  const originReads: object[] = [];
   fixtures.installation = testInstallation(
     { teamId: 'T1', installationId: 'UBOT', botUserId: 'UBOT', botId: 'B1' },
     {
@@ -80,8 +82,19 @@ async function setup(
           const target = options.target ?? open;
           return { ok: true, channel: typeof target === 'function' ? target() : target };
         },
-        replies: async ({ channel }: { channel: string }) => {
-          if (channel === 'C1')
+        replies: async (args: { channel: string }) => {
+          const { channel } = args;
+          if (channel === 'C1') {
+            originReads.push(args);
+            if (options.originPages) {
+              const page = Number((args as { cursor?: string }).cursor ?? 0);
+              const next = page + 1 < options.originPages.length ? String(page + 1) : '';
+              return {
+                ok: true,
+                messages: options.originPages[page],
+                response_metadata: { next_cursor: next },
+              };
+            }
             return {
               ok: true,
               messages: options.origin ?? [
@@ -90,6 +103,7 @@ async function setup(
               ],
               response_metadata: {},
             };
+          }
           reads.push(channel);
           if (options.replies) return options.replies();
           return { ok: true, messages: options.thread ?? [alert], response_metadata: {} };
@@ -130,9 +144,9 @@ async function setup(
       identity: { ...identity, ...changes },
       link: { channelId: 'C2', messageTs: alertTs, threadTs: null, ...link },
     });
-  const root = (changes: object = {}) =>
-    post('/native-messages/root', { identity: { ...identity, ...changes } });
-  return { linked, root, post, identity, reads };
+  const thread = (after: string | null = null, changes: object = {}) =>
+    post('/native-messages/thread', { identity: { ...identity, ...changes }, after });
+  return { linked, thread, post, identity, reads, originReads };
 }
 
 describe('linked message reads', () => {
@@ -277,35 +291,116 @@ describe('linked message reads', () => {
   });
 
   it('refuses a requester who left the origin channel', async () => {
-    const { linked, root, reads } = await setup({ originMembers: [] });
+    const { linked, thread, reads } = await setup({ originMembers: [] });
     expect((await linked()).status).toBe(503);
-    expect((await root()).status).toBe(503);
+    expect((await thread()).status).toBe(503);
     expect(reads).toEqual([]);
   });
 });
 
-describe('thread root reads', () => {
-  it('returns the first message of the origin thread', async () => {
-    const { root } = await setup();
-    expect(await (await root()).json()).toEqual({
-      message: {
-        ts: rootTs,
-        date: '2026-10-25T14:53:20.100Z',
-        userId: null,
-        botName: 'Opsgenie',
-        text: 'P2 checkout errors\nHTTP 500 rate above 5%',
-      },
+type Ctx = { messages: Array<{ ts: string; text: string }>; omitted: number };
+
+describe('thread context reads', () => {
+  const ownAnswer = {
+    ts: '1792940000.300001',
+    bot_id: 'B1',
+    text: 'preview',
+    blocks: [
+      { type: 'markdown', text: 'Restarting fixed it last time.' },
+      { type: 'context', elements: [{ type: 'mrkdwn', text: 'Done · Model: claude' }] },
+    ],
+  };
+  const conversation = [
+    { ...alert, ts: rootTs },
+    { ts: '1792940000.200001', user: 'U2', text: 'tried a restart, still failing' },
+    ownAnswer,
+    { ts: '1792940000.400001', user: 'U3', text: 'error says &lt;timeout&gt;' },
+    { ts: mentionTs, user: 'U1', text: '<@UBOT> any idea?' },
+    { ts: '1792940002.100001', user: 'U2', text: 'later' },
+  ];
+
+  it('returns the thread before the request for a new conversation', async () => {
+    const { thread, originReads } = await setup({ origin: conversation });
+    expect(await (await thread()).json()).toEqual({
+      messages: [
+        {
+          ts: rootTs,
+          date: '2026-10-25T14:53:20.100Z',
+          userId: null,
+          botName: 'Opsgenie',
+          text: 'P2 checkout errors\nHTTP 500 rate above 5%',
+        },
+        expect.objectContaining({ userId: 'U2', text: 'tried a restart, still failing' }),
+        expect.objectContaining({
+          botName: 'B1',
+          own: true,
+          text: 'Restarting fixed it last time.',
+        }),
+        expect.objectContaining({ userId: 'U3', text: 'error says <timeout>' }),
+      ],
+      omitted: 0,
+      truncated: false,
     });
+    expect(originReads.at(-1)).toMatchObject({ ts: rootTs, latest: mentionTs });
+    expect(originReads.at(-1)).not.toHaveProperty('oldest');
   });
 
-  it('returns nothing for a root without text', async () => {
-    const { root } = await setup({
-      origin: [
-        { ts: rootTs, user: 'U2' },
-        { ts: mentionTs, user: 'U1' },
-      ],
+  it('returns only what others posted since the seen point', async () => {
+    const { thread, originReads } = await setup({ origin: conversation });
+    const body = (await (await thread('1792940000.200001')).json()) as Ctx;
+    expect(body.messages.map((m) => m.ts)).toEqual(['1792940000.400001']);
+    expect(originReads.at(-1)).toMatchObject({ oldest: '1792940000.200001', latest: mentionTs });
+  });
+
+  it('keeps the first and the newest messages within the bounds, in thread order', async () => {
+    const replies = Array.from({ length: SLACK_READ_MESSAGES + 10 }, (_, i) => ({
+      ts: `1792940000.${String(200001 + i)}`,
+      user: 'U2',
+      text: `reply ${i}`,
+    }));
+    const { thread } = await setup({
+      origin: [{ ...alert, ts: rootTs }, ...replies, { ts: mentionTs, user: 'U1' }],
     });
-    expect(await (await root()).json()).toEqual({ message: null });
+    const body = (await (await thread()).json()) as Ctx;
+    expect(body.messages).toHaveLength(SLACK_READ_MESSAGES);
+    expect(body.messages[0]!.ts).toBe(rootTs);
+    expect(body.messages[1]!.text).toBe('reply 11');
+    expect(body.messages.at(-1)!.text).toBe(`reply ${SLACK_READ_MESSAGES + 9}`);
+    expect(body.omitted).toBe(11);
+    expect(JSON.stringify(body).length).toBeLessThanOrEqual(SLACK_READ_BYTES + 200);
+  });
+
+  it('reads the newest end of a long thread once per message and skips empty posts', async () => {
+    const root = { ...alert, ts: rootTs };
+    const pages = Array.from({ length: 8 }, (_, page) => [
+      root,
+      ...Array.from({ length: 100 }, (_, i) => ({
+        ts: `1792940000.${String(200001 + page * 100 + i)}`,
+        user: 'U2',
+        ...(page === 7 && i === 99 ? {} : { text: `reply ${page * 100 + i}` }),
+      })),
+    ]);
+    pages.at(-1)!.push({ ts: mentionTs, user: 'U1' });
+    const { thread } = await setup({ originPages: pages });
+    const body = (await (await thread()).json()) as Ctx;
+    expect(body.messages.filter((m) => m.ts === rootTs)).toHaveLength(1);
+    expect(body.messages).toHaveLength(SLACK_READ_MESSAGES);
+    expect(body.messages.at(-1)!.text).toBe('reply 798');
+    expect(body.omitted).toBe(800 - SLACK_READ_MESSAGES);
+  });
+
+  it('returns nothing for a thread the request starts and refuses a bad seen point', async () => {
+    const own = await setup({ origin: [{ ts: rootTs, user: 'U1', text: '<@UBOT> help' }] });
+    expect(await (await own.thread(null, { messageTs: rootTs })).json()).toEqual({
+      messages: [],
+      omitted: 0,
+      truncated: false,
+    });
+    expect(own.originReads).toHaveLength(1);
+    await adapter!.close();
+    const { thread } = await setup({ origin: conversation });
+    expect((await thread(mentionTs)).status).toBe(503);
+    expect((await thread('yesterday')).status).toBe(503);
   });
 
   it('refuses a deleted root and an externally shared origin', async () => {
@@ -315,9 +410,9 @@ describe('thread root reads', () => {
         { ts: mentionTs, user: 'U1' },
       ],
     });
-    expect((await deleted.root()).status).toBe(503);
+    expect((await deleted.thread()).status).toBe(503);
     await adapter!.close();
     const shared = await setup({ originChannel: { ...open, is_ext_shared: true } });
-    expect((await shared.root()).status).toBe(503);
+    expect((await shared.thread()).status).toBe(503);
   });
 });

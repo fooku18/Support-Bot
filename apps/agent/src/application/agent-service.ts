@@ -17,7 +17,7 @@ import {
   NATIVE_INPUT_COUNT,
   NATIVE_INPUT_BYTES,
 } from '../domain/files/native-inputs.js';
-import { withThreadRoot } from '../integrations/slack/message-client.js';
+import { withThreadContext } from '../integrations/slack/message-client.js';
 import { nativeInputMessage, NativeInputEncodingError } from '../mastra/runtime/native-inputs.js';
 import { coordinatorRunConfiguration, resolveChannelModel } from './configuration/config.js';
 import { CoordinatorError } from './errors.js';
@@ -42,8 +42,8 @@ export function createNativeAgentService(options: NativeAgentOptions) {
     stopped,
     admit,
     recordModel,
-    holdsThreadRoot,
-    recordThreadRoot,
+    threadSeenThrough,
+    recordThreadSeen,
     inputReceipts,
     sequence,
     publicationReceipts,
@@ -68,19 +68,29 @@ export function createNativeAgentService(options: NativeAgentOptions) {
     // has not yet obtained a native stream when shutdown begins.
     return track(Promise.resolve().then(work));
   }
-  /** The thread's first message when the request does not start the thread and
-   * its model conversation does not hold it yet. Context only: an unavailable
-   * read leaves the request as it is. */
-  async function threadRoot(r: IdentityRow, conversation: { epoch: string }, signal: AbortSignal) {
-    const { messageTs, rootTs } = r.accepted;
-    if (!options.messages || messageTs === rootTs) return undefined;
-    if (await holdsThreadRoot(r, conversation)) return undefined;
+  /** The thread messages the model conversation has not seen. `seen` says
+   * whether the conversation holds the thread up to this request once its
+   * segment finishes. Context only: an unavailable read leaves the request as
+   * it is, and the next request reads the same range again. */
+  async function threadContext(
+    r: IdentityRow,
+    conversation: { epoch: string },
+    prompt: string,
+    signal: AbortSignal,
+  ) {
+    if (!options.messages) return { seen: false, request: prompt };
+    if (r.accepted.messageTs === r.accepted.rootTs) return { seen: true, request: prompt };
+    const after = await threadSeenThrough(r, conversation);
     try {
-      return (await options.messages.root(r.accepted, signal)) ?? undefined;
+      const context = await options.messages.thread(r.accepted, after, signal);
+      return {
+        seen: true,
+        request: context.messages.length ? withThreadContext(prompt, context, after) : prompt,
+      };
     } catch {
       signal.throwIfAborted();
       options.log.warn(`native thread context unavailable run_id=${r.run_id}`);
-      return undefined;
+      return { seen: false, request: prompt };
     }
   }
   async function execute(
@@ -248,12 +258,14 @@ export function createNativeAgentService(options: NativeAgentOptions) {
       );
       admitted = true;
       logger.info('native.segment.started', { runId: r.run_id });
-      // A mention inside a thread is often about the thread's first message (an
-      // alert). The model gets it once per conversation, as untrusted data.
-      const root = 'prompt' in input ? await threadRoot(r, conversation, signal.signal) : undefined;
-      const request =
-        'prompt' in input ? (root ? withThreadRoot(input.prompt, root) : input.prompt) : '';
-      if (root) await guard();
+      // A mention inside a thread is often about what the thread already says.
+      // The model gets each thread message once per conversation, as untrusted data.
+      const thread =
+        'prompt' in input
+          ? await threadContext(r, conversation, input.prompt, signal.signal)
+          : { seen: false, request: '' };
+      const request = thread.request;
+      if ('prompt' in input && request !== input.prompt) await guard();
       let prompt: Parameters<typeof runtime.agent.stream>[0] = request;
       if (options.inputs && r.accepted.files?.length && 'prompt' in input) {
         // Return the admitted handle before downloading. Cancellation and drain
@@ -349,7 +361,7 @@ export function createNativeAgentService(options: NativeAgentOptions) {
       }, options.limits.timeoutMs);
       timer.unref();
       const result = await runNativeSegment(segment);
-      if (root && !result.uncertain) await recordThreadRoot(r, conversation);
+      if (thread.seen && !result.uncertain) await recordThreadSeen(r, conversation);
       await guard();
       // Searches and fetches already ran, each authorized at its dispatch. Record
       // them under the run's current authority; a later tool assignment change
