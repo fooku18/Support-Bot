@@ -21,6 +21,7 @@ import {
   cleanTraceText,
   decodeRepositoryFileOutput,
   gitlabUrl,
+  hintProjectPaths,
   MAX_TRACE_BYTES,
   normalizeGitlabOutput,
   renderGitlabResultText,
@@ -1659,5 +1660,85 @@ describe('change detection (commits, merged merge requests, deployments in a win
         },
       ]);
     });
+  });
+});
+
+describe('a project path GitLab does not find', () => {
+  const missing = (project: string, output = '{"message":"404 Project Not Found"}') =>
+    normalizeGitlabOutput({
+      operation: 'get_repository_file',
+      project,
+      status: 'failed',
+      httpStatus: 404,
+      output,
+    });
+  const listing = (paths: string[]) =>
+    normalizeGitlabOutput({
+      operation: 'list_projects',
+      project: 'instance',
+      status: 'completed',
+      httpStatus: 200,
+      output: JSON.stringify(paths.map((path, id) => ({ id, path_with_namespace: path }))),
+      page: 1,
+      per_page: 100,
+    });
+  const searches: unknown[] = [];
+  const lister = (paths: string[]) => async (validated: unknown) => {
+    searches.push(validated);
+    return listing(paths);
+  };
+
+  it('names the reachable projects with that name, the full-path match first', async () => {
+    searches.length = 0;
+    const result = await hintProjectPaths(
+      missing('frontend/app'),
+      lister(['other/app', 'other/app-legacy', 'top/frontend/app', 'mobile/apps/app']),
+    );
+    expect(searches).toEqual([{ kind: 'list_projects', search: 'app', page: 1, per_page: 100 }]);
+    expect(result).toMatchObject({ ok: false, errorCategory: 'not_found' });
+    expect(renderGitlabResultText(result)).toBe(
+      'failed (get_repository_file @ frontend/app): [not_found] GitLab project was not found (or is not visible to this token). Projects named "app" this token can reach: top/frontend/app, other/app, mobile/apps/app. Use the full path, starting at the top-level group.',
+    );
+  });
+
+  it('says when no reachable project has that name, and bounds the list', async () => {
+    const none = await hintProjectPaths(missing('old/tool'), lister(['old/tooling']));
+    expect(none.error).toBe(
+      'GitLab project was not found (or is not visible to this token). No project named "tool" is visible to this token; list_projects shows the reachable ones.',
+    );
+    const many = await hintProjectPaths(
+      missing('g/svc'),
+      lister(Array.from({ length: 7 }, (_, i) => `team${i}/svc`)),
+    );
+    expect(many.error).toContain(
+      'Projects named "svc" this token can reach: team0/svc, team1/svc, team2/svc, team3/svc, team4/svc, …',
+    );
+    const crowded = await hintProjectPaths(
+      missing('g/app'),
+      lister(Array.from({ length: 100 }, (_, i) => `team${i}/app-${i}`)),
+    );
+    expect(crowded.error).toContain(
+      'More than 100 reachable projects match "app"; search list_projects with more of the path.',
+    );
+  });
+
+  it('adds nothing for a numeric ID, another missing resource or a failed search', async () => {
+    searches.length = 0;
+    const fileMissing = missing('g/p', '{"message":"404 File Not Found"}');
+    expect(fileMissing.error).toBe(
+      'GitLab resource was not found (or is not visible to this token)',
+    );
+    expect(await hintProjectPaths(fileMissing, lister(['x/p']))).toBe(fileMissing);
+    const numeric = missing('42');
+    expect(await hintProjectPaths(numeric, lister(['x/42']))).toBe(numeric);
+    expect(searches).toEqual([]);
+    const failedSearch = await hintProjectPaths(missing('g/p'), async () => missing('instance'));
+    expect(failedSearch.error).toBe(
+      'GitLab project was not found (or is not visible to this token)',
+    );
+    const thrown = await hintProjectPaths(missing('g/p'), async () => {
+      throw new Error('runtime unreachable');
+    });
+    expect(thrown.error).toBe('GitLab project was not found (or is not visible to this token)');
   });
 });

@@ -25,7 +25,10 @@ import {
   parseProjectRef,
   type ValidatedGitlabArgs,
 } from '../../integrations/gitlab/gitlab-operations.js';
-import type { GitlabNormalizedResult } from '../../integrations/gitlab/gitlab-rest-adapter.js';
+import {
+  hintProjectPaths,
+  type GitlabNormalizedResult,
+} from '../../integrations/gitlab/gitlab-rest-adapter.js';
 import {
   checkoutSlug,
   identityFromProject,
@@ -352,7 +355,10 @@ export class CheckoutManager {
    */
   async clone(project: unknown, ref?: unknown): Promise<CommandOutcome> {
     const reference = parseProjectRef(project, 'clone_repository');
-    const lookup = await this.options.gitlab({ kind: 'get_project', project: reference });
+    const lookup = await hintProjectPaths(
+      await this.options.gitlab({ kind: 'get_project', project: reference }),
+      this.options.gitlab,
+    );
     if (!lookup.ok) {
       throw new CheckoutError(
         `GitLab project ${reference.slice(0, 120)} is not readable: [${lookup.errorCategory ?? 'upstream'}] ${lookup.error ?? 'lookup failed'}`,

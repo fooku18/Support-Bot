@@ -33,7 +33,10 @@ import {
   operationScopeLabel,
   type ValidatedGitlabArgs,
 } from '../../../src/integrations/gitlab/gitlab-operations.js';
-import type { GitlabNormalizedResult } from '../../../src/integrations/gitlab/gitlab-rest-adapter.js';
+import {
+  normalizeGitlabOutput,
+  type GitlabNormalizedResult,
+} from '../../../src/integrations/gitlab/gitlab-rest-adapter.js';
 import {
   workspacePaths,
   type WorkspacePaths,
@@ -129,9 +132,23 @@ function fakeGitlab(projects: Array<{ id: number; path: string }>) {
         : { ...fail(validated, injected.category), detail: injected.detail };
     }
     if (validated.kind === 'get_current_user') return ok(validated, user.current);
+    if (validated.kind === 'list_projects')
+      return ok(
+        validated,
+        projects
+          .filter((entry) => entry.path.includes(validated.search ?? ''))
+          .map((entry) => ({ id: entry.id, path_with_namespace: entry.path })),
+      );
     // Publication reads only use the project form; group and instance lists find nothing here.
     const target = 'project' in validated ? project(String(validated.project)) : undefined;
-    if (target === undefined) return fail(validated, 'not_found');
+    if (target === undefined)
+      return normalizeGitlabOutput({
+        operation: validated.kind,
+        project: operationScopeLabel(validated),
+        status: 'failed',
+        httpStatus: 404,
+        output: '{"message":"404 Project Not Found"}',
+      });
     switch (validated.kind) {
       case 'get_project':
         return ok(validated, {
@@ -311,6 +328,9 @@ describe('multi-repository checkouts and publication', () => {
     expect(registered).toHaveLength(2);
     // Unknown or unreadable projects are explicit.
     await expect(checkouts.clone('group/missing')).rejects.toThrow(/not readable: \[not_found\]/);
+    await expect(checkouts.clone('other-group/test2')).rejects.toThrow(
+      'GitLab project other-group/test2 is not readable: [not_found] GitLab project was not found (or is not visible to this token). Projects named "test2" this token can reach: example-group/test2. Use the full path, starting at the top-level group.',
+    );
     await expect(checkouts.clone('https://evil/x/y')).rejects.toThrow(/project/);
     await expect(checkouts.clone('example-group/test', 'support-agent/x')).resolves.toBeDefined();
     // Addressing: path, ID, slug; ambiguity when omitted.
