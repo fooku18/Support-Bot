@@ -30,6 +30,10 @@ const AUTHOR = {
   other: 'another person',
 };
 
+export function withoutAttribution(text: string) {
+  return text.replace(APP_ATTRIBUTION, '').trim();
+}
+
 function readable(text: string) {
   return text
     .replace(APP_ATTRIBUTION, '')
@@ -54,7 +58,7 @@ function describe(message: string, requester: boolean, recent: ThreadMessage[]) 
   return `A Slack thread with an AI assistant. Recent messages, oldest first:\n${history.join('\n')}\n\n${who} now wrote this new message, without mentioning the assistant:\n${text}`;
 }
 
-const TIMEOUT_MS = 2000;
+const TIMEOUT_MS = 5000;
 
 const QUESTION = {
   reply: {

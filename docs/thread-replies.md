@@ -36,7 +36,7 @@ small talk and messages meant for someone else stay silent.
 Files without text from the requester and the request controls above skip
 the model; files without text from others stay silent. The model is also skipped for a message that would
 not start a follow-up anyway (replies disabled, or the current answer not
-yet delivered). When the model fails or takes longer than 2 seconds, the
+yet delivered). When the model fails or takes longer than 5 seconds, the
 message stays silent; a mention still starts a run.
 
 The decider is any model that serves the Jev API (`POST /v1/systemone`),
