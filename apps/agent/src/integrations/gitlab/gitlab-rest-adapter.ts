@@ -810,21 +810,46 @@ export function normalizeGitlabOutput(args: {
   }
   try {
     const normalized = normalizeOperationPayload(args.operation, parsed, args.scope);
-    let serialized = JSON.stringify(normalized.data);
+    let data = normalized.data;
     let truncated = normalized.truncated;
-    if (serialized.length > MAX_MODEL_BYTES) {
-      serialized = JSON.stringify(
-        `${serialized.slice(0, MAX_MODEL_BYTES)}\n[…output truncated at ${MAX_MODEL_BYTES} bytes]`,
-      );
-      truncated = true;
-    }
     const warnings = [...base.warnings, ...normalized.warnings];
-    if (truncated && !warnings.some((w) => w.includes('truncated'))) {
+    const rows = Array.isArray(parsed) ? parsed.length : 0;
+    let omitted = 0;
+    if (Array.isArray(data)) {
+      const sizes = data.map((row) => JSON.stringify(row).length + 1);
+      let size = sizes.reduce((sum, rowSize) => sum + rowSize, 1);
+      let kept = data.length;
+      while (kept > 1 && size > MAX_MODEL_BYTES) size -= sizes[--kept]!;
+      omitted = data.length - kept;
+      if (omitted > 0) {
+        const position =
+          args.page !== undefined && args.per_page !== undefined
+            ? (args.page - 1) * args.per_page
+            : null;
+        if (position === null) {
+          warnings.push(
+            `only the first ${kept} of ${data.length} rows fit the model bound; narrow the query to see the rest`,
+          );
+        } else {
+          const resume = position + kept;
+          let perPage = kept;
+          while (resume % perPage !== 0) perPage -= 1;
+          warnings.push(
+            `only rows ${position + 1}-${resume} of this page fit the model bound and rows ${resume + 1}-${position + data.length} were omitted; continue with per_page ${perPage} and page ${resume / perPage + 1}`,
+          );
+        }
+        data = data.slice(0, kept);
+        truncated = true;
+      }
+    } else if (JSON.stringify(data).length > MAX_MODEL_BYTES) truncated = true;
+    if (truncated && !warnings.some((w) => w.includes('truncated') || w.includes('omitted'))) {
       warnings.push('output truncated to the model bound with explicit markers');
     }
-    const rows = Array.isArray(parsed) ? parsed.length : 0;
     const nextPage =
-      args.page !== undefined && args.per_page !== undefined && rows >= args.per_page
+      omitted === 0 &&
+      args.page !== undefined &&
+      args.per_page !== undefined &&
+      rows >= args.per_page
         ? args.page + 1
         : null;
     if (nextPage !== null) {
@@ -836,7 +861,7 @@ export function normalizeGitlabOutput(args: {
       ...base,
       ok: true,
       pagination: { ...base.pagination, next_page: nextPage },
-      data: JSON.parse(serialized) as unknown,
+      data,
       truncated,
       warnings,
     };
