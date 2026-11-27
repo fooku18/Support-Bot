@@ -2767,9 +2767,6 @@ describe('driver-managed tools, tool scopes and the model mode switch', () => {
       ...f.env,
       COMPOSE_PROJECT_NAME: `native-mode-${randomUUID().slice(0, 8)}`,
     });
-    const bin = f.root + '/bin';
-    fs.mkdirSync(bin);
-    fs.writeFileSync(bin + '/package.json', '{"type":"commonjs"}');
     fs.writeFileSync(
       f.root + '/services.json',
       JSON.stringify([
@@ -2781,8 +2778,8 @@ describe('driver-managed tools, tool scopes and the model mode switch', () => {
       ]),
     );
     fs.writeFileSync(
-      bin + '/docker',
-      `const fs=require('fs'),path=require('path'),root=path.dirname(__dirname),a=process.argv.slice(2);
+      f.root + '/docker.cjs',
+      `const fs=require('fs'),root=__dirname,a=process.argv.slice(2);
 fs.appendFileSync(root+'/calls.jsonl',JSON.stringify(a)+String.fromCharCode(10));
 if(a.includes('stop')&&a.includes('--profile')&&fs.existsSync(root+'/fail-stub-stop'))process.exit(1);
 if(a[0]==='ps')console.log('owned');
@@ -2843,7 +2840,7 @@ else if(a.includes('exec'))console.log(JSON.stringify({runtime:'native-answer',i
         .at(-1);
     };
     const withDocker = async <T>(run: () => Promise<T>) => {
-      const restore = routeDocker(bin + '/docker');
+      const restore = routeDocker(f.root + '/docker.cjs');
       try {
         return await run();
       } finally {

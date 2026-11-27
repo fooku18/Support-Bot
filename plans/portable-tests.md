@@ -11,15 +11,19 @@ their fake `docker` and drove the real Docker daemon: each `npm test` run left
 four to six `native-mode-*` networks behind until Docker ran out of address
 pools.
 
-Goal: every test passes on its supported host, and no test reaches the real
-Docker daemon through a missed fake. No platform branches.
+Goal: host tooling tests pass on any OS, every other test passes on its
+supported host, and a missed fake fails instead of reaching the real Docker
+daemon. No platform branches. Windows stays unsupported for the Linux-only
+tests (agent Workspace, `admin-backup.sh`); there they run in a Linux
+container.
 
 ## Decisions and approach
 
 - The fake `docker` no longer depends on `PATH` or a shebang.
   [`tests/integration/fake-docker.ts`](../tests/integration/fake-docker.ts)
   routes `spawnSync('docker', …)` to `node <fake>` in the test process, and
-  through `--import` in every Node child that inherits `FAKE_DOCKER`.
+  through `--import` in every Node child that inherits `FAKE_DOCKER`. T2 sets
+  `DOCKER_HOST` to a closed port, so a call that misses the fake fails.
 - Repository paths come from `fileURLToPath` and child `PATH`s are joined
   with `path.delimiter`. Module specifiers are file URLs. Volume specs are
   parsed at the last `:/` so a drive letter cannot split them.

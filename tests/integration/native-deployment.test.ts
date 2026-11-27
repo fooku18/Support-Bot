@@ -23,8 +23,6 @@ function fixture() {
   const dir = path.join(root, randomUUID());
   fs.mkdirSync(dir);
   fs.mkdirSync(path.join(dir, 'admin-store'));
-  fs.mkdirSync(path.join(dir, 'bin'));
-  fs.writeFileSync(path.join(dir, 'bin/package.json'), '{"type":"commonjs"}');
   fs.writeFileSync(path.join(dir, 'runtime'), 'synthetic');
   fs.writeFileSync(path.join(dir, 'gateway'), 'synthetic');
   const env: Record<string, string> = {
@@ -74,8 +72,8 @@ function fixture() {
     ]),
   );
   fs.writeFileSync(
-    path.join(dir, 'bin/docker'),
-    `const fs=require('fs'),path=require('path'),root=path.dirname(__dirname),a=process.argv.slice(2);
+    path.join(dir, 'docker.cjs'),
+    `const fs=require('fs'),root=__dirname,a=process.argv.slice(2);
 fs.appendFileSync(root+'/calls.jsonl',JSON.stringify({args:a,env:Object.keys(process.env),stub:process.env.NATIVE_MODEL_STUB})+String.fromCharCode(10));
 if(a[0]==='ps') console.log('owned');
 else if(a[0]==='inspect') console.log(fs.readFileSync(root+'/services.json','utf8'));
@@ -89,7 +87,8 @@ if(a.includes('up')&&fs.existsSync(root+'/up-stderr.txt')){process.stderr.write(
       ['--import', fakeDockerImport, path.join(repo, 'scripts', script), ...args],
       {
         env: {
-          FAKE_DOCKER: path.join(dir, 'bin/docker'),
+          FAKE_DOCKER: path.join(dir, 'docker.cjs'),
+          DOCKER_HOST: 'tcp://127.0.0.1:9',
           NATIVE_IMAGE_TAG: 'ambient-wrong',
           SUPPORT_AGENT_SERVICE_TOKEN: 'ambient-private',
           Compose_File: 'ambient-compose',
