@@ -48,14 +48,15 @@ container.
 
 ## Verification
 
-- Deterministic, Windows 11 with Node 26.13.1:
+- Deterministic, Windows 11 with Node 26.13.1, revision `a6a1199`:
   - T0 clean.
   - T2 natively: 130 of 135 pass; the five failures are `admin-backup.sh`
     refusing Windows paths, as designed. No `native-mode-*` network was
     created.
   - T1 and T2 in `node:26.13.1-bookworm` on Docker Desktop: all pass
     (1,049 and 135 tests).
-  - T3 in the same container on the host socket with
+  - T3 in the same container on the host socket with images from earlier
+    branches (`native-coding:review`, `cli-runtime`/`egress:g5-change`) and
     `NATIVE_TEST_DOCKER_LOOPBACK=host.docker.internal`: `discovery`,
     `telemetry`, `coding`, `backup` and `tools` pass; `application` stops at
     `input-context-tripwire-is-explicit-failure-without-delivery`, as on
