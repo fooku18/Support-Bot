@@ -46,17 +46,17 @@ says when it found none.
   checkouts finalized", the 2026-05-27 red flag, and the 2026-07-07 red flag
   plus the 2026-07-30 yellow flag on crawler traffic.
 
-| Case | Before (`73fb4dc`, 2026-11-27 23:32 UTC) | After |
-| --- | --- | --- |
-| Storefront pop-up (lets-buy, 11-06) | run stopped ("Execution stopped or was refused") | |
-| Checkouts at zero (red flag, 11-04) | no Slack search; Datadog analysis, no link | |
-| Logins at zero (red flag, 11-10) | no Slack search, no link | |
-| Search degradation (red flag, 07-30) | no Slack search, no link | |
-| **Earlier report linked** | **0 of 4** | |
+| Case                                 | Before (`73fb4dc`, 2026-11-27 23:32 UTC)         | After |
+| ------------------------------------ | ------------------------------------------------ | ----- |
+| Storefront pop-up (lets-buy, 11-06)  | run stopped ("Execution stopped or was refused") |       |
+| Checkouts at zero (red flag, 11-04)  | no Slack search; Datadog analysis, no link       |       |
+| Logins at zero (red flag, 11-10)     | no Slack search, no link                         |       |
+| Search degradation (red flag, 07-30) | no Slack search, no link                         |       |
+| **Earlier report linked**            | **0 of 4**                                       |       |
 
-  The after column runs on the release that also carries #26 (playbook) and
-  the 25-step budget, so it measures the release, not this line alone.
-  Neither of those mentions earlier reports or Slack search.
+The after column runs on the release that also carries #26 (playbook) and
+the 25-step budget, so it measures the release, not this line alone.
+Neither of those mentions earlier reports or Slack search.
 
 ## Rollout
 
