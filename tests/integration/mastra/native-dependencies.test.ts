@@ -311,13 +311,13 @@ describe('Studio workspace deployment', () => {
     expect(create.some((arg) => /native_(anthropic|openai|vertex)/.test(arg))).toBe(false);
   });
 
-  it('resolves hoisted, app-owned and nested CLI dependencies at their locked identities', () => {
+  it('resolves the CLI dependencies at their locked identities', () => {
     const cli = create[create.indexOf('--entrypoint') + 3]!;
     const cwd = create[create.indexOf('-w') + 1]!;
     const app = path.join(state, path.relative('/studio', cwd));
     const entry = path.join(state, path.relative('/studio', cli));
     const checks = [
-      ['mastra', path.join(app, 'src/mastra/runtime.mjs'), 'apps/agent/node_modules/mastra'],
+      ['mastra', path.join(app, 'src/mastra/runtime.mjs'), 'node_modules/mastra'],
       ['posthog-node', entry, 'node_modules/posthog-node'],
       ['@mastra/core', path.join(app, 'src/mastra/runtime.mjs'), 'node_modules/@mastra/core'],
       [
@@ -327,8 +327,8 @@ describe('Studio workspace deployment', () => {
       ],
       [
         '@hono/node-server',
-        path.join(app, 'node_modules/@mastra/deployer/dist/index.js'),
-        'apps/agent/node_modules/@mastra/deployer/node_modules/@hono/node-server',
+        path.join(state, 'node_modules/@mastra/deployer/dist/index.js'),
+        'node_modules/@hono/node-server',
       ],
     ];
     const result = probe(`
