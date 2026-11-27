@@ -237,6 +237,7 @@ export interface SlackBinding {
 
 const READINESS_TIMEOUT_MS = 10_000;
 const READINESS_ATTEMPTS = 3;
+const READINESS_RETRY_MS = 1_000;
 
 export async function fetchCliRuntimeReadiness(
   cliRuntimeUrl: string,
@@ -245,7 +246,7 @@ export async function fetchCliRuntimeReadiness(
 ): Promise<CliRuntimeReadiness> {
   let lastError: unknown = null;
   for (let attempt = 1; attempt <= READINESS_ATTEMPTS; attempt += 1) {
-    if (attempt > 1) await new Promise((resolve) => setTimeout(resolve, 1_000));
+    if (attempt > 1) await new Promise((resolve) => setTimeout(resolve, READINESS_RETRY_MS));
     let response: Response;
     try {
       response = await fetch(new URL('/readyz', cliRuntimeUrl), {

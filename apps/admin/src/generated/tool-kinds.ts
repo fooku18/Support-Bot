@@ -57,13 +57,13 @@ export const CREDENTIAL_KINDS: readonly ToolKind[] = [
 ];
 
 /** Kinds served by the credential-owning cli-runtime (the others need no runtime or use the web runtime). */
-export const CLI_RUNTIME_KINDS: readonly ToolKind[] = [
+export const CLI_RUNTIME_KINDS = [
   'gitlab',
   'atlassian',
   'datadog',
   'cloudflare',
   'slack',
-];
+] as const satisfies readonly ToolKind[];
 /** Hosted search runs inside the selected model provider. */
 export const WEB_RUNTIME_KINDS: readonly ToolKind[] = ['webFetch'];
 
@@ -478,7 +478,7 @@ export interface ChannelToolAssignment {
 
 /** Kinds whose readiness comes from a runtime probe; the others are ready when enabled. */
 export function kindNeedsProbe(kind: ToolKind): boolean {
-  return CLI_RUNTIME_KINDS.includes(kind);
+  return (CLI_RUNTIME_KINDS as readonly ToolKind[]).includes(kind);
 }
 
 /** Instance readiness reported by a runtime (`POST /internal/tool-instances/status`). */

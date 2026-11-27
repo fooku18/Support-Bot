@@ -7,7 +7,7 @@ import { COMMAND_RECEIPT_TYPE } from './generated/channel-commands.js';
  */
 
 import type { Agent } from 'node:http';
-import { WebClient } from '@slack/web-api';
+import { ErrorCode, WebClient } from '@slack/web-api';
 import { setTimeout as delay } from 'node:timers/promises';
 import {
   deliveryMetadata,
@@ -355,7 +355,7 @@ function rateLimitedFailure(err: unknown): SlackFailure | null {
   }
   const code = (err as { code?: unknown }).code;
   const retryAfter = (err as { retryAfter?: unknown }).retryAfter;
-  if (code === 'slack_webapi_rate_limited_error') {
+  if (code === ErrorCode.RateLimitedError) {
     const seconds = typeof retryAfter === 'number' && Number.isFinite(retryAfter) ? retryAfter : 30;
     return {
       kind: 'rate_limited',
@@ -380,7 +380,7 @@ function isAmbiguousNetworkError(err: unknown): boolean {
   if (typeof dataError === 'string') {
     return false;
   }
-  if (code === 'slack_webapi_request_error' || code === 'slack_webapi_http_error') {
+  if (code === ErrorCode.RequestError || code === ErrorCode.HTTPError) {
     return true;
   }
   return (

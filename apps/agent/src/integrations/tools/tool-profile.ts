@@ -57,25 +57,9 @@ export interface EffectiveTool {
   contractVersion?: string;
   /** Datadog: upstream tool names the admin removed. */
   denyTools?: string[];
-  /**
-   * Datadog, filled at run start from the qualified runtime catalog: the
-   * site, the registered and excluded upstream names, and the catalog hash
-   * (part of the policy hash, so an upstream catalog change is visible).
-   */
-  site?: string;
-  catalogHash?: string;
-  discoveredTools?: string[];
-  excludedTools?: string[];
   /** Cloudflare: the configured account (null: zone-level only) and zone names (null: all). */
   accountId?: string | null;
   zones?: string[] | null;
-  /**
-   * Cloudflare, filled at run start from the qualified runtime snapshot: the
-   * exposed zones and their set hash (part of the policy hash, so a zone
-   * change is visible).
-   */
-  zoneSetHash?: string;
-  exposedZones?: Array<{ id: string; name: string }>;
 }
 
 /** The channel's GitLab instance (core tools: reads, writes, clone, verify, publish). */
@@ -90,20 +74,6 @@ export interface EffectiveGitlab {
 export interface EffectiveToolProfile {
   tools: EffectiveTool[];
   gitlab: EffectiveGitlab | null;
-}
-
-/** An assigned tool the run cannot use, with the reason the model is told. */
-export interface UnavailableTool {
-  kind: ChannelToolDto['kind'];
-  label: string;
-  reason: string;
-}
-
-export interface ResolvedChannelTools {
-  profile: EffectiveToolProfile;
-  unavailable: UnavailableTool[];
-  /** Workspace of the channel (every runtime request names it). */
-  teamId: string;
 }
 
 function effectiveTool(tool: ChannelToolDto): EffectiveTool | null {
@@ -171,33 +141,22 @@ function effectiveTool(tool: ChannelToolDto): EffectiveTool | null {
 
 /**
  * Builds the run's profile from the channel's assigned tools. Unready
- * instances are left out and reported as unavailable; `gitlab: false`
+ * instances and a GitLab instance without a host are left out; `gitlab: false`
  * (fixture deployments) leaves a GitLab assignment unused.
  */
 export function resolveChannelTools(
   channel: ChannelToolsDto | null,
   options: { gitlab: boolean },
-): ResolvedChannelTools {
+): EffectiveToolProfile {
   const profile: EffectiveToolProfile = {
     tools: [],
     gitlab: null,
   };
-  const unavailable: UnavailableTool[] = [];
   for (const tool of channel?.tools ?? []) {
     if (tool.kind === 'gitlab' && !options.gitlab) continue;
-    if (!tool.ready) {
-      unavailable.push({
-        kind: tool.kind,
-        label: tool.label,
-        reason: `not ready (${(tool.detail ?? 'no readiness reported').slice(0, 160)})`,
-      });
-      continue;
-    }
+    if (!tool.ready) continue;
     if (tool.kind === 'gitlab') {
-      if (typeof tool.host !== 'string' || tool.host.length === 0) {
-        unavailable.push({ kind: tool.kind, label: tool.label, reason: 'no host' });
-        continue;
-      }
+      if (typeof tool.host !== 'string' || tool.host.length === 0) continue;
       profile.gitlab = {
         instanceId: tool.instanceId,
         label: tool.label,
@@ -209,5 +168,5 @@ export function resolveChannelTools(
     const entry = effectiveTool(tool);
     if (entry !== null) profile.tools.push(entry);
   }
-  return { profile, unavailable, teamId: channel?.teamId ?? '' };
+  return profile;
 }
