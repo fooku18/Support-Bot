@@ -77,7 +77,14 @@ The output `TokenLimiterProcessor` (`strategy: 'abort'`) is unchanged.
   `publication/checkouts`, `publication/transfer-links`, `admin-backup-script`
   and `docker-gc-script`, as on unmodified `main` on the macOS development
   machine.
-- T3 `application`: not run yet.
+- T3 `application` on `main` stopped at
+  `input-context-tripwire-is-explicit-failure-without-delivery`: a 200 KB
+  text attachment reached the model. Text attachments arrive as `file`
+  parts, and the estimate counted every file part at the flat 1,600 tokens of
+  an image. `text/*` file parts now count their bytes at three per token.
+  After the fix (Linux container on Windows 11, Node 26.13.1, based on
+  `3fec448`): `test/runtime/context-budget.test.ts` 7 tests, T1 1,061 tests,
+  T2 135 tests and T3 `application` 81 records pass.
 - Live: BLOCKED until a T5 gateway run on the test instance. Context and
   inference changes need T5 before release.
 - Evidence: —
@@ -91,7 +98,7 @@ Rollback: revert this change.
 
 ## Open items
 
-- [ ] Run T3 `application` on a Docker host.
+- [x] Run T3 `application` on a Docker host.
 - [ ] Run T5 gateway acceptance, including a long tool investigation followed
       by a follow-up in the same thread.
 - [ ] Decide whether very large single tool results should also be capped when
