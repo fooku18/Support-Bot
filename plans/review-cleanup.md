@@ -28,7 +28,6 @@ In scope:
 
 | ID  | Area         | Change                                                                                                |
 | --- | ------------ | ----------------------------------------------------------------------------------------------------- |
-| Q1  | CI           | Run T0 to T2 on pull requests and pushes to `main`. Until now only the image publish workflow ran.    |
 | Q2  | build        | Typecheck the tests of admin, slack and egress.                                                       |
 | A1  | admin        | Saving unrelated channel settings no longer re-checks an unchanged stored model key.                  |
 | A2  | admin        | Removing a workspace also removes its channel reply settings.                                         |
@@ -64,6 +63,8 @@ In scope:
 
 Left out, with the reason:
 
+- A CI workflow running T0 to T2 on pull requests: the contributor token
+  cannot change workflow files. Separate change by the maintainer.
 - Delivery and run correctness (cancel after retain leaves a retained row,
   post-send recheck marks a sent answer uncertain, transient config failure
   after a finished segment, restarted deadline, context notes not counted):
@@ -88,7 +89,7 @@ Left out, with the reason:
 
 ## Work
 
-- [x] Q1, Q2 (plus the `LiveOptions['limits']` type the new test typecheck
+- [x] Q2 (plus the `LiveOptions['limits']` type the new test typecheck
       exposed)
 - [x] A1 to A5
 - [x] I1 to I7, I10, I18
@@ -108,12 +109,12 @@ are folded into those commits.
 
 ## Verification
 
-- Deterministic, Linux (`node:26.13.1-bookworm` container, the CI image):
+- Deterministic, Linux (`node:26.13.1-bookworm` container):
   - Every commit on the branch: `npm run typecheck:all`, `npm run lint` and
     `npm run format:check` pass.
   - Head: `npm run test:packages` and `npm test` pass (agent 664, admin 138
-    and 1 skipped, slack 166, egress 31, model-stub 19, root 135).
-  - Base `b1916d9`.
+    and 1 skipped, slack 171, egress 31, model-stub 19, root 135).
+  - Base `1365d82` (rebased over #11 and #12).
 - Images: `runtime`, `cli-runtime`, `egress` and `native-coding` build from
   the branch head, and
   `tests/integration/runtime-image.sh --prebuilt` passes on the `runtime`
