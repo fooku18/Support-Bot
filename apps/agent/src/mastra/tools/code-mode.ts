@@ -35,6 +35,25 @@ export function assertCodeModeRuntime(
 
 type TransportRun = Parameters<IsolatedVmCodeModeTransport['run']>[0];
 
+export const CODE_MODE_READ_SHAPE =
+  'Every external_* function resolves to { ok: true, data } with the parsed JSON response, or to { ok, output } with the text of a non-JSON response or of a failed read (ok false, output says why).';
+
+/** What a script receives from an `external_*` read: the parsed JSON of a
+ * successful read, or its text. The model-facing copies stay out. */
+export function codeModeReadResult(value: unknown): unknown {
+  const result = (value as { result?: unknown } | null)?.result as
+    | { ok?: unknown; output?: unknown; data?: unknown }
+    | undefined;
+  if (typeof result?.ok !== 'boolean' || typeof result.output !== 'string') return value;
+  if (!result.ok) return { ok: false, output: result.output };
+  if (result.data !== undefined) return { ok: true, data: result.data };
+  try {
+    return { ok: true, data: JSON.parse(result.output) as unknown };
+  } catch {
+    return { ok: true, output: result.output };
+  }
+}
+
 /** Bounds what one script may read and return. */
 class BoundedTransport extends IsolatedVmCodeModeTransport {
   override async run(options: TransportRun) {
@@ -45,7 +64,7 @@ class BoundedTransport extends IsolatedVmCodeModeTransport {
         reads += 1;
         if (reads > CODE_MODE_LIMITS.maxReads)
           throw new Error(`a script may make at most ${CODE_MODE_LIMITS.maxReads} read calls`);
-        return options.dispatch(tool, args);
+        return codeModeReadResult(await options.dispatch(tool, args));
       },
     });
     if (Buffer.byteLength(JSON.stringify(result) ?? '') <= CODE_MODE_LIMITS.maxOutputBytes)
@@ -78,7 +97,7 @@ export function createNativeCodeMode(reads: ToolsInput, authorize: () => Promise
     return execute(args, context);
   };
   // Load the generated signatures with the tool instead of the system prompt.
-  tool.description += `\n\n${code.instructions}`;
+  tool.description += `\n\n${code.instructions}\n\n${CODE_MODE_READ_SHAPE}`;
   return tool;
 }
 

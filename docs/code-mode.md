@@ -30,6 +30,11 @@ Limits per run, in
 A script may make at most 50 read calls; further calls are refused. A result
 with logs above 48 000 bytes is refused as `OutputLimitError`.
 
+Each `external_*` call resolves to `{ ok: true, data }` with the parsed JSON
+of a successful read, or to `{ ok, output }` with the text of a non-JSON
+response or of a failed read. The model-facing copy of the reply stays out of
+the script, and the tool description states this shape.
+
 Array buffers count against the memory limit. The stack uses V8's default.
 
 ## Runtime requirements
