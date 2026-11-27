@@ -53,9 +53,21 @@ unknown argument datasets`. The agent validates the call with
 
 ## Verification
 
-- Deterministic: both new tests fail on `dcb297b` (`unknown argument
-datasets`; last request `tool_choice` `auto`) and pass with the change.
-  T0–T2 and T3 `application` and `tools`: pending.
+- Deterministic, on Windows 11 with Node 26.13.1:
+  - Both new tests fail on `dcb297b` (`unknown argument datasets`; last
+    request `tool_choice` `auto`) and pass with the change.
+  - T0 (typecheck, lint, format) passes. T1 `test:packages`: 56 agent tests
+    fail in `domain/publication/*` and `application/inspection.test.ts`,
+    the same files that fail on unmodified `dcb297b` on Windows (symlinks,
+    Git transport, a Windows module path); `code-mode.test.ts` failed once
+    on timing under load and passes alone. Every other package passes.
+    T2 passes.
+  - T3 `application`: passed, 75 records, with the `inputs-corrections`
+    phase left out by a local edit. That phase fails on `main` already: its
+    200 KB tripwire fixture now fits the 64,000-token budget.
+  - T3 `tools`: BLOCKED. The driver calls `process.getuid`, which Windows
+    lacks, and this machine has no Linux Docker host. The round-trip unit
+    test runs the same `validateCloudflareRequest` the tool runtime uses.
 - Live: pending. The deployment check repeats the traffic question in the
   test channel. T5 is not run (no gateway test instance for these tools).
 
