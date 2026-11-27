@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DatadogArgumentError,
+  datadogOutputValidator,
   validateDatadogArguments,
 } from '../../src/integrations/datadog/datadog-schema.js';
 
@@ -19,5 +20,19 @@ describe('Datadog argument validation', () => {
       });
       expect(() => validateDatadogArguments(current, { query: 1 })).toThrow(DatadogArgumentError);
     }
+  });
+
+  it('compiles schemas that declare a draft 2020-12 $schema, as the MCP SDK does', () => {
+    const schema = {
+      $schema: 'https://json-schema.org/draft/2020-12/schema',
+      type: 'object',
+      properties: { query: { type: 'string' } },
+    };
+    expect(validateDatadogArguments(schema, { query: 'service:web' })).toEqual({
+      query: 'service:web',
+    });
+    const validate = datadogOutputValidator.getValidator(schema);
+    expect(validate({ query: 'service:web' }).valid).toBe(true);
+    expect(validate({ query: 1 }).valid).toBe(false);
   });
 });
