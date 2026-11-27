@@ -23,6 +23,7 @@ describe('support playbook', () => {
     expect(supportPlaybook).toMatch(/never confirm or deny/i);
     expect(supportPlaybook).toMatch(/single monitoring source/i);
     expect(supportPlaybook).toMatch(/monitoring itself/i);
+    expect(supportPlaybook).toMatch(/same monitoring system count as one/i);
     expect(supportPlaybook).toMatch(/deployments/i);
     expect(supportPlaybook).toMatch(/severity/i);
   });
