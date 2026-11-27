@@ -64,6 +64,7 @@ describe('native package ownership', () => {
     const meta = await graph([
       'apps/agent/src/bootstrap/main.ts',
       'apps/agent/src/bootstrap/provision.ts',
+      'apps/agent/src/bootstrap/upgrade.ts',
     ]);
     assertNativeGraph(meta, true);
     for (const file of [

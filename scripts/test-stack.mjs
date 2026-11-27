@@ -68,11 +68,11 @@ try {
     if (found.some((c) => c.service === 'model-stub' && c.running))
       throw new Error('stop the model stub with test:stack:down before recreation');
     if (found.some((c) => c.service === 'native-answer' && c.running)) await drain(d);
-    if (values.provision) {
-      if (found.length) throw new Error('fresh provisioning requires an empty project');
-      compose(d, ['up', '-d', '--no-build', '--pull', 'never', '--wait', 'native-postgres']);
-      compose(d, ['run', '--no-deps', 'native-provision']);
-    }
+    if (values.provision && found.length)
+      throw new Error('fresh provisioning requires an empty project');
+    compose(d, ['up', '-d', '--no-build', '--pull', 'never', '--wait', 'native-postgres']);
+    if (values.provision) compose(d, ['run', '--no-deps', 'native-provision']);
+    compose(d, ['run', '--rm', '--no-deps', 'native-upgrade']);
     // Recorded before the start: containers may carry this mode's configuration
     // even if the start fails.
     writeModelMode(dir, mode);

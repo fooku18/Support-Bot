@@ -20,10 +20,10 @@ run --entrypoint sh "$image" -ec '
   printf "%s\n" "#!/bin/sh" "test -f \"\$1\" || exit 1" "printf \"%s\\\\n\" \"\$@\"" > /tmp/node
   chmod +x /tmp/node
   export PATH=/tmp:$PATH
-  for role in agent provision telemetry admin admin-cli adapter cli-runtime; do
+  for role in agent provision upgrade telemetry admin admin-cli adapter cli-runtime; do
     case "$role" in
       agent) expected=/app/apps/agent/dist/native/main.mjs ;;
-      provision|telemetry) expected=/app/apps/agent/dist/native/$role.mjs ;;
+      provision|upgrade|telemetry) expected=/app/apps/agent/dist/native/$role.mjs ;;
       admin) expected=/app/apps/admin/dist/index.js ;;
       admin-cli) expected=/app/apps/admin/dist/cli.js ;;
       adapter) expected=/app/apps/slack/dist/index.js ;;
@@ -45,6 +45,7 @@ run --entrypoint sh "$image" -ec '
   refuses agent "native answer startup refused: SERVICE_TOKEN required"
   refuses adapter "Native adapter startup refused"
   refuses provision "Error: valid NATIVE_PG_HOST required"
+  refuses upgrade "Error: valid NATIVE_PG_HOST required"
   refuses telemetry "Error: valid NATIVE_PG_HOST required"
   refuses admin-cli "usage: node dist/cli.js"
 '

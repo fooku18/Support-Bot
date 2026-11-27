@@ -3,12 +3,12 @@ set -eu
 role=${1:-}
 case "$role" in
   agent) script=/app/apps/agent/dist/native/main.mjs ;;
-  provision|telemetry) script=/app/apps/agent/dist/native/$role.mjs ;;
+  provision|upgrade|telemetry) script=/app/apps/agent/dist/native/$role.mjs ;;
   admin) script=/app/apps/admin/dist/index.js ;;
   admin-cli) script=/app/apps/admin/dist/cli.js ;;
   adapter) script=/app/apps/slack/dist/index.js ;;
   cli-runtime) script=/app/apps/tool-runtime/dist/cli-runtime-service.js ;;
-  *) echo 'Unknown support-agent role. Expected agent, provision, telemetry, admin, admin-cli, adapter or cli-runtime.' >&2; exit 64 ;;
+  *) echo 'Unknown support-agent role. Expected agent, provision, upgrade, telemetry, admin, admin-cli, adapter or cli-runtime.' >&2; exit 64 ;;
 esac
 shift
 if [ "$#" -eq 0 ]; then

@@ -6,6 +6,7 @@ set -eu
 case "${1:-start}" in
   telemetry) exec node /app/apps/agent/dist/native/telemetry.mjs ;;
   provision) exec node /app/apps/agent/dist/native/provision.mjs ;;
+  upgrade) exec node /app/apps/agent/dist/native/upgrade.mjs ;;
   start) exec node /app/apps/agent/dist/native/main.mjs ;;
   *) echo 'unsupported native operation' >&2; exit 1 ;;
 esac

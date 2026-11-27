@@ -13,12 +13,20 @@ export function nativeStore(pool: Pool, provision = false) {
   });
 }
 
-/** Explicit maintenance identity, dedicated fresh database only. Never called by startup.
- * No adoption, migrations or reset of coordinator/native qualification stores. */
-export async function provisionNativeApplication(pool: Pool) {
+const FRAMEWORK_GRANTS = `
+    GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA framework TO native_answer;
+    GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA framework TO native_answer;`;
+
+async function requireMaintenanceIdentity(pool: Pool) {
   const identity = (await pool.query('SELECT current_user, current_database() AS db')).rows[0];
   if (identity.current_user !== 'postgres' || identity.db !== 'native_answer')
     throw new Error('explicit native maintenance identity required');
+}
+
+/** Explicit maintenance identity, dedicated fresh database only. Never called by startup.
+ * No adoption, migrations or reset of coordinator/native qualification stores. */
+export async function provisionNativeApplication(pool: Pool) {
+  await requireMaintenanceIdentity(pool);
   const existing = await pool.query(
     "SELECT 1 FROM pg_namespace WHERE nspname IN ('framework','native_agents','coordinator')",
   );
@@ -37,14 +45,26 @@ export async function provisionNativeApplication(pool: Pool) {
   await pool.query(`
     GRANT CONNECT ON DATABASE native_answer TO native_answer;
     GRANT USAGE ON SCHEMA framework,native_agents TO native_answer;
-    GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA framework TO native_answer;
-    GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA framework TO native_answer;
+    ${FRAMEWORK_GRANTS}
     GRANT SELECT ON ALL TABLES IN SCHEMA native_agents TO native_answer;
     GRANT INSERT,UPDATE(owner) ON native_agents.tasks TO native_answer;
     GRANT INSERT,UPDATE(input_receipts) ON native_agents.requests TO native_answer;
     GRANT INSERT ON native_agents.actions TO native_answer;
     GRANT INSERT,UPDATE(outcome,slack_ts) ON native_agents.deliveries TO native_answer;
   `);
+}
+
+export async function upgradeNativeApplication(pool: Pool) {
+  await requireMaintenanceIdentity(pool);
+  const seal = (
+    await pool.query(
+      "SELECT obj_description(oid,'pg_namespace') AS seal FROM pg_namespace WHERE nspname='native_agents'",
+    )
+  ).rows[0]?.seal;
+  if (seal !== JSON.stringify({ version: NATIVE_STORAGE_VERSION }))
+    throw new Error('native upgrade requires a sealed store of this version');
+  await nativeStore(pool, true).init();
+  await pool.query(FRAMEWORK_GRANTS);
 }
 
 /** Runtime has DML on an already provisioned store, never framework DDL privileges. */

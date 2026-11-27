@@ -234,7 +234,14 @@ async function inProcessSuite() {
   const password = randomBytes(32).toString('hex');
   const { host, port } = await startPg(`${prefix}-pg`, { tcp: true, password });
   if (suite === 'application') {
-    const built = await bundle({ provision: 'apps/agent/src/bootstrap/provision.ts' }, root, true);
+    const built = await bundle(
+      {
+        provision: 'apps/agent/src/bootstrap/provision.ts',
+        upgrade: 'apps/agent/src/bootstrap/upgrade.ts',
+      },
+      root,
+      true,
+    );
     linkExternals(built);
     const env = {
       PATH: process.env.PATH,
@@ -245,8 +252,39 @@ async function inProcessSuite() {
     };
     const provision = () =>
       spawnSync(process.execPath, [path.join(root, 'provision.mjs')], { env, timeout: 60000 });
+    const upgrade = () =>
+      spawnSync(process.execPath, [path.join(root, 'upgrade.mjs')], { env, timeout: 60000 });
+    const sql = (statement) =>
+      run('docker', [
+        'exec',
+        `${prefix}-pg`,
+        'psql',
+        '-U',
+        'postgres',
+        '-d',
+        'native_answer',
+        '-v',
+        'ON_ERROR_STOP=1',
+        '-Atc',
+        statement,
+      ]).trim();
+    assert.equal(upgrade().status, 1, 'refuse upgrade without a native store');
     assert.equal(provision().status, 0, 'fresh TCP provisioning');
     assert.equal(provision().status, 1, 'refuse existing TCP database');
+    sql('ALTER TABLE framework.mastra_workflow_run_entries DROP COLUMN first_seq');
+    assert.equal(upgrade().status, 0, 'upgrade a store of an older framework version');
+    assert.equal(upgrade().status, 0, 'repeat the upgrade');
+    assert.equal(
+      sql(
+        "SELECT has_column_privilege('native_answer','framework.mastra_workflow_run_entries','first_seq','SELECT,UPDATE')",
+      ),
+      't',
+      'upgraded column granted to the runtime',
+    );
+    const seal = sql("SELECT obj_description('native_agents'::regnamespace,'pg_namespace')");
+    sql(`COMMENT ON SCHEMA native_agents IS '{"version":"other"}'`);
+    assert.equal(upgrade().status, 1, 'refuse upgrade of a store with another seal');
+    sql(`COMMENT ON SCHEMA native_agents IS '${seal}'`);
   }
   const phases = [
     'discovery-provision',
