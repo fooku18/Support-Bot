@@ -442,5 +442,140 @@ describe('normalizers', () => {
     );
     expect(result.truncated).toBe(true);
     expect(Buffer.byteLength(result.output)).toBeLessThanOrEqual(512);
+    expect(parse(result.output).body).toMatch(/\[…truncated\]$/);
+  });
+
+  it('drops whole comments to fit the bound and continues at the first one left out', () => {
+    const comments = Array.from({ length: 20 }, (_, i) => ({
+      id: String(100 + i),
+      author: { displayName: `Person ${i}` },
+      created: '2026-11-01T10:00:00.000+0000',
+      body: `comment ${i} `.padEnd(1500, 'x'),
+    }));
+    const result = normalize(
+      validateAtlassianOperation('listJiraIssueComments', { issueKey: 'ABC-1', startAt: 40 }),
+      ok({ comments, startAt: 40, maxResults: 20, total: 100 }),
+      SITE,
+      200000,
+    );
+    expect(Buffer.byteLength(result.output)).toBeLessThanOrEqual(12000);
+    const projection = parse(result.output);
+    const delivered = projection.items.length;
+    expect(delivered).toBeGreaterThan(0);
+    expect(delivered).toBeLessThan(20);
+    expect(projection.items.at(-1).id).toBe(String(100 + delivered - 1));
+    expect(projection).toMatchObject({
+      returnedCount: delivered,
+      nextStartAt: 40 + delivered,
+      truncated: true,
+      omittedCount: 20 - delivered,
+    });
+    expect(result.truncated).toBe(true);
+  });
+
+  it('moves past a comment that alone exceeds the bound', () => {
+    const comments = Array.from({ length: 2 }, (_, i) => ({
+      id: String(100 + i),
+      author: { displayName: `Person ${i}` },
+      created: '2026-11-01T10:00:00.000+0000',
+      body: '\u0001'.repeat(2000),
+    }));
+    const result = normalize(
+      validateAtlassianOperation('listJiraIssueComments', { issueKey: 'ABC-1', startAt: 40 }),
+      ok({ comments, startAt: 40, maxResults: 20, total: 100 }),
+      SITE,
+      200000,
+    );
+    expect(Buffer.byteLength(result.output)).toBeLessThanOrEqual(12000);
+    expect(result.output).toContain('"id":"100"');
+    expect(result.output).toContain('"nextStartAt":41,');
+    expect(result.truncated).toBe(true);
+  });
+
+  it('withholds the token of a cut search page and says how to continue after the shown hits', () => {
+    const issues = Array.from({ length: 20 }, (_, i) => ({
+      key: `ABC-${i + 1}`,
+      fields: { summary: `summary ${i} `.padEnd(500, 'y'), status: { name: 'Open' } },
+    }));
+    const result = normalize(
+      validateAtlassianOperation('searchJiraIssuesUsingJql', {
+        jql: 'project = ABC',
+        maxResults: 20,
+      }),
+      ok({ issues, nextPageToken: 'tok-2', isLast: false }),
+      SITE,
+    );
+    const projection = parse(result.output);
+    const delivered = projection.items.length;
+    expect(delivered).toBeLessThan(20);
+    expect(projection).toMatchObject({
+      nextPageToken: null,
+      truncated: true,
+      omittedCount: 20 - delivered,
+      continueWith: `repeat this call unchanged except maxResults: ${delivered}, then continue with the nextPageToken it returns`,
+    });
+  });
+
+  it('marks a Confluence page body cut at the text bound', () => {
+    const storage = `<p>${'Intro paragraph. '.repeat(400)}</p><p>Rollback: run deploy --rollback</p>`;
+    const result = normalize(
+      validateAtlassianOperation('getConfluencePage', { pageId: '42' }),
+      ok({ id: '42', title: 'Runbook', status: 'current', body: { storage: { value: storage } } }),
+      SITE,
+    );
+    expect(result.truncated).toBe(true);
+    expect(parse(result.output).body).toMatch(/Intro paragraph\.[^]*\[…truncated\]$/);
+  });
+
+  it('keeps code macro bodies (CDATA) of page storage, including ">"', () => {
+    const storage =
+      '<p>Restart the service:</p>' +
+      '<ac:structured-macro ac:name="code" ac:schema-version="1">' +
+      '<ac:parameter ac:name="language">bash</ac:parameter>' +
+      '<ac:plain-text-body><![CDATA[kubectl -n shop rollout restart deploy/checkout]]></ac:plain-text-body>' +
+      '</ac:structured-macro>' +
+      '<ac:structured-macro ac:name="code">' +
+      '<ac:plain-text-body><![CDATA[kubectl get pods > pods.txt && echo "<done> &amp;"]]></ac:plain-text-body>' +
+      '</ac:structured-macro>';
+    const result = normalize(
+      validateAtlassianOperation('getConfluencePage', { pageId: '7' }),
+      ok({ id: '7', title: 'Runbook', status: 'current', body: { storage: { value: storage } } }),
+      SITE,
+    );
+    const body = parse(result.output).body as string;
+    expect(body).toContain('kubectl -n shop rollout restart deploy/checkout');
+    expect(body).toContain('kubectl get pods > pods.txt && echo "<done> &amp;"');
+  });
+
+  it('renders pasted links, mentions, emoji, status and dates of Jira ADF', () => {
+    const { text } = extractAtlassianText({
+      type: 'doc',
+      version: 1,
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'Regression from ' },
+            {
+              type: 'inlineCard',
+              attrs: { url: 'https://gitlab.example.com/shop/checkout/-/merge_requests/812' },
+            },
+            { type: 'text', text: ', please check with ' },
+            { type: 'mention', attrs: { id: '5b10a2844c20165700ede21g', text: '@Jane Doe' } },
+            { type: 'text', text: ' ' },
+            { type: 'emoji', attrs: { shortName: ':fire:', text: '🔥' } },
+            { type: 'text', text: ' state ' },
+            { type: 'status', attrs: { text: 'BLOCKED', color: 'red' } },
+            { type: 'text', text: ' due ' },
+            { type: 'date', attrs: { timestamp: '1798761600000' } },
+          ],
+        },
+        { type: 'blockCard', attrs: { url: 'https://example.com/incident/42' } },
+        { type: 'paragraph', content: [{ type: 'text', text: 'Next' }] },
+      ],
+    });
+    expect(text).toBe(
+      'Regression from https://gitlab.example.com/shop/checkout/-/merge_requests/812, please check with @Jane Doe 🔥 state BLOCKED due 2027-01-01\nhttps://example.com/incident/42\nNext',
+    );
   });
 });

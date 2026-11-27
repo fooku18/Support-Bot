@@ -280,6 +280,14 @@ export interface AtlassianResult {
   refused?: string;
 }
 
+const TEXT_CUT = ' […truncated]';
+const OUTPUT_CUT = '\n[truncated: Atlassian result exceeded the output limit]';
+
+interface AtlassianPage {
+  items: unknown[];
+  project(items: unknown[], omitted: number): Record<string, unknown>;
+}
+
 function record(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -298,8 +306,38 @@ function markupToText(value: string): string {
   return value
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
     .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '')
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/&(?:amp|lt|gt|quot|apos|#39|nbsp);/g, (entity) => ENTITIES[entity] ?? entity);
+    .split(/<!\[CDATA\[([\s\S]*?)\]\]>/)
+    .map((part, index) =>
+      index % 2 === 1
+        ? part
+        : part
+            .replace(/<[^>]*>/g, ' ')
+            .replace(/&(?:amp|lt|gt|quot|apos|#39|nbsp);/g, (entity) => ENTITIES[entity] ?? entity),
+    )
+    .join('');
+}
+function adfInlineText(node: Record<string, unknown>): string | null {
+  const attrs = record(node.attrs);
+  if (!attrs) return null;
+  const string = (value: unknown): string | null =>
+    typeof value === 'string' && value.length > 0 ? value : null;
+  switch (node.type) {
+    case 'inlineCard':
+    case 'blockCard':
+    case 'embedCard':
+      return string(attrs.url);
+    case 'mention':
+    case 'status':
+      return string(attrs.text);
+    case 'emoji':
+      return string(attrs.text) ?? string(attrs.shortName);
+    case 'date': {
+      const time = new Date(Number(attrs.timestamp));
+      return Number.isNaN(time.getTime()) ? null : time.toISOString().slice(0, 10);
+    }
+    default:
+      return null;
+  }
 }
 /** Bounded ADF/storage extraction: no HTML execution, URL resolution or external fetch. */
 export function extractAtlassianText(
@@ -338,11 +376,20 @@ export function extractAtlassianText(
     }
     const obj = record(node);
     if (!obj) return;
-    if (typeof obj.text === 'string') walk(obj.text, depth + 1);
+    const inline = adfInlineText(obj);
+    if (inline !== null) add(inline);
+    else if (typeof obj.text === 'string') walk(obj.text, depth + 1);
     else if (obj.content !== undefined) walk(obj.content, depth + 1);
     else if (obj.storage !== undefined) walk(obj.storage, depth + 1);
     else if (obj.value !== undefined) walk(obj.value, depth + 1);
-    if (obj.type === 'paragraph' || obj.type === 'hardBreak' || obj.type === 'heading') add('\n');
+    if (
+      obj.type === 'paragraph' ||
+      obj.type === 'hardBreak' ||
+      obj.type === 'heading' ||
+      obj.type === 'blockCard' ||
+      obj.type === 'embedCard'
+    )
+      add('\n');
   };
   walk(value, 0);
   return { text: text.trim(), truncated };
@@ -409,11 +456,14 @@ export function normalizeAtlassianResponse(
   const root = record(data);
   if (!root) return failure(args, 'invalid_shape');
   let textTruncated = false;
-  const text = (v: unknown, max = 4000): string => {
+  const extract = (v: unknown, max = 4000): { text: string; truncated: boolean } => {
     const out = extractAtlassianText(v, max);
     textTruncated ||= out.truncated;
-    return out.text;
+    return out;
   };
+  const text = (v: unknown, max = 4000): string => extract(v, max).text;
+  const marked = (value: { text: string; truncated: boolean }): string =>
+    value.truncated ? `${value.text}${TEXT_CUT}` : value.text;
   const jiraUrl = (key: string): string => `https://${site}/browse/${key}`;
   const pageUrl = (id: string): string => `https://${site}/wiki/pages/viewpage.action?pageId=${id}`;
   const validId = (value: unknown): boolean =>
@@ -430,7 +480,23 @@ export function normalizeAtlassianResponse(
       url: jiraUrl(String(item.key)),
     };
   };
-  let projection: unknown;
+  const tokenPage =
+    (key: 'nextPageToken' | 'cursor', value: string | null) =>
+    (items: unknown[], omitted: number): Record<string, unknown> => ({
+      returnedCount: items.length,
+      [key]: omitted > 0 ? null : value,
+      ...(omitted > 0
+        ? {
+            truncated: true,
+            omittedCount: omitted,
+            continueWith: `repeat this call unchanged except maxResults: ${items.length}, then continue with the ${key} it returns`,
+          }
+        : {}),
+      items,
+    });
+  let projection: Record<string, unknown> = {};
+  let page: AtlassianPage | null = null;
+  let body: { key: 'description' | 'body'; text: string } | null = null;
   switch (args.kind) {
     case 'searchJiraIssues':
     case 'searchJiraIssuesUsingJql': {
@@ -451,10 +517,9 @@ export function normalizeAtlassianResponse(
         return failure(args, 'invalid_shape');
       const token = root.isLast === true ? null : continuation(root.nextPageToken);
       if (token === undefined) return failure(args, 'invalid_shape');
-      projection = {
+      page = {
         items: issues.map((item) => issueHit(item as Record<string, unknown>)),
-        returnedCount: issues.length,
-        nextPageToken: token,
+        project: tokenPage('nextPageToken', token),
       };
       break;
     }
@@ -462,6 +527,7 @@ export function normalizeAtlassianResponse(
       const fields = record(root.fields);
       if (typeof root.key !== 'string' || !ISSUE_KEY_PATTERN.test(root.key) || !fields)
         return failure(args, 'invalid_shape');
+      const description = extract(fields.description, 4000);
       projection = {
         key: root.key,
         summary: text(fields.summary, 500),
@@ -473,9 +539,10 @@ export function normalizeAtlassianResponse(
           ? fields.labels.slice(0, 20).map((v) => text(v, 120))
           : [],
         updated: text(fields.updated, 64),
-        description: text(fields.description),
+        description: marked(description),
         url: jiraUrl(root.key),
       };
+      body = { key: 'description', text: description.text };
       break;
     }
     case 'listJiraIssueComments':
@@ -494,7 +561,10 @@ export function normalizeAtlassianResponse(
         })
       )
         return failure(args, 'invalid_shape');
-      projection = {
+      const { startAt } = args;
+      const total = typeof root.total === 'number' ? root.total : null;
+      const next = nextStartAt(startAt, items.length, root.total, root.isLast);
+      page = {
         items: items.map((item) => {
           const obj = item as Record<string, unknown>;
           return comments
@@ -502,14 +572,18 @@ export function normalizeAtlassianResponse(
                 id: String(obj.id),
                 author: text(record(obj.author)?.displayName, 120),
                 created: text(obj.created, 64),
-                body: text(obj.body, 2000),
+                body: marked(extract(obj.body, 2000)),
               }
             : { key: text(obj.key, 64), name: text(obj.name, 500) };
         }),
-        startAt: args.startAt,
-        returnedCount: items.length,
-        total: typeof root.total === 'number' ? root.total : null,
-        nextStartAt: nextStartAt(args.startAt, items.length, root.total, root.isLast),
+        project: (kept, omitted) => ({
+          startAt,
+          returnedCount: kept.length,
+          total,
+          nextStartAt: omitted > 0 ? startAt + kept.length : next,
+          ...(omitted > 0 ? { truncated: true, omittedCount: omitted } : {}),
+          items: kept,
+        }),
       };
       break;
     }
@@ -526,7 +600,7 @@ export function normalizeAtlassianResponse(
         return failure(args, 'invalid_shape');
       const cursor = confluenceCursor(record(root._links)?.next);
       if (cursor === undefined) return failure(args, 'invalid_shape');
-      projection = {
+      page = {
         items: results.map((item) => {
           const obj = item as Record<string, unknown>;
           const content = obj.content as Record<string, unknown>;
@@ -547,31 +621,65 @@ export function normalizeAtlassianResponse(
             url: pageUrl(id),
           };
         }),
-        returnedCount: results.length,
-        cursor,
+        project: tokenPage('cursor', cursor),
       };
       break;
     }
     case 'getConfluencePage': {
       if (String(root.id) !== args.pageId || typeof root.title !== 'string')
         return failure(args, 'invalid_shape');
+      const content = extract(record(root.body)?.storage ?? root.body, 4000);
       projection = {
         pageId: args.pageId,
         title: text(root.title, 500),
         status: text(root.status, 120),
         spaceId: validId(root.spaceId) ? String(root.spaceId) : null,
-        body: text(record(root.body)?.storage ?? root.body),
+        body: marked(content),
         url: pageUrl(args.pageId),
       };
+      body = { key: 'body', text: content.text };
       break;
     }
   }
-  let output = `${args.kind}: ${JSON.stringify(projection)}`;
   const bound = Math.max(1, Math.min(maxOutputBytes, 12000));
-  if (Buffer.byteLength(output) > bound) {
-    output = Buffer.from(output).subarray(0, bound).toString('utf8');
-    textTruncated = true;
+  const render = (value: unknown): string => `${args.kind}: ${JSON.stringify(value)}`;
+  const fits = (value: string): boolean => Buffer.byteLength(value) <= bound;
+  let output: string;
+  if (page !== null) {
+    const { items, project } = page;
+    const keeping = (kept: number) => render(project(items.slice(0, kept), items.length - kept));
+    output = keeping(items.length);
+    if (!fits(output) && items.length > 1) {
+      let low = 1;
+      let high = items.length - 1;
+      while (low < high) {
+        const mid = Math.ceil((low + high) / 2);
+        if (fits(keeping(mid))) low = mid;
+        else high = mid - 1;
+      }
+      output = keeping(low);
+      textTruncated = true;
+    }
+  } else {
+    output = render(projection);
+    let rest = body?.text ?? '';
+    while (body !== null && !fits(output) && rest.length > 0) {
+      const excess = Buffer.byteLength(output) - bound;
+      rest = rest
+        .slice(0, Math.max(0, rest.length - Math.max(64, excess)))
+        .replace(/[\uD800-\uDBFF]$/, '');
+      projection[body.key] = `${rest}${TEXT_CUT}`;
+      textTruncated = true;
+      output = render(projection);
+    }
   }
-  while (Buffer.byteLength(output) > bound) output = output.slice(0, -1);
+  if (!fits(output)) {
+    textTruncated = true;
+    const marker = Buffer.byteLength(OUTPUT_CUT) < bound ? OUTPUT_CUT : '';
+    const room = bound - Buffer.byteLength(marker);
+    output = Buffer.from(output).subarray(0, room).toString('utf8');
+    while (Buffer.byteLength(output) > room) output = output.slice(0, -1);
+    output += marker;
+  }
   return { status: 'completed', output, truncated: textTruncated };
 }
