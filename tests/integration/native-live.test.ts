@@ -1164,7 +1164,7 @@ describe('native live driver', () => {
           threads.get(root)!.push({
             ts: `${seq}.5`,
             user: 'UAPP',
-            text: 'Which colour?\n\nReply in this thread with your answer, or `cancel` to stop.',
+            text: 'Which colour?',
           });
         } else if (text === 'teal-42') deliver(root, 'run-ask', 'STUB_ASK_RESULT teal-42', askTs);
         else deliver(root, `run-${seq}`, 'empty', ts);

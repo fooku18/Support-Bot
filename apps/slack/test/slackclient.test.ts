@@ -9,6 +9,7 @@ import {
   previewText,
   replyBlocks,
   MAX_FOOTER_CHARS,
+  QUESTION_ACTION,
   SLACK_TEXT_CHARS,
   SlackPostError,
 } from '../src/slackclient.js';
@@ -137,6 +138,45 @@ describe('answer footer', () => {
       { type: 'context', elements: [{ type: 'mrkdwn', text: '✅ Done · Model: *opus*' }] },
     ]);
     expect(flattenOwnAnswer({ text: args.text, blocks: args.blocks })).toBe('The answer.');
+  });
+
+  it('posts question choices as buttons below the question, outside text and context', async () => {
+    const post = vi.fn(async () => ({ ok: true, message: { ts: '1.000004' } }));
+    const webClient = { chat: { postMessage: post } } as unknown as WebClient;
+    await postMessage(
+      { webClient, botUserId: 'UBOT' },
+      {
+        channel: 'CTEST',
+        thread_ts: '1.000004',
+        text: 'Which market?',
+        choices: { toolCallId: 'call-1', options: ['DE', 'All markets'] },
+        delivery: { operationId: 'out-1-question', revision: 1, answer: true },
+      },
+    );
+    const args = (post.mock.calls[0] as unknown as [{ text: string; blocks: unknown[] }])[0];
+    expect(args.text).toBe('Which market?');
+    expect(args.blocks).toEqual([
+      { type: 'markdown', text: 'Which market?' },
+      {
+        type: 'actions',
+        block_id: 'call-1',
+        elements: [
+          {
+            type: 'button',
+            action_id: `${QUESTION_ACTION}:0`,
+            text: { type: 'plain_text', text: 'DE' },
+            value: 'DE',
+          },
+          {
+            type: 'button',
+            action_id: `${QUESTION_ACTION}:1`,
+            text: { type: 'plain_text', text: 'All markets' },
+            value: 'All markets',
+          },
+        ],
+      },
+    ]);
+    expect(flattenOwnAnswer({ text: args.text, blocks: args.blocks })).toBe('Which market?');
   });
 
   it('omits an empty footer and bounds a long one', () => {

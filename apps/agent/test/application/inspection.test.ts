@@ -125,6 +125,16 @@ describe('inert durable inspection', () => {
       ...question,
       options: ['www.kaufland.de', 'All markets'],
     });
+    step.suspendPayload.toolCallSuspended = {
+      question: question.question,
+      options: [{ label: 'DE' }, { label: 'PL' }],
+      selectionMode: 'multi_select',
+    };
+    expect((await readNativeRun(storage, runId)).suspended).toEqual({
+      ...question,
+      options: ['DE', 'PL'],
+      multiSelect: true,
+    });
   });
 
   it.each(['running', 'pending', 'paused', 'success', 'failed', 'canceled', 'tripwire'] as const)(

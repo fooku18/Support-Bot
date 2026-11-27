@@ -108,9 +108,10 @@ describe('native presentation', () => {
       notice: 'notice:question:call-1',
       outcome: 'delivered',
     });
-    expect(send.mock.calls[0]![0].text).toBe(
-      'Which?\n• DE\n• All markets\n\nReply in this thread with your answer, or `cancel` to stop.',
-    );
+    expect(send.mock.calls[0]![0]).toMatchObject({
+      text: 'Which?',
+      choices: { toolCallId: 'call-1', options: ['DE', 'All markets'] },
+    });
     // Changed settings: a continue would be refused, so the user never waits
     // on the question; the failure notice asks for a fresh request.
     const changed = fixture({ active: false, suspended: question }, async () => false);
@@ -120,9 +121,24 @@ describe('native presentation', () => {
     });
     expect(send.mock.calls[1]![0].text).toMatch(/^No confirmed answer\./);
     expect(send.mock.calls[1]![0].text).not.toContain('Which?');
+    expect(send.mock.calls[1]![0].choices).toBeUndefined();
     expect(changed.actions.map((a) => a[1])).toEqual(['notice:failure']);
     expect(changed.log.warn.mock.calls.map(([m]) => m)).toContain(
       `native failure notice run_id=${runId}; question withdrawn reason=execution_policy_changed_start_fresh`,
     );
+  });
+
+  it.each([
+    ['a multi-select question', { multiSelect: true, options: ['DE', 'PL'] }],
+    ['more than 25 options', { options: Array.from({ length: 26 }, (_, i) => `M${i}`) }],
+    ['a label over 75 characters', { options: ['DE', 'x'.repeat(76)] }],
+  ])('lists the options as text without buttons for %s', async (_name, extra) => {
+    const question = { question: 'Which?', toolCallId: 'call-1', ...extra };
+    const f = fixture({ active: false, suspended: question });
+    const send = vi.fn<NativeAgentSender>(async () => ({ ts: '1794866400.000400' }));
+    await f.service.present(runId, 'UOWNER', owner, send);
+    const sent = send.mock.calls[0]![0];
+    expect(sent.choices).toBeUndefined();
+    expect(sent.text).toBe(['Which?', ...extra.options.map((o) => `• ${o}`)].join('\n'));
   });
 });

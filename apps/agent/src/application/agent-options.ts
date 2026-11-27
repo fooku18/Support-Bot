@@ -81,6 +81,7 @@ export type NativeAgentSender = (value: {
   files?: NativeExport[];
   /** The full answer when `text` is only its preview (long answers). */
   answerFile?: NativeAnswerFile;
+  choices?: { toolCallId: string; options: string[] };
   authority?: { runId: string; actor: string; owner: string };
 }) => Promise<{
   ts?: string;

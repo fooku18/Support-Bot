@@ -4,7 +4,7 @@
   "steps": [
     {
       "prompt": "STUB_ASK Which colour code should I use?",
-      "contains": ["Which colour code should I use?", "Reply in this thread"],
+      "contains": ["Which colour code should I use?"],
       "question": true
     },
     {

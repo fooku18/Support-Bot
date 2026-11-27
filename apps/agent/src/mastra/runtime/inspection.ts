@@ -131,6 +131,7 @@ function nativeSuspension(snapshot: WorkflowRunState | undefined) {
       toolCallId: payload.toolCallId,
       question: payload.toolCallSuspended.question,
       ...(options.length ? { options } : {}),
+      ...(payload.toolCallSuspended.selectionMode === 'multi_select' ? { multiSelect: true } : {}),
     };
   }
 }
