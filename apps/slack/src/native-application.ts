@@ -9,7 +9,7 @@ import {
   createNativeAgentAdapter,
   nativeAgentSender,
   nativeThreadReply,
-  AutomaticRepliesDisabledError,
+  NativeAgentRefusal,
 } from './native-agents.js';
 import { nativeInputHandler } from './native-inputs.js';
 import { sendNativeExports } from './native-exports.js';
@@ -555,9 +555,9 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
         void present(accepted, decision.request.userId, { event, installation });
       }
     } catch (error) {
-      if (expectedOwner && error instanceof AutomaticRepliesDisabledError) {
+      if (expectedOwner && !REQUEST_CONTROL.test(command) && error instanceof NativeAgentRefusal) {
         log.info(
-          `automatic reply ignored (channel disabled) channel=${event.channel} message_ts=${event.ts} event_id=${eventId}`,
+          `automatic reply refused reason=${error.code} channel=${event.channel} message_ts=${event.ts} event_id=${eventId}`,
         );
         return;
       }

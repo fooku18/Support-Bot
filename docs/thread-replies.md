@@ -10,7 +10,11 @@ including to existing threads. Already admitted work continues.
 The adapter checks the original thread, requester and current channel
 access. It ignores unrelated messages, copies of explicit mentions and
 unmentioned `!` commands. Other participants can make an explicit mention
-subject to channel policy.
+subject to channel policy. An unmentioned message that cannot start a
+follow-up, for example while the current answer is not yet delivered,
+stays silent; the adapter logs `automatic reply refused reason=…`.
+Mentions, request controls and service outages still get a private
+refusal notice.
 
 Use `continue <answer>`, `cancel` and `status` for
 [request controls](agent-progress.md). These controls are available when

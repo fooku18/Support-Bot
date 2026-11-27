@@ -142,6 +142,13 @@ A stricter criteria wording was worse on both sets (14/18, 40/43).
     decoded event text, and the flattened content when Slack sends no text.
     Accepted: an app message whose short fallback text is `status` while
     its blocks say more now counts as a control.
+  - Since participants count (#11), every untagged remark in a thread
+    whose answer was not yet delivered got the private notice "Request
+    refused or unavailable". Unmentioned messages other than controls, the
+    requester's included, now stay silent when the service refuses them
+    (409 with a code); the adapter logs the code. Outages and other
+    failures still post the notice. Slack package: 171 tests pass, the new
+    one fails before the change.
 - Deterministic, Windows 11, Node 26.13.1, Docker Desktop 29.9.3:
   - T0 on `1b33a18`: pass.
   - T1 and T2 on `1b33a18`: the Slack package (163 tests, 19 new) and
