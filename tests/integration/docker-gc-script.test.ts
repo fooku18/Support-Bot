@@ -65,7 +65,7 @@ const IMAGE_PRUNE = 'image prune -f --filter label=org.support-agent.image=1';
 const AGE_PRUNE = 'builder prune -f --filter until=168h';
 const CAP_PRUNE = 'builder prune -f --max-used-space 10GB';
 const RUNNER = 'support-agent/runner:ctest';
-const AGENT = 'support-agent/native-coding:ctest';
+const AGENT = 'support-agent/native-answer:ctest';
 
 function run(args: string[] = [], env: NodeJS.ProcessEnv = {}) {
   const root = mkdtempSync(path.join(os.tmpdir(), 'support-agent-docker-gc-'));

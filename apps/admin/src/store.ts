@@ -182,6 +182,7 @@ export class AdminStore {
         }
       }
       await store.transaction(async () => {
+        await store.removeUnknownToolKinds();
         if ((await store.currentDocument()) === null) {
           // An unconfigured service denies requests until an operator pairs a workspace.
           await store.mutate('system', 'config.initialize', 'config', {}, () => undefined);
@@ -204,6 +205,41 @@ export class AdminStore {
 
   async close(): Promise<void> {
     await this.database.close();
+  }
+
+  /** Drops assignments and instances of tool kinds this version no longer has. */
+  private async removeUnknownToolKinds(): Promise<void> {
+    const instances = (await this.all('SELECT id, kind FROM tool_instances')).filter(
+      (row) => !isToolKind(row.kind),
+    );
+    const assignments = (
+      await this.all('SELECT team_id, channel_id, kind FROM channel_tools')
+    ).filter((row) => !isToolKind(row.kind));
+    if (instances.length === 0 && assignments.length === 0) return;
+    await this.mutate(
+      'system',
+      'tool.kind.remove',
+      'tools',
+      {
+        kinds: [...new Set([...instances, ...assignments].map((row) => String(row.kind)))].sort(),
+        instances: instances.map((row) => String(row.id)).sort(),
+        assignments: assignments.length,
+      },
+      async () => {
+        for (const row of assignments)
+          await this.run(
+            'DELETE FROM channel_tools WHERE team_id = ? AND channel_id = ? AND kind = ?',
+            String(row.team_id),
+            String(row.channel_id),
+            String(row.kind),
+          );
+        for (const row of instances) {
+          await this.run('DELETE FROM channel_tools WHERE instance_id = ?', String(row.id));
+          await this.run('DELETE FROM tool_instance_status WHERE instance_id = ?', String(row.id));
+          await this.run('DELETE FROM tool_instances WHERE id = ?', String(row.id));
+        }
+      },
+    );
   }
 
   async all(sql: string, ...params: Array<string | number | null>): Promise<Row[]> {

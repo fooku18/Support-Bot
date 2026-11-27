@@ -29,8 +29,6 @@ const TOOL_SETTINGS_FIELDS: Record<ChannelToolAssignment['tools'][number]['kind'
   webSearch: [],
   webFetch: [],
   codeMode: [],
-  files: ['readOnly'],
-  localExec: [],
 };
 
 /** The complete trusted admin snapshot. Its source hash stays separate from the

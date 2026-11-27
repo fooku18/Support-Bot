@@ -1,28 +1,14 @@
 import { createDurableAgent } from '@mastra/core/agent/durable';
-import { Agent, type ToolsInput } from '@mastra/core/agent';
-import type { AnyWorkspace } from '@mastra/core/workspace';
-import { TaskSignalProvider } from '@mastra/core/signals';
+import { Agent } from '@mastra/core/agent';
 import { ToolSearchProcessor } from '@mastra/core/processors';
-import {
-  taskWriteTool,
-  taskUpdateTool,
-  taskCompleteTool,
-  taskCheckTool,
-  TaskStateProcessor,
-} from '@mastra/core/tools';
 import { nativeAgentConfiguration, type NativeAgentConfiguration } from './shared.js';
 
 export const NATIVE_AGENT_ID = 'coding';
 export const NATIVE_AGENT_VERSION = 1;
 
-/** Assigned reads are discovered on demand. Workspace tools depend on the trusted binding. */
+/** Assigned reads and Code Mode are discovered on demand. */
 export function createNativeAgent(
   options: NativeAgentConfiguration & {
-    coding?: {
-      workspace: AnyWorkspace;
-      tools: ToolsInput;
-    };
-    /** Discovered on demand like the reads; independent of the workspace. */
     codeMode?: NativeAgentConfiguration['tools'];
   },
 ) {
@@ -34,24 +20,12 @@ export function createNativeAgent(
       ...common,
       id: NATIVE_AGENT_ID,
       name: 'Support Agent',
-      workspace: options.coding?.workspace,
-      signals: options.coding ? [new TaskSignalProvider()] : [],
       hooks: {
         beforeToolCall: options.beforeDispatch,
         afterToolCall: options.beforeDispatch,
       },
-      tools: {
-        ...(options.coding && {
-          ...options.coding.tools,
-          task_write: taskWriteTool,
-          task_update: taskUpdateTool,
-          task_complete: taskCompleteTool,
-          task_check: taskCheckTool,
-        }),
-        ...common.tools,
-      },
+      tools: common.tools,
       inputProcessors: [
-        ...(options.coding ? [new TaskStateProcessor()] : []),
         new ToolSearchProcessor({
           tools: { ...options.tools, ...options.codeMode },
           storage: 'context',

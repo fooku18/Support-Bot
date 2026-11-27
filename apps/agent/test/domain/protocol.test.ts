@@ -3,9 +3,7 @@ import {
   buildContextRebuiltNotice,
   claudeFailureLabel,
   buildClaudeReply,
-  buildCodingReply,
   buildClaudeFailureReply,
-  buildCodingFailureReply,
   buildCancellationReply,
   buildCompletionReply,
   sanitizeClaudeFailureReason,
@@ -241,126 +239,19 @@ describe('user-facing reply text', () => {
     expect(reply.persistedAnswerText).toBe('x'.repeat(500));
   });
 
-  it('renders tool answers and clarifications as the summary alone', () => {
-    const summaryText = 'The project contains a single file `hello`.';
-    for (const outcome of [{ discovery: true }, { clarification: true }]) {
-      expect(
-        buildCodingReply({
-          changedFiles: 0,
-          verification: 'passed',
-          recoveryNeeded: false,
-          summaryText,
-          maxChars: 3000,
-          ...outcome,
-        }),
-      ).toBe(summaryText);
-    }
-  });
-
-  it('links the merge requests a tool answer published', () => {
-    expect(
-      buildCodingReply({
-        changedFiles: 0,
-        verification: 'not_run',
-        recoveryNeeded: false,
-        summaryText: 'Published both merge requests.',
-        discovery: true,
-        maxChars: 3000,
-        mergeRequests: [
-          { project: 'g/p', mrUrl: 'https://gitlab.example/g/p/-/merge_requests/1', mrIid: 1 },
-          { project: 'g/q', mrUrl: 'https://gitlab.example/g/q/-/merge_requests/2', mrIid: 2 },
-        ],
-      }),
-    ).toBe(
-      'Published both merge requests.\n\n[Merge request g/p !1](https://gitlab.example/g/p/-/merge_requests/1) · [Merge request g/q !2](https://gitlab.example/g/q/-/merge_requests/2)',
-    );
-  });
-
-  it('ends a coding change with one short status line', () => {
-    const text = buildCodingReply({
-      changedFiles: 2,
-      verification: 'passed (`npm test`)',
-      recoveryNeeded: false,
-      summaryText: 'Added greet().',
-      maxChars: 3000,
-      mergeRequests: [{ project: 'group/app', mrUrl: 'https://gitlab.example/mr/1', mrIid: 1 }],
-    });
-    expect(text).toBe(
-      'Added greet().\n\n✅ 2 files changed · verification passed (`npm test`) · [Merge request !1](https://gitlab.example/mr/1)',
-    );
-    expect(text).not.toMatch(internal);
-    expect(
-      buildCodingReply({
-        changedFiles: 1,
-        verification: 'passed',
-        recoveryNeeded: true,
-        partial: true,
-        summaryText: 'Kept the draft.',
-        maxChars: 3000,
-      }),
-    ).toBe(
-      'Kept the draft.\n\n⚠️ Partial result · 1 file changed · not verified · recovery needed before follow-up work',
-    );
-  });
-
-  it('keeps the status line when the summary must be shortened', () => {
-    const text = buildCodingReply({
-      changedFiles: 3,
-      verification: 'passed',
-      recoveryNeeded: false,
-      summaryText: 'y'.repeat(1000),
-      maxChars: 300,
-      mergeRequests: [{ project: 'group/app', mrUrl: 'https://gitlab.example/mr/7', mrIid: 7 }],
-    });
-    expect(text.length).toBeLessThanOrEqual(300);
-    expect(text).toContain(
-      `The result is available as a downloadable file.\n\n✅ 3 files changed · verification passed · [Merge request !7]`,
-    );
-  });
-
   it('states failures and cancellations without task identifiers', () => {
     const texts = [
       buildClaudeFailureReply({ reason: 'Model inference timed out' }),
-      buildCodingFailureReply({ reason: 'verification failed (exit 1)' }),
       buildCancellationReply({ outcome: 'confirmed', mrUrl: 'https://gitlab.example/mr/2' }),
       buildCompletionReply({ contextRevision: 1, acceptedMessageCount: 2 }),
     ];
     expect(texts[0]).toBe('❌ The request failed: Model inference timed out.');
-    expect(texts[1]).toBe('❌ The coding request failed: verification failed (exit 1).');
-    expect(texts[2]).toBe(
+    expect(texts[1]).toBe(
       '🛑 Cancelled. The active request was stopped before further work started.\nMerge request: https://gitlab.example/mr/2',
     );
     for (const text of texts) {
       expect(text).not.toMatch(internal);
     }
-  });
-
-  it('lists every merge request of a coding reply and keeps the links when truncating', () => {
-    const text = buildCodingReply({
-      changedFiles: 2,
-      verification: 'passed',
-      recoveryNeeded: false,
-      summaryText: 'x'.repeat(5000),
-      maxChars: 600,
-      mergeRequests: [
-        {
-          project: 'group/app',
-          mrUrl: 'https://gitlab.example/group/app/-/merge_requests/1',
-          mrIid: 1,
-        },
-        {
-          project: 'group/lib',
-          mrUrl: 'https://gitlab.example/group/lib/-/merge_requests/2',
-          mrIid: 2,
-        },
-      ],
-    });
-    expect(text.length).toBeLessThanOrEqual(600);
-    expect(text).toContain(`The result is available as a downloadable file.\n\n✅`);
-    expect(text).toMatch(
-      /\n\n✅ 2 files changed · verification passed · \[Merge request group\/app !1\]\(https:\/\/gitlab\.example\/group\/app\/-\/merge_requests\/1\) · \[Merge request group\/lib !2\]\(https:\/\/gitlab\.example\/group\/lib\/-\/merge_requests\/2\)$/,
-    );
-    expect(text).not.toMatch(internal);
   });
 });
 

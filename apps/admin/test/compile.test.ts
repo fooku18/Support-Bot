@@ -235,7 +235,7 @@ describe('compileDocument tool assignments', () => {
     hasCredential: true,
     credentialVersion: 1,
   });
-  const files = instance('ti_000000000000000e', 'files', { settings: { readOnly: true } });
+  const code = instance('ti_000000000000000e', 'codeMode');
   const assign = (channelId: string, row: ToolInstanceRow): ChannelToolRow => ({
     teamId: 'T0TEAM1',
     channelId,
@@ -262,7 +262,7 @@ describe('compileDocument tool assignments', () => {
       { teamId: 'T0TEAM1', channelId: 'C0OFF', enabled: false },
     ],
     blockedMembers: [],
-    toolInstances: [gitlab, atlassian, datadog, search, files],
+    toolInstances: [gitlab, atlassian, datadog, search, code],
   };
   const tool = (resourceId: string) => ({ resourceType: 'tool' as const, resourceId });
   const mcp = (resourceId: string) => ({ resourceType: 'mcp' as const, resourceId });
@@ -271,39 +271,39 @@ describe('compileDocument tool assignments', () => {
     const document = compileDocument(10, {
       ...base,
       channelTools: [
-        assign('C0CHAN1', files),
+        assign('C0CHAN1', code),
         assign('C0CHAN1', gitlab),
         assign('C0CHAN1', atlassian),
         assign('C0OFF', datadog),
       ],
     });
     const policy = policyOf(document);
-    expect(Object.keys(policy.roles).sort()).toEqual(['user', 'user-gl-at-fs']);
+    expect(Object.keys(policy.roles).sort()).toEqual(['user', 'user-gl-at-cm']);
     expect(policy.bindings).toEqual([
       {
         workspace: 'T0TEAM1',
         channels: ['C0CHAN1'],
         users: ['*'],
-        roles: ['user-gl-at-fs'],
+        roles: ['user-gl-at-cm'],
       },
       { workspace: 'T0TEAM1', channels: ['C0CHAN2'], users: ['*'], roles: ['user'] },
     ]);
     // Every person on the list has the same grants: task actions, skills and the channel's tools.
     expect(document.authorizationPolicy.roles).toMatchObject({
-      'user-gl-at-fs': {
+      'user-gl-at-cm': {
         grants: [
           { actions: ['task.start', 'task.read', 'task.steer', 'task.cancel'] },
           { actions: ['skill.use'], resourceType: 'skill', resources: ['*'] },
           {
             actions: ['tool.use'],
             resourceType: 'tool',
-            resources: ['gitlab', 'atlassian', 'files'],
+            resources: ['gitlab', 'atlassian', 'codeMode'],
           },
           { actions: ['mcp.use'], resourceType: 'mcp', resources: ['atlassian'] },
         ],
       },
     });
-    for (const kind of ['gitlab', 'atlassian', 'files'])
+    for (const kind of ['gitlab', 'atlassian', 'codeMode'])
       expect(allowed(document, 'U0ALICE', 'tool.use', 'C0CHAN1', undefined, tool(kind))).toBe(true);
     expect(allowed(document, 'U0ALICE', 'tool.use', 'C0CHAN1', undefined, tool('datadog'))).toBe(
       false,
@@ -314,7 +314,7 @@ describe('compileDocument tool assignments', () => {
     expect(allowed(document, 'U0ALICE', 'mcp.use', 'C0CHAN1', undefined, mcp('gitlab'))).toBe(
       false,
     );
-    for (const kind of ['gitlab', 'atlassian', 'files'])
+    for (const kind of ['gitlab', 'atlassian', 'codeMode'])
       expect(allowed(document, 'U0BOB', 'tool.use', 'C0CHAN1', undefined, tool(kind))).toBe(true);
     // A channel without assignments: task actions and skills, no tool.
     expect(allowed(document, 'U0ALICE', 'task.start', 'C0CHAN2')).toBe(true);
@@ -332,7 +332,7 @@ describe('compileDocument tool assignments', () => {
     expect(document.toolAssignments[0]?.tools.map((row) => row.kind)).toEqual([
       'gitlab',
       'atlassian',
-      'files',
+      'codeMode',
     ]);
     expect(document.toolAssignments[1]).toEqual({
       teamId: 'T0TEAM1',
@@ -367,7 +367,6 @@ describe('compileDocument tool assignments', () => {
       datadog: datadog.settings,
       cloudflare: { accountId: null, zones: null },
       webSearch: search.settings,
-      files: files.settings,
     };
     const instances = kinds.map((kind, index) =>
       instance(`ti_${String(index).padStart(16, '0')}`, kind, { settings: settings[kind] ?? {} }),
@@ -402,7 +401,7 @@ describe('compileDocument tool assignments', () => {
   });
 
   it('omits disabled and foreign instances and keeps the policy independent of readiness', () => {
-    const foreign = { ...files, id: 'ti_00000000000000ff', teamId: 'T0OTHER' };
+    const foreign = { ...code, id: 'ti_00000000000000ff', teamId: 'T0OTHER' };
     const rows = {
       ...base,
       toolInstances: [{ ...gitlab, status: 'disabled' as const }, datadog, foreign],
@@ -429,7 +428,7 @@ describe('compileDocument tool assignments', () => {
     const noCredential = { ...gitlab, hasCredential: false };
     const document = compileDocument(16, {
       ...base,
-      toolInstances: [noCredential, atlassian, datadog, search, files],
+      toolInstances: [noCredential, atlassian, datadog, search, code],
       toolStatuses: [
         ready(noCredential),
         ready(atlassian, 0), // stale: probed an older credential
@@ -444,7 +443,7 @@ describe('compileDocument tool assignments', () => {
         assign('C0CHAN1', atlassian),
         assign('C0CHAN1', datadog),
         assign('C0CHAN1', search),
-        assign('C0CHAN1', files),
+        assign('C0CHAN1', code),
       ],
     });
     const tools = document.toolAssignments[0]?.tools ?? [];
@@ -453,7 +452,7 @@ describe('compileDocument tool assignments', () => {
       ['atlassian', false, 'waiting for runtime readiness'],
       ['datadog', false, 'token rejected (403)'],
       ['webSearch', true, null],
-      ['files', true, null],
+      ['codeMode', true, null],
     ]);
   });
 
@@ -492,12 +491,10 @@ describe('compileDocument tool assignments', () => {
         { ...atlassian, settings: { ...atlassianSettings, operations: null } },
         datadog,
         search,
-        files,
+        code,
       ],
       toolStatuses: [ready(gitlab)],
-      channelTools: [gitlab, atlassian, datadog, search, files].map((row) =>
-        assign('C0CHAN1', row),
-      ),
+      channelTools: [gitlab, atlassian, datadog, search, code].map((row) => assign('C0CHAN1', row)),
     });
     const assignment = document.toolAssignments[0];
     expect(assignment).not.toHaveProperty('limits');
@@ -538,13 +535,12 @@ describe('compileDocument tool assignments', () => {
         detail: null,
       },
       {
-        kind: 'files',
-        instanceId: files.id,
-        label: files.label,
+        kind: 'codeMode',
+        instanceId: code.id,
+        label: code.label,
         credentialVersion: 0,
         ready: true,
         detail: null,
-        readOnly: true,
       },
     ]);
     const text = JSON.stringify(document);

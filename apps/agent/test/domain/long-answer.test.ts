@@ -7,7 +7,6 @@ import {
   LONG_ANSWER_PREVIEW_CHARS,
   longAnswerMessage,
   longAnswerNotice,
-  publicationLine,
   SLACK_MARKDOWN_CHARS,
   splitLongAnswer,
 } from '../../src/domain/delivery/long-answer.js';
@@ -62,25 +61,6 @@ describe('long answer cut', () => {
     const text = 'a'.repeat(LONG_ANSWER_PREVIEW_CHARS - 1) + '😀' + 'b'.repeat(20_000);
     const preview = answerPreview(text);
     expect(preview).toBe('a'.repeat(LONG_ANSWER_PREVIEW_CHARS - 1));
-  });
-
-  it('keeps the trailing publication lines visible under the preview', () => {
-    const verified = publicationLine({
-      outcome: 'confirmed',
-      evidence: {
-        project: 'group/app',
-        branch: 'support-agent/x',
-        commit: 'a'.repeat(40),
-        mrUrl: 'https://gitlab.example/group/app/-/merge_requests/7',
-      },
-    });
-    const unconfirmed = publicationLine({ outcome: 'uncertain' });
-    const text = `${lines(14_000)}\n\n${verified}\n\n${unconfirmed}`;
-    const split = splitLongAnswer(text)!;
-    expect(split.preview.endsWith(`\n\n${verified}\n\n${unconfirmed}`)).toBe(true);
-    expect(split.preview).toContain('merge_requests/7');
-    expect(split.preview.length).toBeLessThan(LONG_ANSWER_PREVIEW_CHARS + 400);
-    expect(answerFileBytes(split.file, split.preview).toString('utf8')).toBe(text);
   });
 
   it('says whether the full answer is attached', () => {

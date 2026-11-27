@@ -24,13 +24,13 @@ export async function backupScenario(c: any) {
   } = c;
   await check('restricted-restored-or-source-grants-and-single-execution-owner', async () => {
     await assert.rejects(pool.query('CREATE TABLE framework.forbidden_runtime_ddl(id int)'));
-    // Only the receipt columns of publications are writable at runtime.
-    await assert.rejects(pool.query('UPDATE native_agents.publications SET project=project'));
+    // Only the receipt columns of deliveries are writable at runtime.
+    await assert.rejects(pool.query('UPDATE native_agents.deliveries SET text=text'));
     const other = await c.launch(c.main, c.baseEnv, 'singleton-refused');
     assert.equal((await other.done).code, 1);
     assert.equal(gatewayRequests.length, 0);
     assert.equal(posts.length, 0);
-    return { runtimeDdl: 'refused', publicationProjectWrite: 'refused', secondOwner: 'refused' };
+    return { runtimeDdl: 'refused', deliveryTextWrite: 'refused', secondOwner: 'refused' };
   });
   if (phase === 'backup-source') {
     const saved: any = {};
@@ -70,9 +70,8 @@ export async function backupScenario(c: any) {
     await check('cold-restored-inspection-does-not-recover-or-send', async () => {
       const status = await get('/native/status');
       assert.equal(status.active.length, 0);
-      // The two answer questions, plus the coding question of `coding-backup-source`.
       const waits = status.waits.map((w: any) => w.runId);
-      assert.equal(waits.length, 3);
+      assert.equal(waits.length, 2);
       for (const kind of ['resume', 'revoked']) assert(waits.includes(saved[kind].handle.runId));
       assert.equal(
         (await call('inspect', request('resume'))).suspended.toolCallId,

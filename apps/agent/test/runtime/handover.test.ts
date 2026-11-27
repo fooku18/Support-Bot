@@ -6,7 +6,6 @@ import { expect, it, vi } from 'vitest';
 import { InMemoryStore } from '@mastra/core/storage';
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
-import { LocalFilesystem, Workspace } from '@mastra/core/workspace';
 import { createReleaseSummaryRuntime } from '../../src/mastra/agents/release-summary.js';
 import { runNativeSegment } from '../../src/mastra/runtime/segment.js';
 
@@ -53,13 +52,9 @@ function response(part: Part) {
   return new Response(events.join(''), { headers: { 'content-type': 'text/event-stream' } });
 }
 
-it.each([
-  [false, false],
-  [false, true],
-  [true, true],
-])(
-  'discovers assigned read tools with a coding workspace bound: %s, Code Mode bound: %s',
-  async (withWorkspace, withCodeMode) => {
+it.each([false, true])(
+  'discovers assigned read tools with Code Mode bound: %s',
+  async (withCodeMode) => {
     const root = path.resolve('artifacts/native-handover', randomUUID());
     await fs.mkdir(root, { recursive: true });
     const requests: Request[] = [];
@@ -74,14 +69,9 @@ it.each([
       const names = request.tools.map((t) => t.name);
       expect(names).toContain('ask_user');
       expect(names).toContain('search_tools');
-      if (withWorkspace) {
-        expect(names).toContain('task_write');
-        expect(names).toContain('mastra_workspace_read_file');
-      } else {
-        const allowed = ['ask_user', 'search_tools', 'read_release'];
-        if (withCodeMode) allowed.push('execute_typescript');
-        expect(names.filter((n) => !allowed.includes(n))).toEqual([]);
-      }
+      const allowed = ['ask_user', 'search_tools', 'read_release'];
+      if (withCodeMode) allowed.push('execute_typescript');
+      expect(names.filter((n) => !allowed.includes(n))).toEqual([]);
       const content = JSON.stringify(request.messages);
       if (mode === 'code') {
         if (!names.includes('execute_typescript'))
@@ -112,17 +102,7 @@ it.each([
       }
       return response({ type: 'text', text: fact });
     });
-    const workspace = new Workspace({
-      id: randomUUID(),
-      filesystem: new LocalFilesystem({ basePath: root }),
-    });
     const runtime = createReleaseSummaryRuntime({
-      ...(withWorkspace && {
-        coding: {
-          workspace,
-          tools: {},
-        },
-      }),
       ...(withCodeMode && {
         codeMode: {
           execute_typescript: createTool({
@@ -216,7 +196,6 @@ it.each([
         JSON.stringify(requests, null, 2),
       );
       await runtime.mastra.shutdown();
-      if (withWorkspace) await workspace.stop();
       vi.unstubAllGlobals();
     }
   },

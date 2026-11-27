@@ -7,7 +7,6 @@
     "deploy/lib/model-catalog.mjs",
     "tests/fixtures/repository/**"
   ],
-  "ignoreBinaries": ["mkfifo"],
   "workspaces": {
     ".": {
       "entry": [

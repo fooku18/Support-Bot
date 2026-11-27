@@ -31,7 +31,6 @@ import {
   type ChannelToolAssignment,
   type CloudflareSettings,
   type DatadogSettings,
-  type FilesSettings,
   type ToolKind,
 } from '../generated/tool-kinds.js';
 import {
@@ -603,8 +602,6 @@ const KIND_ICONS: Record<ToolKind, IconName> = {
   webSearch: 'search',
   webFetch: 'download',
   codeMode: 'zap',
-  files: 'audit',
-  localExec: 'prompt',
 };
 
 /** Readiness of an instance in words, as the runtimes last reported it. */
@@ -716,15 +713,6 @@ ${(settings?.zones ?? []).join('\n')}</textarea
         credentials) that calls the channel's read-only service tools and returns one combined
         result. No endpoint or key; assigning this instance to a channel admits it.
       </p>`;
-    case 'files': {
-      const settings = instance?.settings as FilesSettings | undefined;
-      return html`<label class="field"
-        ><span
-          ><input type="checkbox" name="readOnly" ${settings?.readOnly === true ? 'checked' : ''} />
-          Read-only</span
-        ></label
-      >`;
-    }
     default:
       return html``;
   }

@@ -162,7 +162,7 @@ RUN set -eux; \
       if (context.evalSync('6 * 7') !== 42) process.exit(1); \
     "
 
-# build the shared agent. The lean image is for isolated fixtures.
+# build the shared agent.
 FROM agent-source AS native-answer-build
 RUN npm run build:native --workspace @support-agent/agent
 
@@ -204,21 +204,3 @@ COPY --chmod=755 deploy/docker/support-agent /usr/local/bin/support-agent
 RUN install -d -o node -g node /var/lib/support-agent-admin
 USER node
 ENTRYPOINT ["/usr/local/bin/support-agent"]
-
-# Deployed image with the isolated Workspace and trusted Git publication adapter.
-FROM base AS native-coding-os
-RUN apt-get update && apt-get install -y --no-install-recommends git bubblewrap ca-certificates \
-    && rm -rf /var/lib/apt/lists/* \
-    && mkdir -p /var/lib/native-coding
-
-FROM native-coding-os AS native-coding
-ENV NODE_ENV=production
-# isolated-vm (Code Mode) crashes on Node 20+ without this flag.
-ENV NODE_OPTIONS=--no-node-snapshot
-WORKDIR /app
-COPY --from=agent-deps /build/node_modules ./node_modules
-COPY --from=agent-deps /build/apps/agent ./apps/agent
-COPY --from=native-answer-build /build/apps/agent/dist/native ./apps/agent/dist/native
-COPY --chmod=755 deploy/docker/native-answer-entrypoint.sh /usr/local/bin/
-COPY --chmod=755 deploy/docker/native-bwrap.sh /usr/local/bin/bwrap
-ENTRYPOINT ["/usr/local/bin/native-answer-entrypoint.sh"]

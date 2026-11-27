@@ -71,13 +71,10 @@ describe('native package ownership', () => {
       'mastra/agents/shared.ts',
       'mastra/runtime/agent.ts',
       'mastra/runtime/segment.ts',
-      'mastra/tools/coding.ts',
       'mastra/tools/code-mode.ts',
       'mastra/tools/read-services.ts',
       'application/agent-service.ts',
-      'domain/publication/publish-project.ts',
       'domain/authorization/policy.ts',
-      'domain/delivery/register-export.ts',
       'integrations/gitlab/gitlab-operations.ts',
       'integrations/tools/runtime-client.ts',
     ])

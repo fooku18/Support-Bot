@@ -718,36 +718,32 @@ describe('native live driver', () => {
       E2E_GITLAB_PROJECT_ID: '42',
       E2E_GITLAB_TARGET_BRANCH: 'main',
     };
-    for (const name of ['coding-files', 'thread-followup']) {
-      const raw = JSON.parse(fs.readFileSync(`tests/live/scenarios/${name}.json`, 'utf8'));
+    const trace = {
+      E2E_GITLAB_TRACE_JOB_ID: '7',
+      E2E_GITLAB_TRACE_HEAD_MARKER: 'trace-marker head',
+      E2E_GITLAB_TRACE_TAIL_MARKER: 'trace-marker-end',
+    };
+    {
+      const raw = JSON.parse(fs.readFileSync('tests/live/scenarios/gitlab-discovery.json', 'utf8'));
       expect(JSON.stringify(raw)).not.toContain('example-group');
-      const resolved = validateScenario(resolveScenarioFixtures(raw, gitlab));
+      const resolved = validateScenario(resolveScenarioFixtures(raw, { ...gitlab, ...trace }));
       expect(JSON.stringify(resolved)).not.toContain('{{');
       expect(resolved.steps[0].prompt).toContain('group/fixture');
-      for (const step of resolved.steps.filter((x: { publication?: unknown }) => x.publication)) {
-        expect(step.publication).toMatchObject({
-          host: 'gitlab.test.invalid',
-          project: 'group/fixture',
-          projectId: 42,
-          targetBranch: 'main',
-        });
-      }
-      expect(() => resolveScenarioFixtures(raw, { ...gitlab, E2E_GITLAB_PROJECT_ID: '' })).toThrow(
-        'missing_E2E_GITLAB_PROJECT_ID',
-      );
       expect(() =>
-        resolveScenarioFixtures(raw, { ...gitlab, E2E_GITLAB_PROJECT: '<operator: project>' }),
+        resolveScenarioFixtures(raw, { ...gitlab, ...trace, E2E_GITLAB_PROJECT_ID: '' }),
+      ).toThrow('missing_E2E_GITLAB_PROJECT_ID');
+      expect(() =>
+        resolveScenarioFixtures(raw, {
+          ...gitlab,
+          ...trace,
+          E2E_GITLAB_PROJECT: '<operator: project>',
+        }),
       ).toThrow('missing_E2E_GITLAB_PROJECT');
     }
-    // Only a publication's projectId becomes a number; a fact in `contains` stays text.
+    // A fact in `contains` stays text.
     const discovery = resolveScenarioFixtures(
       JSON.parse(fs.readFileSync('tests/live/scenarios/gitlab-discovery.json', 'utf8')),
-      {
-        ...gitlab,
-        E2E_GITLAB_TRACE_JOB_ID: '7',
-        E2E_GITLAB_TRACE_HEAD_MARKER: 'trace-marker head',
-        E2E_GITLAB_TRACE_TAIL_MARKER: 'trace-marker-end',
-      },
+      { ...gitlab, ...trace },
     );
     expect(validateScenario(discovery).steps[0].contains).toEqual(['42', 'main']);
     expect(discovery.steps[1].prompt).toContain('CI job 7 ');
@@ -2257,8 +2253,6 @@ describe('driver-managed tools, tool scopes and the model mode switch', () => {
       neededTools(JSON.parse(fs.readFileSync(`tests/live/scenarios/${file}`, 'utf8')));
     expect(needs('answer-continuity.json')).toEqual([]);
     expect(needs('stub/channel-settings.json')).toEqual([]);
-    expect(needs('thread-followup.json')).toEqual(['gitlab']);
-    expect(needs('coding-files.json')).toEqual(['gitlab']);
     expect(needs('gitlab-discovery.json')).toEqual(['gitlab']);
     expect(needs('web-search.json')).toEqual(['webSearch']);
     expect(needs('web-fetch.json')).toEqual(['webFetch']);
@@ -2293,8 +2287,6 @@ describe('driver-managed tools, tool scopes and the model mode switch', () => {
       gitlab: 'ti_gitlab',
       atlassian: 'ti_jira',
       codeMode: 'ti_code',
-      files: 'ti_files',
-      localExec: 'ti_exec',
     };
     const tools = fakeTools(original, gitlabInstances);
     const app = answeringApp(answer);
@@ -2307,7 +2299,7 @@ describe('driver-managed tools, tool scopes and the model mode switch', () => {
         return app.slack(method, body);
       },
       // The channel as it is would block: the identity read saw tools.
-      identity: { ...identity, assignedTools: 5, readyKinds: ['gitlab'] },
+      identity: { ...identity, assignedTools: 3, readyKinds: ['gitlab'] },
       report,
       save: () => {},
       admin: tools.admin,
@@ -2320,13 +2312,9 @@ describe('driver-managed tools, tool scopes and the model mode switch', () => {
       'unassign gitlab',
       'unassign atlassian',
       'unassign codeMode',
-      'unassign files',
-      'unassign localExec',
       'assign gitlab ti_gitlab',
       'assign atlassian ti_jira',
       'assign codeMode ti_code',
-      'assign files ti_files',
-      'assign localExec ti_exec',
     ]);
     expect(tools.assignment).toEqual(original);
     expect(report.toolAssignment).toMatchObject({
@@ -2490,8 +2478,6 @@ describe('driver-managed tools, tool scopes and the model mode switch', () => {
           'webSearch',
           'webFetch',
           'codeMode',
-          'files',
-          'localExec',
         ],
       },
     });
@@ -2597,7 +2583,7 @@ describe('driver-managed tools, tool scopes and the model mode switch', () => {
               ? {
                   tools: [
                     { kind: 'gitlab', instanceId: 'ti_gitlab', label: 'GitLab', ready: true },
-                    { kind: 'localExec', instanceId: 'ti_exec', label: 'Exec', ready: true },
+                    { kind: 'codeMode', instanceId: 'ti_code', label: 'Code', ready: true },
                   ],
                 }
               : {
@@ -2619,7 +2605,7 @@ describe('driver-managed tools, tool scopes and the model mode switch', () => {
     );
     expect(await admin.assignment()).toEqual({
       gitlab: { instanceId: 'ti_gitlab', label: 'GitLab', ready: true },
-      localExec: { instanceId: 'ti_exec', label: 'Exec', ready: true },
+      codeMode: { instanceId: 'ti_code', label: 'Code', ready: true },
     });
     expect(await admin.instances()).toEqual([
       { id: 'ti_gitlab', kind: 'gitlab', label: '', host: 'gitlab.test.invalid', ready: true },

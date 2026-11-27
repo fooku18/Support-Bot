@@ -26,23 +26,6 @@ export interface IntakeRequest {
   actionToken?: string;
 }
 
-/** Model-authored plan only. Identity is (originating run, attempt, revision, ordinal). */
-export interface TaskChecklistDto {
-  objectiveRunId: string;
-  runId: string;
-  attempt: number;
-  revision: number;
-  items: Array<{ ordinal: number; label: string; status: 'pending' | 'in_progress' | 'completed' }>;
-}
-
-/** Controller-owned evidence, never supplied by a model tool. */
-export interface TaskProjectEvidenceDto {
-  project: string;
-  treeDigest: string | null;
-  verification: 'not_run' | 'passed' | 'failed' | 'timed_out' | 'incomplete' | 'unknown';
-  publication: 'not_published' | 'published' | 'unknown';
-}
-
 export interface SlackFileDescriptorDto {
   id: string;
   sourceTs: string;
@@ -66,9 +49,7 @@ export interface ChannelToolDto {
     | 'slack'
     | 'webSearch'
     | 'webFetch'
-    | 'codeMode'
-    | 'files'
-    | 'localExec';
+    | 'codeMode';
   instanceId: string;
   label: string;
   credentialVersion: number;
@@ -84,8 +65,6 @@ export interface ChannelToolDto {
   accountId?: string | null;
   /** Cloudflare only: the zone names exposed (null: every zone the token sees). */
   zones?: string[] | null;
-  /** Task files only. */
-  readOnly?: boolean;
 }
 
 /**

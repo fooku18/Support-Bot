@@ -1854,8 +1854,6 @@ function settingsFromForm(kind: ToolKind, body: Record<string, unknown>): Record
           .map((name) => name.trim())
           .filter((name) => name.length > 0),
       };
-    case 'files':
-      return { readOnly: body.readOnly !== undefined };
     default:
       return {};
   }

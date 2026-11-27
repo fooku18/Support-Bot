@@ -14,24 +14,6 @@ export const LONG_ANSWER_FILE_NAME = 'answer.md';
 export const LONG_ANSWER_FILE_BYTES = 2 * 1024 ** 2;
 /** Room the notice and its separator take in front of the preview. */
 const NOTICE_ROOM = 400;
-/** Kept application status paragraphs (publication lines) may use at most this much. */
-const TAIL_CHARS = 4_000;
-
-/** Application-owned status paragraphs appended after a coding answer. The
- * preview keeps them, so a long answer still shows its merge request link. */
-export const PUBLICATION_CONFIRMED_PREFIX = 'Verified publication: ';
-export const PUBLICATION_UNCONFIRMED_LINE =
-  'Publication outcome unconfirmed. Do not retry; operator reconciliation required.';
-
-export function publicationLine(p: {
-  outcome: string;
-  evidence?: { project: string; branch: string; commit: string; mrUrl: string } | null;
-}): string {
-  return p.outcome === 'confirmed' && p.evidence
-    ? `${PUBLICATION_CONFIRMED_PREFIX}${p.evidence.project} branch ${p.evidence.branch}, commit ${p.evidence.commit}, MR ${p.evidence.mrUrl}.`
-    : PUBLICATION_UNCONFIRMED_LINE;
-}
-
 /** The full answer as a thread file (the same bytes as the retained text). */
 export interface NativeAnswerFile {
   name: string;
@@ -101,25 +83,13 @@ export function answerPreview(text: string, max = LONG_ANSWER_PREVIEW_CHARS): st
 
 /**
  * Splits an answer above the Slack limit into a preview and the full answer
- * file, or returns null when the answer fits. Trailing publication paragraphs
- * stay visible under the preview.
+ * file, or returns null when the answer fits.
  */
 export function splitLongAnswer(text: string): { preview: string; file: NativeAnswerFile } | null {
   if (text.length <= SLACK_MARKDOWN_CHARS) return null;
   const bytes = Buffer.from(text, 'utf8');
   if (bytes.length > LONG_ANSWER_FILE_BYTES) throw new Error('answer exceeds the file bound');
-  const paragraphs = text.split('\n\n');
-  let start = paragraphs.length;
-  while (
-    start > 1 &&
-    (paragraphs[start - 1]!.startsWith(PUBLICATION_CONFIRMED_PREFIX) ||
-      paragraphs[start - 1] === PUBLICATION_UNCONFIRMED_LINE)
-  )
-    start--;
-  const tail = paragraphs.slice(start).join('\n\n');
-  const kept = tail.length <= TAIL_CHARS ? tail : '';
-  const body = kept ? paragraphs.slice(0, start).join('\n\n') : text;
-  const preview = [answerPreview(body), kept].filter(Boolean).join('\n\n');
+  const preview = answerPreview(text);
   if (preview.length + NOTICE_ROOM > SLACK_MARKDOWN_CHARS) throw new Error('preview bound');
   return {
     preview,

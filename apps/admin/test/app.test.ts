@@ -754,12 +754,12 @@ describe('admin app', () => {
         (await store.listAudit(50)).filter((row) => row.action === 'tool.secret.refused'),
       ).toHaveLength(3);
       expect((await internalGet('/tool-instances/ti_0000000000000000/secret')).status).toBe(404);
-      const files = await api('/installations/T0TEAM1/tools', 'POST', {
-        kind: 'files',
-        label: 'Files',
+      const code = await api('/installations/T0TEAM1/tools', 'POST', {
+        kind: 'codeMode',
+        label: 'Code Mode',
       });
-      const filesId = ((await files.json()) as { instance: View }).instance.id;
-      expect((await internalGet(`/tool-instances/${filesId}/secret`)).status).toBe(404);
+      const codeId = ((await code.json()) as { instance: View }).instance.id;
+      expect((await internalGet(`/tool-instances/${codeId}/secret`)).status).toBe(404);
       await api(`/installations/T0TEAM1/tools/${gitlab.id}`, 'PUT', { status: 'disabled' });
       expect((await internalGet(`/tool-instances/${gitlab.id}/secret`)).status).toBe(404);
       await api(`/installations/T0TEAM1/tools/${gitlab.id}`, 'PUT', { status: 'enabled' });
@@ -955,13 +955,13 @@ describe('admin app', () => {
       await store.recordSeen('T0OTHER');
       const foreign = (
         await store.createToolInstance('test', 'T0OTHER', {
-          kind: 'files',
+          kind: 'codeMode',
           label: 'Other',
         })
       ).instance;
       expect(
         (
-          await api('/installations/T0TEAM1/channels/C0GENERAL/tools/files', 'PUT', {
+          await api('/installations/T0TEAM1/channels/C0GENERAL/tools/codeMode', 'PUT', {
             instanceId: foreign.id,
           })
         ).status,
@@ -1195,7 +1195,7 @@ describe('admin app', () => {
 
       const assign = await form(
         '/workspaces/T0TEAM1/channels/C0GENERAL/tools',
-        { csrf, kind_gitlab: gitlab.id, kind_datadog: datadog?.id ?? '', kind_files: 'none' },
+        { csrf, kind_gitlab: gitlab.id, kind_datadog: datadog?.id ?? '', kind_codeMode: 'none' },
         cookie,
       );
       expect(assign.status).toBe(303);

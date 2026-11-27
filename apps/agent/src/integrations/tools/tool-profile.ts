@@ -29,12 +29,7 @@ export const WEB_RUNTIME_ADAPTER = 'web-runtime-v1';
 /** Adapter ID of provider-hosted web search. */
 export const WEB_SEARCH_ADAPTER = 'anthropic-web-search-v1';
 
-/** Runtime profile of the local commands (pinned, immutable packaging). */
-export const LOCAL_COMMANDS_PROFILE = 'local-commands-v1';
-
 export type EffectiveToolName =
-  | 'files'
-  | 'localExec'
   | 'atlassian'
   | 'datadog'
   | 'cloudflare'
@@ -49,9 +44,6 @@ export interface EffectiveTool {
   label: string;
   credentialVersion: number;
   adapter: string;
-  scope: 'task' | 'global';
-  /** Read-only narrowing for the files grant. */
-  readOnly: boolean;
   /** Atlassian: typed operation allowlist plus contract version. */
   operations?: string[];
   contractVersion?: string;
@@ -62,7 +54,7 @@ export interface EffectiveTool {
   zones?: string[] | null;
 }
 
-/** The channel's GitLab instance (core tools: reads, writes, clone, verify, publish). */
+/** The channel's GitLab instance. */
 export interface EffectiveGitlab {
   instanceId: string;
   label: string;
@@ -81,25 +73,13 @@ function effectiveTool(tool: ChannelToolDto): EffectiveTool | null {
     instanceId: tool.instanceId,
     label: tool.label,
     credentialVersion: tool.credentialVersion,
-    readOnly: false,
   };
   switch (tool.kind) {
-    case 'files':
-      return {
-        ...base,
-        name: 'files',
-        adapter: 'task-fs-v1',
-        scope: 'task',
-        readOnly: tool.readOnly === true,
-      };
-    case 'localExec':
-      return { ...base, name: 'localExec', adapter: LOCAL_COMMANDS_PROFILE, scope: 'task' };
     case 'atlassian':
       return {
         ...base,
         name: 'atlassian',
         adapter: ATLASSIAN_ADAPTER,
-        scope: 'global',
         operations: normalizeAtlassianOperations(tool.operations ?? [...ATLASSIAN_READ_OPERATIONS]),
         contractVersion: ATLASSIAN_CONTRACT_VERSION,
       };
@@ -108,7 +88,6 @@ function effectiveTool(tool: ChannelToolDto): EffectiveTool | null {
         ...base,
         name: 'datadog',
         adapter: DATADOG_ADAPTER,
-        scope: 'global',
         contractVersion: DATADOG_CONTRACT_VERSION,
         denyTools: [...(tool.denyTools ?? [])].sort(),
       };
@@ -117,7 +96,6 @@ function effectiveTool(tool: ChannelToolDto): EffectiveTool | null {
         ...base,
         name: 'cloudflare',
         adapter: CLOUDFLARE_ADAPTER,
-        scope: 'global',
         contractVersion: CLOUDFLARE_CONTRACT_VERSION,
         accountId: tool.accountId ?? null,
         zones: tool.zones === undefined || tool.zones === null ? null : [...tool.zones].sort(),
@@ -127,13 +105,12 @@ function effectiveTool(tool: ChannelToolDto): EffectiveTool | null {
         ...base,
         name: 'slack',
         adapter: SLACK_ADAPTER,
-        scope: 'global',
         contractVersion: SLACK_CONTRACT_VERSION,
       };
     case 'webSearch':
-      return { ...base, name: 'webSearch', adapter: WEB_SEARCH_ADAPTER, scope: 'global' };
+      return { ...base, name: 'webSearch', adapter: WEB_SEARCH_ADAPTER };
     case 'webFetch':
-      return { ...base, name: 'webFetch', adapter: WEB_RUNTIME_ADAPTER, scope: 'global' };
+      return { ...base, name: 'webFetch', adapter: WEB_RUNTIME_ADAPTER };
     default:
       return null;
   }

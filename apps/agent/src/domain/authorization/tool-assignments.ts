@@ -120,10 +120,6 @@ function parseTool(value: unknown, where: string): ChannelToolDto {
       });
     }
   }
-  if (input.readOnly !== undefined) {
-    if (typeof input.readOnly !== 'boolean') fail(`${where}.readOnly must be a boolean`);
-    tool.readOnly = input.readOnly;
-  }
   if (kind === 'gitlab' && tool.host === undefined) fail(`${where}.host is required for gitlab`);
   return tool;
 }
