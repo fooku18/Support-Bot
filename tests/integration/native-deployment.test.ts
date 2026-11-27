@@ -219,13 +219,13 @@ describe('native deployment conversion', () => {
     ]);
     expect(c.services.adapter.environment.NATIVE_APPLICATION_URL).toBe('http://native-answer:9879');
     expect(c.services['native-provision'].profiles).toEqual(['maintenance']);
-    expect(c.services['native-upgrade'].profiles).toEqual(['maintenance']);
-    expect(c.services['native-upgrade'].command).toEqual(['upgrade']);
-    expect(c.services['native-upgrade'].network_mode).toBe('none');
-    expect(c.services['native-upgrade'].secrets).toBeUndefined();
-    expect(c.services['native-upgrade'].depends_on['native-postgres']).toEqual({
-      condition: 'service_healthy',
+    expect(c.services['native-upgrade']).toMatchObject({
+      profiles: ['maintenance'],
+      command: ['upgrade'],
+      network_mode: 'none',
+      depends_on: { 'native-postgres': { condition: 'service_healthy' } },
     });
+    expect(c.services['native-upgrade'].secrets).toBeUndefined();
     // The model stub: tools network only, no route out, no ports, no secrets.
     const stub = c.services['model-stub'];
     expect(stub.profiles).toEqual(['stub']);
@@ -511,9 +511,8 @@ describe('native deployment conversion', () => {
     // The overrides reach Compose interpolation only, for this command only.
     expect(compose.every((c) => c.stub === '1')).toBe(true);
     expect(compose.every((c) => !c.args.some((arg) => /compose\.model-/.test(arg)))).toBe(true);
-    const start = compose
-      .map((c) => c.args)
-      .find((a) => a.includes('up') && a.includes('adapter'))!;
+    const steps = compose.map((c) => c.args);
+    const start = steps.find((a) => a.includes('up'))!;
     expect(start.slice(start.indexOf('egress'))).toEqual([
       'egress',
       'admin',
@@ -522,7 +521,6 @@ describe('native deployment conversion', () => {
       'native-answer',
       'adapter',
     ]);
-    const steps = compose.map((c) => c.args);
     const upgrade = steps.findIndex((a) => a.at(-1) === 'native-upgrade');
     expect(upgrade).toBeGreaterThan(-1);
     expect(steps[upgrade]).toContain('--rm');

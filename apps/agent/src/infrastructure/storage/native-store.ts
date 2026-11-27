@@ -3,6 +3,7 @@ import { PostgresStore } from '@mastra/pg';
 import { provisionNativeAgents } from './agent-storage.js';
 
 export const NATIVE_STORAGE_VERSION = 'coding-application@2';
+const NATIVE_SEAL = JSON.stringify({ version: NATIVE_STORAGE_VERSION });
 
 export function nativeStore(pool: Pool, provision = false) {
   return new PostgresStore({
@@ -35,10 +36,9 @@ export async function provisionNativeApplication(pool: Pool) {
   const storage = nativeStore(pool, true);
   await storage.init();
   await provisionNativeAgents(pool);
-  const seal = JSON.stringify({ version: NATIVE_STORAGE_VERSION });
   const comment = (
     await pool.query("SELECT format('COMMENT ON SCHEMA native_agents IS %L', $1::text) AS sql", [
-      seal,
+      NATIVE_SEAL,
     ])
   ).rows[0].sql;
   await pool.query(comment);
@@ -61,7 +61,7 @@ export async function upgradeNativeApplication(pool: Pool) {
       "SELECT obj_description(oid,'pg_namespace') AS seal FROM pg_namespace WHERE nspname='native_agents'",
     )
   ).rows[0]?.seal;
-  if (seal !== JSON.stringify({ version: NATIVE_STORAGE_VERSION }))
+  if (seal !== NATIVE_SEAL)
     throw new Error('native upgrade requires a sealed store of this version');
   await nativeStore(pool, true).init();
   await pool.query(FRAMEWORK_GRANTS);
@@ -90,7 +90,7 @@ export async function checkNativeStorage(pool: Pool) {
     r.framework_create ||
     r.app_create ||
     r.public_create ||
-    r.seal !== JSON.stringify({ version: NATIVE_STORAGE_VERSION })
+    r.seal !== NATIVE_SEAL
   )
     throw new Error('native storage identity, grants or seal refused');
   await pool.query('SELECT run_id,input_receipts FROM native_agents.requests LIMIT 0');

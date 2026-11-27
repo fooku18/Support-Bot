@@ -250,12 +250,12 @@ async function inProcessSuite() {
       NATIVE_PG_ADMIN_PASSWORD: password,
       NATIVE_PG_PASSWORD: randomBytes(32).toString('hex'),
     };
-    const provision = () =>
-      spawnSync(process.execPath, [path.join(root, 'provision.mjs')], { env, timeout: 60000 });
-    const upgrade = () =>
-      spawnSync(process.execPath, [path.join(root, 'upgrade.mjs')], { env, timeout: 60000 });
+    const entry = (name) =>
+      spawnSync(process.execPath, [path.join(root, `${name}.mjs`)], { env, timeout: 60000 });
+    const provision = () => entry('provision');
+    const upgrade = () => entry('upgrade');
     const sql = (statement) =>
-      run('docker', [
+      docker(
         'exec',
         `${prefix}-pg`,
         'psql',
@@ -267,7 +267,7 @@ async function inProcessSuite() {
         'ON_ERROR_STOP=1',
         '-Atc',
         statement,
-      ]).trim();
+      ).trim();
     assert.equal(upgrade().status, 1, 'refuse upgrade without a native store');
     assert.equal(provision().status, 0, 'fresh TCP provisioning');
     assert.equal(provision().status, 1, 'refuse existing TCP database');
