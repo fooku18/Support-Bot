@@ -1050,7 +1050,7 @@ export function createApp(deps: AppDeps): AdminApp {
     }
   };
 
-  /** Versions of `topics` at this moment (read in the same turn as the data). */
+  /** Versions of `topics` at this moment (read before the data the page shows). */
   const liveRegion = (topics: string[]) => ({
     epoch: feed.epoch,
     versions: Object.fromEntries(topics.map((topic) => [topic, feed.version(topic)])),
@@ -1536,32 +1536,21 @@ export function createApp(deps: AppDeps): AdminApp {
       return;
     }
     if (req.method === 'GET' && req.path === '/costs') {
+      const live = liveRegion(['costs']);
       htmlPage(
         res,
-        costsPage(
-          await pageContext(session),
-          await costsView(req.query, 'channel'),
-          liveRegion(['costs']),
-        ),
+        costsPage(await pageContext(session), await costsView(req.query, 'channel'), live),
       );
       return;
     }
     if (req.method === 'GET' && req.path === '/audit') {
-      htmlPage(
-        res,
-        auditPage(await pageContext(session), await store.listAudit(200), liveRegion(['audit'])),
-      );
+      const live = liveRegion(['audit']);
+      htmlPage(res, auditPage(await pageContext(session), await store.listAudit(200), live));
       return;
     }
     if (req.method === 'GET' && req.path === '/config') {
-      htmlPage(
-        res,
-        configPage(
-          await pageContext(session),
-          (await store.currentDocument())!,
-          liveRegion(['config']),
-        ),
-      );
+      const live = liveRegion(['config']);
+      htmlPage(res, configPage(await pageContext(session), (await store.currentDocument())!, live));
       return;
     }
     throw new HttpError(404, 'not found');
