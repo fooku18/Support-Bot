@@ -90,6 +90,7 @@ export type NativeAgentSender = (value: {
   text: string;
   /** Context line under a final answer (check mark and model); absent on notices. */
   footer?: string;
+  feedbackRunId?: string;
   files?: NativeExport[];
   /** The full answer when `text` is only its preview (long answers). */
   answerFile?: NativeAnswerFile;

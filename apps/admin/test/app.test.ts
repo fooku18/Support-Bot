@@ -1796,6 +1796,53 @@ describe('admin app', () => {
       expect(byToken.status).toBe(200);
       expect((await call('/costs?from=nope', { headers: { cookie } })).status).toBe(400);
     });
+
+    it('stores one answer vote per user and shows the counts on /costs', async () => {
+      const runId = '0b6f4c1e-8d2a-4c39-9b8e-2f7d1a5c3e90';
+      const vote = (userId: string, value: string, extra: Record<string, unknown> = {}) =>
+        fetch(`${base}/internal/channel-commands/feedback`, {
+          method: 'POST',
+          headers: { authorization: `Bearer ${INTERNAL}`, 'content-type': 'application/json' },
+          body: JSON.stringify({
+            teamId: 'T0TEAM1',
+            channelId: 'C0GENERAL',
+            rootTs: '1716234567.111111',
+            answerTs: '1716234567.222222',
+            runId,
+            userId,
+            vote: value,
+            ...extra,
+          }),
+        });
+      expect((await vote('U0ALICE', 'down')).status).toBe(200);
+      expect((await vote('U0ALICE', 'up')).status).toBe(200);
+      expect((await vote('U0BOB', 'down')).status).toBe(200);
+      expect(
+        (
+          await fetch(`${base}/internal/channel-commands/feedback`, {
+            method: 'POST',
+            headers: { authorization: 'Bearer wrong', 'content-type': 'application/json' },
+            body: '{}',
+          })
+        ).status,
+      ).toBe(401);
+      expect((await vote('U0BOB', 'maybe')).status).toBe(400);
+      expect((await vote('U0BOB', 'up', { answerTs: 'x' })).status).toBe(400);
+      expect(await store.answerFeedback()).toEqual([
+        {
+          channelId: 'C0GENERAL',
+          rootTs: '1716234567.111111',
+          answerTs: '1716234567.222222',
+          runId,
+          up: 1,
+          down: 1,
+          lastAt: expect.any(Number),
+        },
+      ]);
+      const body = await (await call('/costs', { headers: { cookie: await signIn() } })).text();
+      expect(body).toContain('Answer feedback');
+      expect(body).toContain(`run ${runId}`);
+    });
   });
 
   describe('Slack rate limits', () => {

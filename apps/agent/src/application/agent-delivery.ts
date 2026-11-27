@@ -283,6 +283,7 @@ export function createNativeAgentDelivery(
               rootTs: r.accepted.rootTs,
               text: long ? long.preview : d.text,
               footer: buildAnswerFooter(modelKey!),
+              feedbackRunId: runId,
               requesterUserId: r.accepted.userId,
               ...(files.length ? { files } : {}),
               ...(long ? { answerFile: long.file } : {}),

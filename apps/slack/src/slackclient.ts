@@ -184,6 +184,23 @@ function choiceBlock(choices: QuestionChoices) {
   };
 }
 
+export const FEEDBACK_ACTION = 'answer_feedback';
+export const FEEDBACK_VOTES = { up: 'Helpful', down: 'Not helpful' } as const;
+export type FeedbackVote = keyof typeof FEEDBACK_VOTES;
+
+function feedbackBlock(runId: string) {
+  return {
+    type: 'actions',
+    block_id: FEEDBACK_ACTION,
+    elements: (Object.keys(FEEDBACK_VOTES) as FeedbackVote[]).map((vote) => ({
+      type: 'button',
+      action_id: `${FEEDBACK_ACTION}:${vote}`,
+      text: { type: 'plain_text', text: FEEDBACK_VOTES[vote] },
+      value: runId,
+    })),
+  };
+}
+
 export async function markQuestionAnswered(
   deps: SlackDeps,
   args: {
@@ -220,6 +237,7 @@ export async function postMessage(
     text: string;
     footer?: string | null;
     choices?: QuestionChoices;
+    feedbackRunId?: string;
     delivery: DeliveryMetadata;
   },
 ): Promise<PostResult> {
@@ -238,6 +256,7 @@ export async function postMessage(
       blocks: [
         ...partBlocks(sent, args.footer),
         ...(args.choices ? [choiceBlock(args.choices)] : []),
+        ...(args.feedbackRunId ? [feedbackBlock(args.feedbackRunId)] : []),
       ] as never,
       metadata: deliveryMetadata(args.delivery),
     });

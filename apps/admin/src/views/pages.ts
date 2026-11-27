@@ -12,6 +12,7 @@ import {
 import type { Listing, SlackChannel, SlackUser } from '../slack.js';
 import type {
   AdminUser,
+  AnswerFeedback,
   AuditEntry,
   Channel,
   ChannelTool,
@@ -1526,7 +1527,48 @@ function outcomeBar(totals: CostAggregate): Raw {
   </div>`;
 }
 
-export function costsPage(context: PageContext, view: CostsView, live?: LiveRegion): string {
+function feedbackTable(rows: AnswerFeedback[]): Raw {
+  return html`<div class="table">
+    <table>
+      <thead>
+        <tr>
+          <th>Answer</th>
+          <th class="num">Helpful</th>
+          <th class="num">Not helpful</th>
+          <th>Last vote</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.length === 0
+          ? html`<tr>
+              <td class="empty" colspan="4">No votes yet.</td>
+            </tr>`
+          : rows.map(
+              (row) =>
+                html`<tr>
+                  <td>
+                    <span
+                      >${row.channelId} · ${row.answerTs}<span class="sub id"
+                        >run ${row.runId}</span
+                      ></span
+                    >
+                  </td>
+                  <td class="num" data-label="Helpful">${grouped(row.up)}</td>
+                  <td class="num" data-label="Not helpful">${grouped(row.down)}</td>
+                  <td data-label="Last vote">${time(row.lastAt)}</td>
+                </tr>`,
+            )}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+export function costsPage(
+  context: PageContext,
+  view: CostsView,
+  live?: LiveRegion,
+  feedback: AnswerFeedback[] = [],
+): string {
   const totals = view.totals;
   const ledger = view.ledger;
   const presets = costPresets(view.generatedAt);
@@ -1617,6 +1659,8 @@ export function costsPage(context: PageContext, view: CostsView, live?: LiveRegi
         )}
       </nav>
       ${costTable(view.rows, COST_BREAKDOWNS.find(([group]) => group === view.group)?.[1] ?? 'Day')}
+      <div class="section-h"><h2>${icon('check')}Answer feedback</h2></div>
+      ${feedbackTable(feedback)}
       <p class="muted small">
         Ledger:
         ${ledger.lastReceivedAt === null

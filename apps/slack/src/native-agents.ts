@@ -119,6 +119,7 @@ export function nativeAgentSender(slack: SlackDeps) {
     text: string;
     footer?: string;
     choices?: QuestionChoices;
+    feedbackRunId?: string;
     /** Set for a long answer: `text` is its preview, the file its full text. */
     answerFileReceipt?: AnswerFileReceipt;
   }) =>
@@ -130,6 +131,7 @@ export function nativeAgentSender(slack: SlackDeps) {
         : value.text,
       footer: value.footer ?? null,
       choices: value.choices,
+      feedbackRunId: value.feedbackRunId,
       delivery: {
         operationId: value.operationId,
         answer: true,
