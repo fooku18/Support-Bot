@@ -537,7 +537,18 @@ export function createNativeAgentService(options: NativeAgentOptions) {
       delivered: Boolean(delivered.rowCount),
       requester,
       requesterId: found.accepted.userId,
+      question: delivered.rowCount ? undefined : await postedQuestion(found.run_id),
     };
+  }
+  /** The tool call of a suspended question whose notice was posted and not cancelled. */
+  async function postedQuestion(runId: string) {
+    const { suspended } = await readNativeRun(options.storage, runId);
+    if (!suspended) return undefined;
+    const { rows } = await options.pool.query<{ action: string }>(
+      "SELECT action FROM native_agents.actions WHERE run_id=$1 AND action IN ('cancel',$2)",
+      [runId, `notice:question:${suspended.toolCallId}`],
+    );
+    return rows.length === 1 && rows[0]!.action !== 'cancel' ? suspended.toolCallId : undefined;
   }
   async function start(accepted: NativeAgentInput, expectedOwner?: string, anyParticipant = false) {
     if ('inputFiles' in accepted || ('files' in accepted && !options.inputs))

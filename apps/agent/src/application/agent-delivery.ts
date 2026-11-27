@@ -116,7 +116,7 @@ export function createNativeAgentDelivery(
           if (inspected.active) fail('native_run_still_active');
           const cancelled = inspected.actions.some((a) => a.action === 'cancel');
           const cfg = await authorize(r, 'task.read');
-          // A question needs `continue`, and a continue runs only under the
+          // A question needs an answer, and an answer runs only under the
           // run's accepted settings. After a settings change it could never be
           // answered, so the run ends with the failure notice instead.
           const asked = cancelled ? undefined : inspected.suspended;
@@ -124,7 +124,7 @@ export function createNativeAgentDelivery(
           const text = cancelled
             ? 'Stopped. Unconfirmed work will not restart or deliver.'
             : question
-              ? `${answerPreview(question.question)}\n\nMention me in this thread with \`continue <answer>\` or \`cancel\`.`
+              ? `${answerPreview([question.question, ...(question.options ?? []).map((o) => `• ${o}`)].join('\n'))}\n\nReply in this thread with your answer, or \`cancel\` to stop.`
               : 'No confirmed answer. Execution stopped or was refused; no automatic replay. Submit a fresh authorized request.';
           const action = cancelled
             ? 'notice:cancel'

@@ -1036,6 +1036,11 @@ describe('native live driver', () => {
       ],
     };
     expect(validateScenario(ask)).toBe(ask);
+    const plain = {
+      ...ask,
+      steps: [ask.steps[0], { prompt: 'teal', mention: false, contains: ['teal'], resume: true }],
+    };
+    expect(validateScenario(plain)).toBe(plain);
     const files = {
       ...stub,
       steps: [{ prompt: 'x', contains: ['x'], attachments: [{ name: 'a.txt', data: 'eA==' }] }],
@@ -1055,7 +1060,7 @@ describe('native live driver', () => {
       { ...coding, model: 'stub' },
       { ...ask, steps: [ask.steps[1]] },
       { ...ask, steps: [ask.steps[0], { ...ask.steps[1], prompt: 'teal' }] },
-      { ...ask, steps: [ask.steps[0], { ...ask.steps[1], mention: false }] },
+      { ...ask, steps: [ask.steps[0], { ...ask.steps[1], prompt: ' ', mention: false }] },
       { ...ask, isolation: { ...scenario.isolation, question: true } },
       { ...ask, steps: [{ ...ask.steps[0], question: 'yes' }] },
       { ...stub, steps: [{ ...scenario.steps[0], exports: [] }] },
@@ -1105,7 +1110,7 @@ describe('native live driver', () => {
       model: 'stub',
       steps: [
         { prompt: 'STUB_ASK Which colour?', contains: ['Which colour?'], question: true },
-        { prompt: 'continue teal-42', contains: ['teal-42'], resume: true },
+        { prompt: 'teal-42', mention: false, contains: ['teal-42'], resume: true },
       ],
     };
     let seq = 0,
@@ -1159,10 +1164,9 @@ describe('native live driver', () => {
           threads.get(root)!.push({
             ts: `${seq}.5`,
             user: 'UAPP',
-            text: 'Which colour?\n\nMention me in this thread with `continue <answer>` or `cancel`.',
+            text: 'Which colour?\n\nReply in this thread with your answer, or `cancel` to stop.',
           });
-        } else if (text.includes('continue'))
-          deliver(root, 'run-ask', 'STUB_ASK_RESULT teal-42', askTs);
+        } else if (text === 'teal-42') deliver(root, 'run-ask', 'STUB_ASK_RESULT teal-42', askTs);
         else deliver(root, `run-${seq}`, 'empty', ts);
         return { ts, channel: 'CTEST' };
       }
@@ -1180,11 +1184,7 @@ describe('native live driver', () => {
       delay: async () => {},
       inspect: async (root: string) => state.get(root) ?? null,
     });
-    expect(sent).toEqual([
-      '<@UAPP> STUB_ASK Which colour?',
-      '<@UAPP> continue teal-42',
-      '<@UAPP> isolated',
-    ]);
+    expect(sent).toEqual(['<@UAPP> STUB_ASK Which colour?', 'teal-42', '<@UAPP> isolated']);
     expect(report.attempts.map((a) => a.runId)).toEqual(['run-ask', 'run-ask', 'run-4']);
     expect(report.attempts[0]).toMatchObject({ state: 'passed', question: { ts: '1.5' } });
     expect(report.attempts[0]!.answer).toBeUndefined();

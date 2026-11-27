@@ -13,7 +13,8 @@ an answer. Pass files with a normal work request.
 The agent can suspend a run with Mastra's `ask_user` tool. The question and
 its continuation state are retained across a restart. The app checks the
 current suspension and resumes it once on an authorized continuation.
-While the run is waiting for input, ordinary text does not answer it.
+While the run is waiting for input, the requester's next unmentioned reply
+in the thread is the answer; a reply of just `cancel` stops the run.
 
 Inspect execution in [Mastra Studio](mastra-studio.md). For authenticated
 stack inspection, use the [deployment runbook](production-recovery.md).

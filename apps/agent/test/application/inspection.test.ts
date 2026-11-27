@@ -107,6 +107,26 @@ describe('inert durable inspection', () => {
     expect(read).toHaveBeenCalledExactlyOnceWith({ runId, workflowName: loop });
   });
 
+  it('projects the option labels of a persisted question', async () => {
+    const value = snapshot();
+    const step = value.context[executionStep] as { suspendPayload: Record<string, unknown> };
+    step.suspendPayload.toolCallSuspended = {
+      question: question.question,
+      options: [
+        { label: 'www.kaufland.de', description: 'Germany' },
+        { label: ' ' },
+        { description: 'no label' },
+        { label: 'All markets' },
+      ],
+      selectionMode: 'single_select',
+    };
+    const { storage } = readonlyStorage({ [runId]: stored(value) });
+    expect((await readNativeRun(storage, runId)).suspended).toEqual({
+      ...question,
+      options: ['www.kaufland.de', 'All markets'],
+    });
+  });
+
   it.each(['running', 'pending', 'paused', 'success', 'failed', 'canceled', 'tripwire'] as const)(
     'keeps %s distinct from a suspended question despite a retained tool payload',
     async (status) => {

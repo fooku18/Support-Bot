@@ -413,6 +413,7 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
               delivered: boolean;
               requester: boolean;
               requesterId: string;
+              question?: string;
             };
             try {
               current = (await transport('/agents/thread', {
@@ -429,7 +430,16 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
                 return;
               throw error;
             }
-            const control = REQUEST_CONTROL.test(controlText(decision.request));
+            const typed = controlText(decision.request);
+            const control = REQUEST_CONTROL.test(typed);
+            if (current.requester && current.question && !control && typed && !event.files?.length)
+              return answerQuestion(
+                { ...current, question: current.question },
+                typed,
+                decision.request.rootTs,
+                normalized,
+                installation,
+              );
             if (decideReply && current.autoReplies && current.delivered && !control) {
               const verdict = await decideReply(
                 decision.request.canonicalText,
@@ -513,6 +523,42 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
     return earlier.slice(-3);
   }
 
+  async function answerQuestion(
+    current: { runId: string; owner: string; requesterId: string; question: string },
+    answer: string,
+    rootTs: string,
+    event: MentionEvent,
+    installation: Installation,
+  ) {
+    const adapter = createNativeAgentAdapter({
+      baseUrl,
+      token,
+      identity: installation.identity,
+      slack: installation.slack,
+    });
+    const who = { runId: current.runId, owner: current.owner, actor: current.requesterId };
+    try {
+      await adapter.resume({ ...who, toolCallId: current.question, answer });
+    } catch (error) {
+      log.info(
+        `question answer refused reason=${error instanceof NativeAgentRefusal ? error.code : error instanceof Error ? error.message : 'unknown'} run_id=${current.runId} message_ts=${event.ts}`,
+      );
+      await refuse(installation, event.channel, who.actor, rootTs);
+      return;
+    }
+    log.info(`question answered by thread reply run_id=${current.runId} message_ts=${event.ts}`);
+    void present(current, who.actor, { event, installation });
+  }
+
+  async function refuse(installation: Installation, channel: string, user: string, rootTs: string) {
+    await postEphemeral(installation.slack, {
+      channel,
+      user,
+      thread_ts: rootTs,
+      text: 'Request refused or unavailable. Continue, cancel, and status are available for active threads. No automatic replay.',
+    }).catch(() => log.warn('native refusal notice unconfirmed; no automatic resend'));
+  }
+
   async function intake(
     event: MentionEvent,
     eventId: string | undefined,
@@ -583,12 +629,7 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
       }
       // Ephemeral refusal is outside durable result delivery. It never claims
       // acceptance or retries a model/tool/send. Contents carry no raw errors.
-      await postEphemeral(installation.slack, {
-        channel: event.channel,
-        user: decision.request.userId,
-        thread_ts: decision.request.rootTs,
-        text: 'Request refused or unavailable. Continue, cancel, and status are available for active threads. No automatic replay.',
-      }).catch(() => log.warn('native refusal notice unconfirmed; no automatic resend'));
+      await refuse(installation, event.channel, decision.request.userId, decision.request.rootTs);
     }
   }
 }

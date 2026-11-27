@@ -2084,6 +2084,23 @@ try {
       await fs.writeFile(`${root}/suspended-inspection.json`, JSON.stringify(inspection, null, 2));
       return { runId: result.runId, suspended: result.suspended };
     });
+    await check('thread-offers-only-a-posted-open-question', async () => {
+      const input = makeInput('ASK_TARGET', '1794740002.100002', 'thread-question-process');
+      const asked = (await startAndWait(input)) as any;
+      assert(asked.suspended, JSON.stringify(asked));
+      assert.equal((await service.thread(input)).question, undefined);
+      const presented = (await service.present(
+        asked.runId,
+        'UOWNER',
+        asked.owner,
+        nativeAgentSender(slack),
+      )) as any;
+      assert.equal(presented.notice, `notice:question:${asked.suspended.toolCallId}`);
+      assert.equal((await service.thread(input)).question, asked.suspended.toolCallId);
+      await service.cancel(asked.runId, 'UOWNER', asked.owner);
+      assert.equal((await service.thread(input)).question, undefined);
+      return { runId: asked.runId };
+    });
     const changedInput = makeInput('ASK_TARGET', '1794740099.100099', 'changed-policy-process');
     const changed = await startAndWait(changedInput);
     await fs.writeFile(`${root}/changed-policy-handle.json`, JSON.stringify(changed, null, 2));

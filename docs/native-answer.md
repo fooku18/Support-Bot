@@ -181,8 +181,9 @@ worker. Commands make no inference or coding run. See
 retry semantics. Unmentioned thread replies starting with `!` stay silent.
 
 In an existing conversation, `continue <answer>`, `cancel` and `status` work with
-or without a mention. A suspended question requires `continue <answer>`; ordinary
-text cannot silently abandon it. Continuation obtains the current `ask_user`
+or without a mention. The question notice lists the model's options. The
+requester's next unmentioned reply answers a suspended question, with or without
+`continue`; other people answer it with `continue <answer>`. Continuation obtains the current `ask_user`
 suspension from framework inspection, including after restart, and resumes only
 once. Controls with files or an empty answer refuse without consuming the resume.
 Busy or uncertain requests require an explicit control or a new mention.
