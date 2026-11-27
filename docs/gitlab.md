@@ -18,11 +18,23 @@ text of the file, cut at 12 000 characters. A binary file, or a file larger
 than 60 000 bytes, comes back without content and with a `content_note`. The
 tool runtime decodes the file before it redacts credentials from the result.
 
-| Kind        | Operations                                                                                                                                                                                                                                                                                                                                                                                                             |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Read        | `get_project`, `list_projects`, `get_issue`, `list_issues`, `get_issue_notes`, `search`, `list_branches`, `list_merge_requests`, `get_merge_request`, `get_merge_request_diffs`, `get_merge_request_commits`, `get_merge_request_notes`, `get_merge_request_pipelines`, `list_pipelines`, `get_pipeline`, `get_pipeline_jobs`, `get_job`, `get_job_trace`, `list_repository_tree`, `get_repository_file`, `get_commit` |
-| Write       | `create_merge_request_note`, `create_issue_note`, `create_issue`, `update_merge_request` (close or reopen only), `create_merge_request`, `retry_job`, `create_pipeline`                                                                                                                                                                                                                                                |
-| Publication | Clone, verify and publish a branch with one merge request per task (see [Publication](#publication))                                                                                                                                                                                                                                                                                                                   |
+| Kind        | Operations                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Read        | `get_project`, `list_projects`, `get_issue`, `list_issues`, `get_issue_notes`, `search`, `list_branches`, `list_merge_requests`, `get_merge_request`, `get_merge_request_diffs`, `get_merge_request_commits`, `get_merge_request_notes`, `get_merge_request_pipelines`, `list_pipelines`, `get_pipeline`, `get_pipeline_jobs`, `get_job`, `get_job_trace`, `list_repository_tree`, `get_repository_file`, `get_commit`, `list_commits`, `list_deployments` |
+| Write       | `create_merge_request_note`, `create_issue_note`, `create_issue`, `update_merge_request` (close or reopen only), `create_merge_request`, `retry_job`, `create_pipeline`                                                                                                                                                                                                                                                                                    |
+| Publication | Clone, verify and publish a branch with one merge request per task (see [Publication](#publication))                                                                                                                                                                                                                                                                                                                                                       |
+
+"What changed" in a project and a time window takes three reads:
+`list_commits` (`since`, `until`, optionally a `ref` and a `path`),
+`list_merge_requests` with `merged_after` and `merged_before` (the state then
+defaults to `merged`), and `list_deployments` (`environment`,
+`updated_after`, `updated_before`, newest first, at most 20 per page because
+each deployment carries its job). A reversed window is refused instead of
+answering an empty list. A full page says which page to read next, so a busy
+window is not taken as complete. GitLab has no group-wide commit or
+deployment list, so these name one project. The tools refuse an argument
+they do not know instead of dropping it, so a misspelled filter never widens
+a read.
 
 Merging, branch or tag deletion, CI variables and project settings are not
 part of the contract. Write operations have no approval step: they are

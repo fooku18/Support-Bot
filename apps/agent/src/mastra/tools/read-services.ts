@@ -1,6 +1,9 @@
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
-import { GITLAB_READ_OPERATIONS } from '../../integrations/gitlab/gitlab-operations.js';
+import {
+  GITLAB_READ_OPERATIONS,
+  isGitlabOperationName,
+} from '../../integrations/gitlab/gitlab-operations.js';
 import { nativeOperationCapability } from './discovery.js';
 import {
   createServiceToolDefinitions,
@@ -61,7 +64,9 @@ export function createReadServiceTools(options: {
       createTool({
         id: d.name,
         description: d.description,
-        inputSchema: z.object(d.inputSchema),
+        inputSchema: isGitlabOperationName(d.name)
+          ? z.object(d.inputSchema).strict()
+          : z.object(d.inputSchema),
         execute: async (args) => {
           const capability = nativeOperationCapability(d.name);
           if (!capability) throw new Error('unavailable service');
