@@ -1318,10 +1318,12 @@ export function renderGitlabResultText(result: GitlabNormalizedResult): string {
     return `${header}: [${result.errorCategory ?? 'upstream'}] ${result.error ?? 'request failed'}`;
   }
   if (result.operation === 'get_job_trace') return renderTraceText(header, result);
-  const body = JSON.stringify(result.data, null, 2).slice(0, MAX_MODEL_BYTES);
-  const truncated = result.truncated
-    ? '\n[truncated: bounded to the model output limit with explicit markers]'
-    : '';
+  const json = JSON.stringify(result.data);
+  const body = json.slice(0, MAX_MODEL_BYTES);
+  const truncated =
+    result.truncated || json.length > MAX_MODEL_BYTES
+      ? '\n[truncated: bounded to the model output limit with explicit markers]'
+      : '';
   const warnings =
     result.warnings.length > 0 ? `\n[warnings: ${result.warnings.join(' | ').slice(0, 500)}]` : '';
   return `${header}:\n${body}${truncated}${warnings}`;

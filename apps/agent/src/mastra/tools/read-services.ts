@@ -70,10 +70,12 @@ export function createReadServiceTools(options: {
           await options.authorize(capability);
           return result;
         },
-        toModelOutput: (reply) => ({
-          type: 'text',
-          value: (reply as BrokerToolReply).content.map((part) => part.text).join('\n'),
-        }),
+        toModelOutput: (reply) => {
+          const content = (reply as Partial<BrokerToolReply> | null)?.content;
+          return Array.isArray(content)
+            ? { type: 'text', value: content.map((part) => part.text).join('\n') }
+            : { type: 'json', value: reply };
+        },
       }),
     ]),
   );

@@ -1285,4 +1285,29 @@ describe('get_job_trace', () => {
     expect(result.ok).toBe(true);
     expect(Buffer.byteLength(JSON.stringify(result.data))).toBeLessThanOrEqual(60_000);
   });
+
+  it('renders every record of a bounded result and marks a cut text', () => {
+    const issues = Array.from({ length: 100 }, (_, i) => ({
+      iid: i + 1,
+      state: 'opened',
+      labels: ['bug', 'checkout'],
+      title: `issue ${i + 1} ${'x'.repeat(500)}`,
+    }));
+    const result = {
+      ok: true,
+      operation: 'list_issues' as const,
+      project: 'g/p',
+      data: issues,
+      pagination: {},
+      truncated: false,
+      warnings: [],
+    };
+    expect(JSON.stringify(issues).length).toBeLessThan(60_000);
+    expect(JSON.stringify(issues, null, 2).length).toBeGreaterThan(60_000);
+    const rendered = renderGitlabResultText(result);
+    expect(rendered).toContain('"title":"issue 100 ');
+    expect(rendered).not.toContain('[truncated');
+    const cut = renderGitlabResultText({ ...result, data: [...issues, ...issues] });
+    expect(cut).toContain('[truncated');
+  });
 });

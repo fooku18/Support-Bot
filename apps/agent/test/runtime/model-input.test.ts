@@ -169,6 +169,13 @@ describe('model input of the native answer agent', () => {
     expect(result.content).toBe('failed (search @ code/x): [refused] scope denied');
   });
 
+  it('shows invalid tool arguments to the model instead of failing the run', async () => {
+    const { out, result } = await run('search', { scope: 'nope', search: 'checkout' }, gitlabOk);
+    expect(out.uncertain).toBe(false);
+    expect(String(result.content)).toContain('scope');
+    expect(String(result.content)).not.toContain('PEX-1000');
+  });
+
   it.each([false, true])('asks Anthropic to cache the prompt (studio %s)', async (studio) => {
     const { requests } = await run('search', { scope: 'issues', search: 'checkout' }, gitlabOk, {
       studio,
