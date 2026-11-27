@@ -8,9 +8,10 @@ import { spawnSync } from 'node:child_process';
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 
-const REPO_ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../..');
+const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const SCRIPT = path.join(REPO_ROOT, 'deploy/docker', 'docker-gc.sh');
 
 const scratch: string[] = [];
@@ -77,7 +78,12 @@ function run(args: string[] = [], env: NodeJS.ProcessEnv = {}) {
   writeFileSync(log, '');
   const result = spawnSync('bash', [SCRIPT, ...args], {
     encoding: 'utf8',
-    env: { PATH: `${bin}:${process.env.PATH}`, FAKE_LOG: log, FAKE_STATE: root, ...env },
+    env: {
+      PATH: [bin, process.env.PATH].join(path.delimiter),
+      FAKE_LOG: log,
+      FAKE_STATE: root,
+      ...env,
+    },
   });
   const calls = readFileSync(log, 'utf8').split('\n').filter(Boolean);
   return { status: result.status, stdout: result.stdout, stderr: result.stderr, calls };

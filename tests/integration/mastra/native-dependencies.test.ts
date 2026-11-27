@@ -284,7 +284,7 @@ describe('Studio workspace deployment', () => {
     // the Node probes so host realpaths cannot hide missing container ancestors.
     for (let i = 0; i < create.length; i++) {
       if (create[i] !== '-v') continue;
-      const [source, target] = create[i + 1]!.split(':');
+      const [, source, target] = create[i + 1]!.match(/^(.+):(\/[^:]*)(?::ro)?$/) ?? [];
       if (!target?.endsWith('/node_modules')) continue;
       const destination = path.join(state, path.relative('/studio', target));
       fs.mkdirSync(path.dirname(destination), { recursive: true });
@@ -378,7 +378,10 @@ describe('Studio workspace deployment', () => {
     const runtime = path.join(state, path.relative('/studio', cwd), 'src/mastra/runtime.mjs');
     const banner = fs.readFileSync(runtime, 'utf8').split('\n')[0];
     const file = path.join(path.dirname(runtime), 'banner-probe.mjs');
-    fs.writeFileSync(file, `${banner}\nif (require('node:path').sep !== '/') process.exit(1);\n`);
+    fs.writeFileSync(
+      file,
+      `${banner}\nif (require('node:path') !== process.getBuiltinModule('node:path')) process.exit(1);\n`,
+    );
     const result = probe(`await import(${JSON.stringify(pathToFileURL(file).href)});`);
     expect(result.status, result.stderr).toBe(0);
   });

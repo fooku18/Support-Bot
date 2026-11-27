@@ -33,6 +33,7 @@ import {
   splitLongAnswer,
 } from '../../apps/agent/src/domain/delivery/long-answer.js';
 import { longText } from '../../apps/model-stub/src/directives.js';
+import { routeDocker } from './fake-docker.js';
 const hash = (s: string) => createHash('sha256').update(s).digest('hex');
 it('requires provider-annotated citations in the delivered reply and attached answer', () => {
   const citation = '[RFC 2606](https://www.rfc-editor.org/rfc/rfc2606)';
@@ -1010,18 +1011,15 @@ describe('native live driver', () => {
       acceptance: 'deterministic, not live acceptance',
     });
     // Stub runs need no Gateway confirmation; the (failing) Docker check comes next.
-    const bin = root + '/bin';
-    fs.mkdirSync(bin);
-    fs.writeFileSync(bin + '/docker', '#!/bin/sh\nexit 1\n', { mode: 0o755 });
-    const path = process.env.PATH;
-    process.env.PATH = `${bin}:${path}`;
+    fs.writeFileSync(root + '/docker.cjs', 'process.exit(1)');
+    const restoreDocker = routeDocker(root + '/docker.cjs');
     try {
       const run = await latest(['--scenario', root + '/stub.json', '--run']);
       expect(run.code).toBe(2);
       expect(run.report.reason).toBe('configuration_or_runtime_prerequisite_unavailable');
       expect(run.report.modelMode).toBe('stub');
     } finally {
-      process.env.PATH = path;
+      restoreDocker();
     }
     // Nothing was posted in any mode.
     for (const id of fs.readdirSync(dir))
@@ -2784,15 +2782,13 @@ describe('driver-managed tools, tool scopes and the model mode switch', () => {
     );
     fs.writeFileSync(
       bin + '/docker',
-      `#!/usr/bin/env node
-const fs=require('fs'),path=require('path'),root=path.dirname(__dirname),a=process.argv.slice(2);
+      `const fs=require('fs'),path=require('path'),root=path.dirname(__dirname),a=process.argv.slice(2);
 fs.appendFileSync(root+'/calls.jsonl',JSON.stringify(a)+String.fromCharCode(10));
 if(a.includes('stop')&&a.includes('--profile')&&fs.existsSync(root+'/fail-stub-stop'))process.exit(1);
 if(a[0]==='ps')console.log('owned');
 else if(a[0]==='inspect')console.log(fs.readFileSync(root+'/services.json','utf8'));
 else if(a.includes('exec'))console.log(JSON.stringify({runtime:'native-answer',idle:true,admitted:0,waits:[]}));
 `,
-      { mode: 0o755 },
     );
     const repo = f.root + '/repo';
     fs.mkdirSync(repo + '/tests/live/scenarios/stub', { recursive: true });
@@ -2846,16 +2842,15 @@ else if(a.includes('exec'))console.log(JSON.stringify({runtime:'native-answer',i
         .sort((x, y) => x.startedAt.localeCompare(y.startedAt))
         .at(-1);
     };
-    const withPath = async <T>(run: () => Promise<T>) => {
-      const original = process.env.PATH;
-      process.env.PATH = `${bin}:${original}`;
+    const withDocker = async <T>(run: () => Promise<T>) => {
+      const restore = routeDocker(bin + '/docker');
       try {
         return await run();
       } finally {
-        process.env.PATH = original;
+        restore();
       }
     };
-    return { ...f, deps, modes, calls, steps, summary, withPath };
+    return { ...f, deps, modes, calls, steps, summary, withDocker };
   }
 
   it('blocks a mode mismatch without --switch-mode and names the flag', async () => {
@@ -2902,7 +2897,7 @@ else if(a.includes('exec'))console.log(JSON.stringify({runtime:'native-answer',i
         '--switch-mode',
         '--rerun',
       ];
-      expect(await s.withPath(() => main(args, s.deps))).toBe(0);
+      expect(await s.withDocker(() => main(args, s.deps))).toBe(0);
       expect(s.modes).toEqual(['stub', 'stub']);
       expect(fs.readFileSync(s.root + '/model-mode', 'utf8')).toBe('gateway\n');
       expect(s.steps()).toEqual([
@@ -2926,7 +2921,7 @@ else if(a.includes('exec'))console.log(JSON.stringify({runtime:'native-answer',i
       // In the needed mode already: no stack command.
       s.setMode('stub');
       const before = s.calls().length;
-      expect(await s.withPath(() => main(args, s.deps))).toBe(0);
+      expect(await s.withDocker(() => main(args, s.deps))).toBe(0);
       expect(s.calls()).toHaveLength(before);
       expect(s.summary().modelModeSwitch).toEqual({ from: 'stub', to: 'stub', switched: false });
       // One scenario: the switch state goes into its report.
@@ -2939,7 +2934,7 @@ else if(a.includes('exec'))console.log(JSON.stringify({runtime:'native-answer',i
         '--run',
         '--switch-mode',
       ];
-      expect(await s.withPath(() => main(one, s.deps))).toBe(0);
+      expect(await s.withDocker(() => main(one, s.deps))).toBe(0);
       const dir = s.root + '/artifacts/native-live';
       const reports = fs
         .readdirSync(dir)
@@ -2983,7 +2978,7 @@ else if(a.includes('exec'))console.log(JSON.stringify({runtime:'native-answer',i
           throw new LiveError('interrupted');
         },
       };
-      expect(await s.withPath(() => main(args, interrupted))).toBe(1);
+      expect(await s.withDocker(() => main(args, interrupted))).toBe(1);
       expect(s.modes).toEqual(['interrupted']);
       expect(s.summary()).toMatchObject({
         outcome: 'failed',
@@ -2996,7 +2991,7 @@ else if(a.includes('exec'))console.log(JSON.stringify({runtime:'native-answer',i
       // `down` in stub mode fails (for example it cannot drain): the suite
       // passed, but the instance is left in stub mode and the exit is 1.
       fs.writeFileSync(s.root + '/fail-stub-stop', '');
-      expect(await s.withPath(() => main(args, s.deps))).toBe(1);
+      expect(await s.withDocker(() => main(args, s.deps))).toBe(1);
       expect(s.summary()).toMatchObject({
         outcome: 'passed',
         modelModeSwitch: {

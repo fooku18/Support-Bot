@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import { compileDocument } from '../../../admin/src/compile.js';
 import { deriveCoordinatorConfig } from '../../src/application/configuration/config.js';
@@ -157,7 +158,7 @@ describe('inert durable inspection', () => {
     const dir = await fs.mkdtemp(path.resolve('artifacts/native-inspection-'));
     const fixture = path.join(dir, 'suspended.json');
     await fs.writeFile(fixture, JSON.stringify(stored(JSON.stringify(snapshot()))), { flag: 'wx' });
-    const inspector = path.resolve('src/mastra/runtime/inspection.ts');
+    const inspector = pathToFileURL(path.resolve('src/mastra/runtime/inspection.ts')).href;
     const output = execFileSync(
       process.execPath,
       [
