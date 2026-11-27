@@ -12,8 +12,10 @@ const defaultLog = createStageLogger('model-transport');
 
 /**
  * Connection failures that end a dispatch before any response arrives, such
- * as a pooled connection the gateway already closed. Each one gets one
- * re-authorized dispatch; HTTP failures and timeouts never do.
+ * as a pooled connection the gateway already closed. They get up to three
+ * re-authorized dispatches with growing delays, because the gateway resets
+ * fresh connections in short bursts too. HTTP failures and an expired request
+ * deadline never do.
  */
 const RECONNECTABLE = new Set([
   'ECONNRESET',
@@ -24,8 +26,7 @@ const RECONNECTABLE = new Set([
   'UND_ERR_CLOSED',
   'UND_ERR_CONNECT_TIMEOUT',
 ]);
-const MAX_RECONNECTS = 1;
-const RECONNECT_DELAY_MS = 250;
+const RECONNECT_DELAYS_MS = [250, 1000, 3000];
 
 /**
  * Error class name and system or undici code of a failed fetch, searched
@@ -212,10 +213,10 @@ export function guardedModelFetch(options: {
     for (let attempt = 1; ; attempt++) {
       // A reconnect is a new dispatch: current authority and the search grant
       // are checked again, and the ledger records each attempt on its own.
-      signal.throwIfAborted();
+      if (signal.aborted) throw answerFailure('timeout');
       await beforeDispatch?.();
       if (searches.length) await authorizeSearch?.();
-      signal.throwIfAborted();
+      if (signal.aborted) throw answerFailure('timeout');
       const started = performance.now();
       let status = 0;
       let recorded = false;
@@ -258,14 +259,14 @@ export function guardedModelFetch(options: {
         if (error instanceof ExecutorError) throw error;
         if (signal.aborted) throw answerFailure('timeout');
         const failure = fetchFailure(error);
-        const reconnect = attempt <= MAX_RECONNECTS && RECONNECTABLE.has(failure.code);
+        const reconnect = attempt <= RECONNECT_DELAYS_MS.length && RECONNECTABLE.has(failure.code);
         log.warn(
           `model dispatch failed run_id=${runId} attempt=${attempt} status=0 error=${failure.name} code=${failure.code} elapsed_ms=${elapsed()} reconnect=${reconnect}`,
         );
         if (!reconnect) throw answerFailure('transient');
       }
       try {
-        await sleep(RECONNECT_DELAY_MS, undefined, { signal });
+        await sleep(RECONNECT_DELAYS_MS[attempt - 1], undefined, { signal });
       } catch {
         throw answerFailure('timeout');
       }

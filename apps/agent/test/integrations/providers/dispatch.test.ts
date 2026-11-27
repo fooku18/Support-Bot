@@ -13,6 +13,9 @@ import { guardedModelFetch } from '../../../src/integrations/providers/transport
 import { createAnswerModel } from '../../../src/mastra/runtime/model.js';
 import { testSelection } from '../../model-fixture.js';
 
+const sleep = vi.hoisted(() => vi.fn(async (_ms: number, ..._rest: unknown[]) => undefined));
+vi.mock('node:timers/promises', () => ({ setTimeout: sleep }));
+
 const options = { nativeTextDocuments: false, timeoutMs: 5000 };
 const prompt = [
   { role: 'user' as const, content: [{ type: 'text' as const, text: 'Synthetic input' }] },
@@ -440,13 +443,11 @@ it('accounts once for success, failure and cancellation and refuses unexpected d
 
 describe('connection failures before a response', () => {
   const endpoint = 'https://api.anthropic.com/v1/messages';
-  const socketClosed = () =>
+  const socketClosed = (code = 'UND_ERR_SOCKET') =>
     new TypeError('fetch failed', {
-      cause: Object.assign(new Error('other side closed https://private.test/detail'), {
-        code: 'UND_ERR_SOCKET',
-      }),
+      cause: Object.assign(new Error('other side closed https://private.test/detail'), { code }),
     });
-  function setup() {
+  function setup(timeoutMs = options.timeoutMs) {
     const selection = testSelection('claude', 'claude-fixture', true);
     const recordRequest = vi.fn();
     const beforeDispatch = vi.fn();
@@ -455,6 +456,7 @@ describe('connection failures before a response', () => {
     const fetchImpl = vi.fn<typeof fetch>();
     const dispatch = guardedModelFetch({
       ...options,
+      timeoutMs,
       endpoint: (url) => url.href === endpoint,
       beforeDispatch,
       authorizeSearch,
@@ -510,14 +512,43 @@ describe('connection failures before a response', () => {
     expect(line).not.toContain('private.test');
   });
 
-  it('gives up after one reconnect and does not reconnect unknown failures', async () => {
-    const first = setup();
-    first.fetchImpl.mockRejectedValueOnce(socketClosed()).mockRejectedValueOnce(socketClosed());
-    await expect(first.send()).rejects.toThrow('Model provider request failed');
-    expect(first.fetchImpl).toHaveBeenCalledTimes(2);
-    expect(first.warn.mock.calls[1]![0]).toContain('attempt=2 status=0');
-    expect(first.warn.mock.calls[1]![0]).toContain('reconnect=false');
+  it('rides out a burst of resets and gives up after three reconnects', async () => {
+    const burst = setup();
+    burst.fetchImpl
+      .mockRejectedValueOnce(socketClosed('ECONNRESET'))
+      .mockRejectedValueOnce(socketClosed('ECONNRESET'))
+      .mockRejectedValueOnce(socketClosed('ECONNRESET'))
+      .mockResolvedValueOnce(Response.json({ usage: { input_tokens: 7, output_tokens: 3 } }));
+    sleep.mockClear();
+    await (await burst.send()).json();
+    expect(burst.fetchImpl).toHaveBeenCalledTimes(4);
+    expect(burst.beforeDispatch).toHaveBeenCalledTimes(4);
+    expect(sleep.mock.calls.map(([ms]) => ms)).toEqual([250, 1000, 3000]);
 
+    const first = setup();
+    for (let i = 0; i < 4; i++) first.fetchImpl.mockRejectedValueOnce(socketClosed('ECONNRESET'));
+    sleep.mockClear();
+    await expect(first.send()).rejects.toThrow('Model provider request failed');
+    expect(first.fetchImpl).toHaveBeenCalledTimes(4);
+    expect(sleep).toHaveBeenCalledTimes(3);
+    expect(first.warn.mock.calls[2]![0]).toContain('attempt=3 status=0');
+    expect(first.warn.mock.calls[2]![0]).toContain('reconnect=true');
+    expect(first.warn.mock.calls[3]![0]).toContain('attempt=4 status=0');
+    expect(first.warn.mock.calls[3]![0]).toContain('reconnect=false');
+  });
+
+  it('times out when the deadline passes during re-authorization', async () => {
+    const late = setup(20);
+    late.fetchImpl.mockRejectedValueOnce(socketClosed());
+    late.beforeDispatch
+      .mockResolvedValueOnce(undefined)
+      .mockImplementationOnce(() => new Promise((resolve) => setTimeout(resolve, 50)));
+    await expect(late.send()).rejects.toThrow('Model inference timed out');
+    expect(late.fetchImpl).toHaveBeenCalledOnce();
+    expect(late.rows()).toHaveLength(1);
+  });
+
+  it('does not reconnect unknown failures', async () => {
     const second = setup();
     second.fetchImpl.mockRejectedValueOnce(new TypeError('fetch failed'));
     await expect(second.send()).rejects.toThrow('Model provider request failed');
