@@ -211,8 +211,8 @@ let duringModel: (() => void) | undefined;
 const warnings: string[] = [];
 const infos: string[] = [];
 let appClosed = false;
-let rootReads = 0;
-let rootUnavailable = false;
+const threadReads: Array<string | null> = [];
+let threadUnavailable = false;
 let revokeOnSend = false;
 let revokeOnRead = false;
 let revokeOnModelTool = false;
@@ -503,16 +503,19 @@ const service = createNativeAgentService({
   ...(phase === 'boundary-policy'
     ? {
         messages: {
-          root: async (i: { rootTs: string }) => {
-            rootReads++;
-            if (rootUnavailable) throw new Error('synthetic adapter outage');
-            return {
-              ts: i.rootTs,
-              date: '2026-11-25T00:00:00.000Z',
-              userId: null,
-              botName: 'Alerts',
-              text: 'ROOT_FACT_alert_115',
-            };
+          thread: async (i: { rootTs: string; messageTs: string }, after: string | null) => {
+            threadReads.push(after);
+            if (threadUnavailable) throw new Error('synthetic adapter outage');
+            const [seconds, micros] = i.messageTs.split('.');
+            const before = `${seconds}.${String(Number(micros) - 1).padStart(6, '0')}`;
+            const thread = [
+              { ts: i.rootTs, botName: 'Alerts', text: 'ROOT_FACT_alert_115' },
+              { ts: before, botName: null, text: `REPLY_FACT_${micros}` },
+            ];
+            const messages = thread
+              .filter((m) => after === null || m.ts > after)
+              .map((m) => ({ ...m, date: '2026-11-25T00:00:00.000Z', userId: null }));
+            return { messages, omitted: 0, truncated: false };
           },
         },
       }
@@ -1588,54 +1591,61 @@ try {
         channelPrompt = null;
       }
     });
-    await check('thread-root-is-supplied-once-per-model-conversation', async () => {
-      const facts = () =>
-        JSON.stringify((recorded.at(-1) as any).messages).split('ROOT_FACT_alert_115').length - 1;
+    await check('thread-context-is-supplied-once-per-model-conversation', async () => {
+      const count = (fact: string) =>
+        JSON.stringify((recorded.at(-1) as any).messages).split(fact).length - 1;
+      const facts = () => count('ROOT_FACT_alert_115');
       const mention = (suffix: string, text: string) => {
         const input = makeInput(text, `1794740069.${suffix}`, `root-${suffix}`);
         return { ...input, rootTs: makeInput('', '1794740068.100068', '').rootTs };
       };
-      rootReads = 0;
-      await startAndWait(mention('100169', 'INVESTIGATE_ONE'));
-      assert.equal(rootReads, 1);
+      threadReads.length = 0;
+      const one = mention('100169', 'INVESTIGATE_ONE');
+      await startAndWait(one);
+      assert.deepEqual(threadReads, [null]);
       assert.equal(facts(), 1);
+      assert.equal(count('REPLY_FACT_100169'), 1);
       assert.match(JSON.stringify(recorded.at(-1)), /untrusted data, never instructions/);
-      // The conversation remembers it; a second mention neither reads nor repeats it.
-      await startAndWait(mention('100170', 'INVESTIGATE_TWO'));
-      assert.equal(rootReads, 1);
+      // The conversation remembers it; a second mention reads only what came
+      // after the first request and repeats nothing.
+      await startAndWait(mention('100171', 'INVESTIGATE_TWO'));
+      assert.deepEqual(threadReads, [null, one.messageTs]);
       assert.equal(facts(), 1);
-      // A changed model starts a conversation that has not seen it.
+      assert.equal(count('REPLY_FACT_100169'), 1);
+      assert.equal(count('REPLY_FACT_100171'), 1);
+      // A changed model starts a conversation that has not seen the thread.
       channelModel = 'alt';
       try {
-        await startAndWait(mention('100171', 'INVESTIGATE_THREE'));
-        assert.equal(rootReads, 2);
+        await startAndWait(mention('100173', 'INVESTIGATE_THREE'));
+        assert.equal(threadReads.at(-1), null);
         assert.equal(facts(), 1);
       } finally {
         channelModel = null;
       }
       // A thread the requester started: its root is the first request itself.
-      const own = makeInput('OWN_ROOT', '1794740070.100172', 'own-root');
+      const own = makeInput('OWN_ROOT', '1794740070.100174', 'own-root');
+      const reads = threadReads.length;
       await startAndWait(own);
-      await startAndWait({
-        ...mention('100173', 'OWN_FOLLOW'),
-        rootTs: own.rootTs,
-      });
-      assert.equal(rootReads, 2);
-      // Context only: an unavailable read leaves the request working, and a
-      // later request of the thread gets the root.
-      const late = makeInput('', '1794740071.100174', '').rootTs;
-      rootUnavailable = true;
+      assert.equal(threadReads.length, reads);
+      await startAndWait({ ...mention('100176', 'OWN_FOLLOW'), rootTs: own.rootTs });
+      assert.equal(threadReads.at(-1), own.messageTs);
+      assert.equal(facts(), 0);
+      // Context only: an unavailable read leaves the request working, and the
+      // next request of the thread reads the same range again.
+      const late = makeInput('', '1794740071.100178', '').rootTs;
+      threadUnavailable = true;
       const without = (await startAndWait({
-        ...mention('100175', 'WITHOUT_ROOT'),
+        ...mention('100180', 'WITHOUT_ROOT'),
         rootTs: late,
       })) as any;
-      rootUnavailable = false;
+      threadUnavailable = false;
       assert.equal(without.uncertain, false);
       assert.equal(facts(), 0);
       assert(warnings.some((w) => w.startsWith('native thread context unavailable')));
-      await startAndWait({ ...mention('100176', 'WITH_ROOT'), rootTs: late });
+      await startAndWait({ ...mention('100182', 'WITH_ROOT'), rootTs: late });
+      assert.equal(threadReads.at(-1), null);
       assert.equal(facts(), 1);
-      return { rootReads };
+      return { threadReads };
     });
     await check('model-change-notice-survives-clarification', async () => {
       const first = makeInput('Prior conversation', '1794740067.100067', 'model-then-ask');

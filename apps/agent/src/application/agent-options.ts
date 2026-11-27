@@ -16,8 +16,8 @@ type ServiceBinding = Parameters<typeof createReadServiceTools>[0];
 export interface NativeAgentOptions {
   /** Credential-owning adapter closure. No model-driven fetch. */
   inputs?: NativeInputClient;
-  /** Reads the first message of a request's thread through the adapter. */
-  messages?: Pick<NativeMessageClient, 'root'>;
+  /** Reads the request's own thread through the adapter. */
+  messages?: Pick<NativeMessageClient, 'thread'>;
   /** Trusted workspace and publication binding. The binding is absent when GitLab is unavailable. */
   coding?: {
     version: string;

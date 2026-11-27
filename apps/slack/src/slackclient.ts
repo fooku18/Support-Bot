@@ -263,7 +263,14 @@ export interface ReplyPage {
 /** Fetches one page of conversations.replies. Throws SlackPostError on failure. */
 export async function fetchRepliesPage(
   deps: SlackDeps,
-  args: { channel: string; rootTs: string; cursor?: string; limit: number },
+  args: {
+    channel: string;
+    rootTs: string;
+    cursor?: string;
+    limit: number;
+    oldest?: string;
+    latest?: string;
+  },
 ): Promise<ReplyPage> {
   try {
     const result = await deps.webClient.conversations.replies({
@@ -271,6 +278,8 @@ export async function fetchRepliesPage(
       ts: args.rootTs,
       limit: args.limit,
       cursor: args.cursor,
+      ...(args.oldest ? { oldest: args.oldest } : {}),
+      ...(args.latest ? { latest: args.latest } : {}),
       include_all_metadata: true,
     });
     const wide = result as unknown as {

@@ -1,7 +1,7 @@
 import type { Installation } from './installations.js';
 import { isChannelMember } from './membership.js';
 import { fetchRepliesPage, SlackPostError, type ReplyPage } from './slackclient.js';
-import { flattenMessageContent } from './generated/slack-message-content.js';
+import { flattenMessageContent, flattenOwnAnswer } from './generated/slack-message-content.js';
 import {
   SLACK_READ_BYTES,
   SLACK_READ_CHANNEL,
@@ -12,6 +12,7 @@ import {
   type SlackMessageLink,
   type SlackMessageRead,
   type SlackMessageRefusal,
+  type SlackThreadContext,
   type SlackThreadMessage,
 } from './generated/slack-messages.js';
 
@@ -64,6 +65,25 @@ async function refusal(
   return null;
 }
 
+const CONTEXT_PAGES = 20;
+
+async function readPages(
+  installation: Installation,
+  range: { channel: string; rootTs: string; oldest?: string; latest?: string },
+  pages = SLACK_READ_PAGES,
+) {
+  const thread = new Map<string, Reply>();
+  let cursor: string | undefined;
+  let complete = false;
+  for (let page = 0; page < pages && !complete; page++) {
+    const history = await fetchRepliesPage(installation.slack, { ...range, limit: 100, cursor });
+    for (const message of history.messages) thread.set(message.ts, message);
+    cursor = history.nextCursor;
+    complete = !cursor;
+  }
+  return { thread: [...thread.values()], complete };
+}
+
 /** The linked message with its thread, or why it may not be read. */
 export async function readLinkedMessage(
   installation: Installation,
@@ -79,21 +99,13 @@ export async function readLinkedMessage(
   const refused = await refusal(installation, origin, link.channelId);
   if (refused) return { refused };
   const threadTs = link.threadTs ?? link.messageTs;
-  const thread: Reply[] = [];
-  let cursor: string | undefined;
-  let complete = false;
+  let thread: Reply[];
+  let complete: boolean;
   try {
-    for (let page = 0; page < SLACK_READ_PAGES && !complete; page++) {
-      const history = await fetchRepliesPage(installation.slack, {
-        channel: link.channelId,
-        rootTs: threadTs,
-        limit: 100,
-        cursor,
-      });
-      thread.push(...history.messages);
-      cursor = history.nextCursor;
-      complete = !cursor;
-    }
+    ({ thread, complete } = await readPages(installation, {
+      channel: link.channelId,
+      rootTs: threadTs,
+    }));
   } catch (error) {
     if (
       error instanceof SlackPostError &&
@@ -112,22 +124,46 @@ export async function readLinkedMessage(
   return { channelId: link.channelId, threadTs, ...bound(readable, link.messageTs, !complete) };
 }
 
-/** The first message of the origin thread; null when it is gone or empty. */
-export async function readThreadRoot(
+/** The origin thread before the request; after a seen point, only others' later messages. */
+export async function readThreadContext(
   installation: Installation,
-  origin: { channelId: string; rootTs: string },
-): Promise<SlackThreadMessage | null> {
-  const page = await fetchRepliesPage(installation.slack, {
-    channel: origin.channelId,
-    rootTs: origin.rootTs,
-    limit: 1,
-  });
-  const root = page.messages.find(
-    (message) => message.ts === origin.rootTs && message.subtype !== 'tombstone',
+  origin: { channelId: string; rootTs: string; messageTs: string },
+  after: string | null,
+): Promise<SlackThreadContext> {
+  if (after !== null && (!SLACK_READ_TS.test(after) || after >= origin.messageTs))
+    throw new Error('invalid thread context range');
+  if (origin.messageTs === origin.rootTs) return { messages: [], omitted: 0, truncated: false };
+  const { thread, complete } = await readPages(
+    installation,
+    {
+      channel: origin.channelId,
+      rootTs: origin.rootTs,
+      latest: origin.messageTs,
+      ...(after ? { oldest: after } : {}),
+    },
+    CONTEXT_PAGES,
   );
-  if (!root) return null;
-  const message = threadMessage(root, SLACK_READ_MESSAGE_BYTES).message;
-  return message.text ? message : null;
+  const own = (message: Reply) => message.bot_id === installation.identity.botId;
+  const earlier = thread.flatMap((reply) => {
+    if (reply.subtype === 'tombstone' || reply.ts >= origin.messageTs) return [];
+    if (after !== null && (reply.ts <= after || own(reply))) return [];
+    const read = threadMessage(reply, SLACK_READ_MESSAGE_BYTES, own(reply));
+    return read.message.text ? [read] : [];
+  });
+  const priority = [...earlier.slice(0, 1), ...earlier.slice(1).reverse()];
+  const kept = new Set<string>();
+  let bytes = 0;
+  let truncated = !complete;
+  for (const { message, cut } of priority) {
+    if (kept.size >= SLACK_READ_MESSAGES) break;
+    const size = Buffer.byteLength(JSON.stringify(message));
+    if (bytes + size > SLACK_READ_BYTES) break;
+    bytes += size;
+    truncated ||= cut;
+    kept.add(message.ts);
+  }
+  const messages = earlier.flatMap(({ message }) => (kept.has(message.ts) ? [message] : []));
+  return { messages, omitted: earlier.length - messages.length, truncated };
 }
 
 /** The linked message and the root come first in the budget, then the thread in order. */
@@ -154,8 +190,11 @@ function bound(thread: Reply[], linkedTs: string, more: boolean) {
   return { messages, omitted: thread.length - messages.length, truncated };
 }
 
-function threadMessage(reply: Reply, maxBytes: number) {
-  const { text, cut } = clip(flattenMessageContent(reply), maxBytes);
+function threadMessage(reply: Reply, maxBytes: number, own = false) {
+  const { text, cut } = clip(
+    own ? flattenOwnAnswer(reply) : flattenMessageContent(reply),
+    maxBytes,
+  );
   const message: SlackThreadMessage = {
     ts: reply.ts,
     date: new Date(Number(reply.ts) * 1000).toISOString(),
@@ -163,6 +202,7 @@ function threadMessage(reply: Reply, maxBytes: number) {
     botName: reply.bot_id ? (reply.botProfileName ?? reply.username ?? reply.bot_id) : null,
     text,
   };
+  if (own) message.own = true;
   return { message, cut };
 }
 
