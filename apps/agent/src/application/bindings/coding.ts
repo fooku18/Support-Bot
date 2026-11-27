@@ -30,7 +30,7 @@ export function nativeCoding(options: {
       const assigned = async () => {
         const cfg = await options.configuration();
         const current = coordinatorRunConfiguration(cfg, identity.teamId, identity.channelId);
-        const { profile } = resolveChannelTools(
+        const profile = resolveChannelTools(
           {
             teamId: identity.teamId,
             channelId: identity.channelId,

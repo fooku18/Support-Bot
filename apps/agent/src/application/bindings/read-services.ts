@@ -67,7 +67,7 @@ export function nativeReadServices(options: {
   return async (identity, signal) => {
     const config = await options.configuration();
     const current = coordinatorRunConfiguration(config, identity.teamId, identity.channelId);
-    const { profile } = resolveChannelTools(
+    const profile = resolveChannelTools(
       {
         teamId: identity.teamId,
         channelId: identity.channelId,

@@ -237,7 +237,7 @@ export interface CliInstanceEntry {
 }
 
 /** Kinds this runtime serves. */
-export type CliRuntimeKind = 'gitlab' | 'atlassian' | 'datadog' | 'cloudflare' | 'slack';
+export type CliRuntimeKind = (typeof CLI_RUNTIME_KINDS)[number];
 
 /** Kinds whose hosts the operator admits through an egress allowlist (Slack's host is fixed). */
 export type AdmittedKind = Exclude<CliRuntimeKind, 'slack'>;

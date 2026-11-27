@@ -101,9 +101,7 @@ export async function fetchToolSecret(
     throw invalid;
   }
   if (
-    body === null ||
-    typeof body !== 'object' ||
-    body.id !== instanceId ||
+    body?.id !== instanceId ||
     typeof body.credential !== 'string' ||
     body.credential.length === 0 ||
     !Number.isSafeInteger(body.credentialVersion) ||
@@ -239,12 +237,7 @@ export class ToolInstanceSync {
       this.lastError = 'admin returned invalid JSON';
       return;
     }
-    if (
-      body === null ||
-      typeof body !== 'object' ||
-      Array.isArray(body) ||
-      !Array.isArray(body.instances)
-    ) {
+    if (!Array.isArray(body?.instances)) {
       this.lastError = 'admin returned an invalid tool instance listing';
       return;
     }
