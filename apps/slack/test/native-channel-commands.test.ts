@@ -353,6 +353,27 @@ describe('native startup command routing at the Socket Mode call site', () => {
     });
   });
 
+  it('reads controls decoded and falls back to the blocks when Slack sends no text', async () => {
+    const { send, calls, responses } = await setup();
+    responses.set('/agents/inspect', () => Response.json({ suspended: { toolCallId: 'tool-1' } }));
+    await send('<@UBOT> continue use A &amp; B where x &lt; 5');
+    expect(calls.find((c) => c.path === '/agents/resume')?.body).toMatchObject({
+      toolCallId: 'tool-1',
+      answer: 'use A & B where x < 5',
+    });
+    await send('', {
+      type: 'message',
+      thread_ts: '1792940000.000001',
+      blocks: [
+        {
+          type: 'rich_text',
+          elements: [{ type: 'rich_text_section', elements: [{ type: 'text', text: 'cancel' }] }],
+        },
+      ],
+    } as Partial<MentionEvent>);
+    expect(calls.filter((c) => c.path === '/agents/cancel')).toHaveLength(1);
+  });
+
   it('keeps unmentioned follow-ups to the requester without a reply decider', async () => {
     const { send, calls } = await setup();
     await send('and for yesterday?', { type: 'message', thread_ts: '1792940000.000001' });
