@@ -1,6 +1,6 @@
 # Native Slack charts in answers
 
-Status: Human review
+Status: Done
 
 ## Summary
 
@@ -74,9 +74,26 @@ two per message; only `chat:write`). Answers should use it.
 
 ## Rollout
 
-Merge to `main` publishes the image; the deployment repo's digest bump
-deploys it, with the operator's approval (given for this change).
+- Merged as [#32](https://github.com/fooku18/Support-Bot/pull/32) (`cccd7a9`);
+  image `ghcr.io/fooku18/support-bot:main@sha256:21c83371…`.
+- Deployment repo MR !19 (2026-11-27 17:05 UTC) failed in the
+  `postgres-bootstrap` Job ("failed during settings schema", no PostgreSQL
+  error) and Helm rolled back. Local runs of the same wrapper image passed.
+  MR !20 retries `admin-cli provision-postgres` up to three times and logs
+  each failure; merged 18:00 UTC, deployed 18:02 UTC (`7b943a36`), bootstrap
+  passed on the first attempt.
+- Rollback: pin `sha256:6cc5f7fb…` (upstream `08da638`) in the deployment
+  repo's `Dockerfile`.
+
+## Live verification
+
+2026-11-27 18:43 UTC, deployment test channel: "How does PDP traffic look
+today per hour compared to yesterday? Please show it as a line chart." After
+a storefront clarification (DE), the answer posted in 26 s with the chart
+"PDP requests per hour (www.kaufland.de, UTC)" in place: the message's
+notification text carries `[Chart: …]`, so the fence became a
+`data_visualization` block and Slack accepted it (no "Chart not shown").
 
 ## Open items
 
-- [ ] Live check in the deployment's test channel after rollout.
+- [x] Live check in the deployment's test channel after rollout.
