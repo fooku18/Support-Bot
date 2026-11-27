@@ -16,6 +16,16 @@ type Inspection = {
   active: boolean;
 };
 
+function buttonChoices(question: NonNullable<Inspection['suspended']>) {
+  const options = question.options ?? [];
+  return !question.multiSelect &&
+    options.length > 0 &&
+    options.length <= 25 &&
+    options.every((o) => o.length <= 75)
+    ? options
+    : undefined;
+}
+
 /** Owns current recipient checks and transport receipts. Unknown effects are never retried.
  * Settings changes apply to new requests: a finished run is presented under the
  * settings it was accepted with. Authorization changes apply immediately. */
@@ -121,10 +131,17 @@ export function createNativeAgentDelivery(
           // answered, so the run ends with the failure notice instead.
           const asked = cancelled ? undefined : inspected.suspended;
           const question = asked && (await policyCurrent(r, cfg)) ? asked : undefined;
+          const choices = question && buttonChoices(question);
           const text = cancelled
             ? 'Stopped. Unconfirmed work will not restart or deliver.'
             : question
-              ? `${answerPreview([question.question, ...(question.options ?? []).map((o) => `• ${o}`)].join('\n'))}\n\nReply in this thread with your answer, or \`cancel\` to stop.`
+              ? answerPreview(
+                  choices
+                    ? question.question
+                    : [question.question, ...(question.options ?? []).map((o) => `• ${o}`)].join(
+                        '\n',
+                      ),
+                )
               : 'No confirmed answer. Execution stopped or was refused; no automatic replay. Submit a fresh authorized request.';
           const action = cancelled
             ? 'notice:cancel'
@@ -151,6 +168,9 @@ export function createNativeAgentDelivery(
               rootTs: r.accepted.rootTs,
               requesterUserId: r.accepted.userId,
               text,
+              ...(choices && question
+                ? { choices: { toolCallId: question.toolCallId, options: choices } }
+                : {}),
             });
             await authorize(r, 'task.read');
             if (sent.ts) await admit(r, `ack:${action}`);

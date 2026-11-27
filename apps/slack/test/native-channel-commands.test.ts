@@ -3,6 +3,7 @@ import type { ReceiverDeps } from '../src/receiver.js';
 import { handleEnvelope } from '../src/receiver.js';
 import { testInstallation } from './helpers/installations.js';
 import { CONFIGURE_ACTION, CONFIGURE_CALLBACK } from '../src/channel-commands.js';
+import { QUESTION_ACTION } from '../src/slackclient.js';
 import { classifyChannelCommand } from '../src/generated/channel-commands.js';
 import type { MentionEvent } from '../src/intake.js';
 
@@ -40,9 +41,14 @@ afterEach(async () => {
 async function setup(env: Record<string, string> = {}) {
   const postEphemeral = vi.fn().mockResolvedValue({ ok: true });
   const open = vi.fn().mockResolvedValue({ ok: true });
+  const update = vi.fn().mockResolvedValue({ ok: true });
   const installation = testInstallation(
     { teamId: 'T1', installationId: 'UBOT', botUserId: 'UBOT', botId: 'B1' },
-    { chat: { postEphemeral }, views: { open }, reactions: { add: vi.fn(), remove: vi.fn() } },
+    {
+      chat: { postEphemeral, update },
+      views: { open },
+      reactions: { add: vi.fn(), remove: vi.fn() },
+    },
   );
   fixtures.installation = installation;
   const calls: Array<{ path: string; body: unknown }> = [];
@@ -108,7 +114,7 @@ async function setup(env: Record<string, string> = {}) {
     );
   const interact = (body: unknown, interactionAck = vi.fn()) =>
     handleEnvelope({ type: 'interactive', body, ack: interactionAck }, receiver.deps!);
-  return { send, calls, postEphemeral, ack, interact, open, responses, installation };
+  return { send, calls, postEphemeral, ack, interact, open, update, responses, installation };
 }
 
 describe('native startup command routing at the Socket Mode call site', () => {
@@ -448,6 +454,83 @@ describe('native startup command routing at the Socket Mode call site', () => {
     await reply('CZ');
     expect(resumes()).toHaveLength(2);
     expect(postEphemeral).toHaveBeenCalledOnce();
+  });
+
+  it("answers a suspended question with the requester's button click only", async () => {
+    const { interact, calls, responses, update, postEphemeral } = await setup();
+    const thread = (requester: boolean, question?: string) =>
+      responses.set('/agents/thread', () =>
+        Response.json({
+          runId: 'synthetic-run',
+          owner: 'owner',
+          autoReplies: false,
+          delivered: false,
+          requester,
+          requesterId: 'U1',
+          question,
+        }),
+      );
+    const click = (blockId = 'tool-1', ack = vi.fn()) =>
+      interact(
+        {
+          type: 'block_actions',
+          team: { id: 'T1' },
+          user: { id: 'U1' },
+          channel: { id: 'C1' },
+          container: {
+            type: 'message',
+            channel_id: 'C1',
+            message_ts: '1792940000.000002',
+            thread_ts: '1792940000.000001',
+          },
+          message: {
+            ts: '1792940000.000002',
+            thread_ts: '1792940000.000001',
+            text: 'Which market?',
+          },
+          actions: [
+            { type: 'button', action_id: `${QUESTION_ACTION}:1`, block_id: blockId, value: 'PL' },
+          ],
+        },
+        ack,
+      );
+    const resumes = () => calls.filter((c) => c.path === '/agents/resume');
+    thread(true, 'tool-1');
+    const ack = vi.fn();
+    await click('tool-1', ack);
+    expect(ack).toHaveBeenCalledOnce();
+    expect(calls.find((c) => c.path === '/agents/thread')?.body).toMatchObject({
+      teamId: 'T1',
+      channelId: 'C1',
+      rootTs: '1792940000.000001',
+      userId: 'U1',
+    });
+    expect(resumes().map((c) => c.body)).toEqual([
+      { runId: 'synthetic-run', owner: 'owner', actor: 'U1', toolCallId: 'tool-1', answer: 'PL' },
+    ]);
+    expect(update).toHaveBeenCalledExactlyOnceWith({
+      channel: 'C1',
+      ts: '1792940000.000002',
+      text: 'Which market?',
+      blocks: [
+        { type: 'markdown', text: 'Which market?' },
+        { type: 'context', elements: [{ type: 'plain_text', text: '✓ PL' }] },
+      ],
+    });
+    await click('tool-0');
+    thread(false, 'tool-1');
+    await click();
+    thread(true);
+    await click();
+    expect(resumes()).toHaveLength(1);
+    thread(true, 'tool-1');
+    responses.set('/agents/resume', () =>
+      Response.json({ error: 'execution_policy_changed' }, { status: 409 }),
+    );
+    await click();
+    expect(resumes()).toHaveLength(2);
+    expect(postEphemeral).toHaveBeenCalledOnce();
+    expect(update).toHaveBeenCalledOnce();
   });
 
   it.each([

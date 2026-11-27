@@ -1,5 +1,5 @@
 import { decideMention, type BotIdentity, type MentionEvent } from './intake.js';
-import { postMessage, type SlackDeps } from './slackclient.js';
+import { postMessage, type QuestionChoices, type SlackDeps } from './slackclient.js';
 import { fileDescriptors } from './file-descriptors.js';
 import { nativeInputFiles } from './generated/native-inputs.js';
 import { longAnswerMessage, type AnswerFileReceipt } from './generated/long-answer.js';
@@ -118,6 +118,7 @@ export function nativeAgentSender(slack: SlackDeps) {
     rootTs: string;
     text: string;
     footer?: string;
+    choices?: QuestionChoices;
     /** Set for a long answer: `text` is its preview, the file its full text. */
     answerFileReceipt?: AnswerFileReceipt;
   }) =>
@@ -128,6 +129,7 @@ export function nativeAgentSender(slack: SlackDeps) {
         ? longAnswerMessage(value.text, value.answerFileReceipt.attached)
         : value.text,
       footer: value.footer ?? null,
+      ...(value.choices ? { choices: value.choices } : {}),
       delivery: {
         operationId: value.operationId,
         answer: true,

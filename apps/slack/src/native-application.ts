@@ -3,7 +3,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { InstallationRegistry, type Installation } from './installations.js';
 import { createStageLogger } from './logger.js';
 import { configureOutbound, createOutboundAgent } from './outbound.js';
-import { createSocketModeReceiver } from './receiver.js';
+import { createSocketModeReceiver, type EnvelopeArgs } from './receiver.js';
 import { decideMention, type MentionEvent } from './intake.js';
 import {
   createNativeAgentAdapter,
@@ -18,7 +18,7 @@ import { SLACK_MARKDOWN_CHARS } from './generated/long-answer.js';
 import { assertPrivateWorkspaceChannel } from './file-upload.js';
 import { isChannelMember } from './membership.js';
 import { readLinkedMessage, readThreadContext } from './message-reads.js';
-import { fetchRepliesPage, postEphemeral, addReaction } from './slackclient.js';
+import { fetchRepliesPage, postEphemeral, addReaction, QUESTION_ACTION } from './slackclient.js';
 import { buildTaskKey, parseTaskKey, type TaskIdentity } from './taskkey.js';
 import { ChannelCommandHandler, CommandClient } from './channel-commands.js';
 import { createReplyDecider, withoutAttribution, type ThreadMessage } from './reply-decider.js';
@@ -394,7 +394,8 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
       interaction: (envelope, installation) =>
         track(
           (async () => {
-            if (!(await commands.interaction(envelope, installation))) await envelope.ack();
+            if (await commands.interaction(envelope, installation)) return;
+            if (!(await questionClick(envelope, installation))) await envelope.ack();
           })(),
         ),
       reply: (event, eventId, installation) =>
@@ -432,14 +433,22 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
             }
             const typed = controlText(decision.request);
             const control = REQUEST_CONTROL.test(typed);
-            if (current.requester && current.question && !control && typed && !event.files?.length)
-              return answerQuestion(
+            if (
+              current.requester &&
+              current.question &&
+              !control &&
+              typed &&
+              !event.files?.length
+            ) {
+              await answerQuestion(
                 { ...current, question: current.question },
                 typed,
                 decision.request.rootTs,
                 normalized,
                 installation,
               );
+              return;
+            }
             if (decideReply && current.autoReplies && current.delivered && !control) {
               const verdict = await decideReply(
                 decision.request.canonicalText,
@@ -544,10 +553,88 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
         `question answer refused reason=${error instanceof NativeAgentRefusal ? error.code : error instanceof Error ? error.message : 'unknown'} run_id=${current.runId} message_ts=${event.ts}`,
       );
       await refuse(installation, event.channel, who.actor, rootTs);
-      return;
+      return false;
     }
     log.info(`question answered by thread reply run_id=${current.runId} message_ts=${event.ts}`);
     void present(current, who.actor, { event, installation });
+    return true;
+  }
+
+  async function questionClick(envelope: EnvelopeArgs, installation: Installation) {
+    const b = envelope.body as {
+      team?: { id?: string };
+      user?: { id?: string };
+      channel?: { id?: string };
+      container?: { message_ts?: string; thread_ts?: string };
+      message?: { text?: string; thread_ts?: string };
+      actions?: Array<{ action_id?: string; block_id?: string; value?: string }>;
+    };
+    const action = b.actions?.find((a) => a.action_id?.startsWith(`${QUESTION_ACTION}:`));
+    if (!action) return false;
+    await envelope.ack();
+    const channel = b.channel?.id;
+    const ts = b.container?.message_ts;
+    const rootTs = b.container?.thread_ts ?? b.message?.thread_ts;
+    const user = b.user?.id;
+    const answer = action.value;
+    if (
+      b.team?.id !== installation.identity.teamId ||
+      !channel ||
+      !ts ||
+      !rootTs ||
+      !user ||
+      !answer ||
+      !action.block_id
+    )
+      return true;
+    const event: MentionEvent = {
+      type: 'app_mention',
+      user,
+      channel,
+      ts,
+      thread_ts: rootTs,
+      text: answer,
+    };
+    const decision = decideMention(event, installation.identity);
+    if (decision.kind !== 'accept') return true;
+    let current: {
+      runId: string;
+      owner: string;
+      requester: boolean;
+      requesterId: string;
+      question?: string;
+    };
+    try {
+      current = (await transport('/agents/thread', decision.request)) as typeof current;
+    } catch (error) {
+      log.info(
+        `question click ignored reason=${error instanceof NativeTransportRefusal ? error.code : 'unavailable'} message_ts=${ts}`,
+      );
+      return true;
+    }
+    if (!current.requester || current.question !== action.block_id) return true;
+    const question = b.message?.text || answer;
+    if (
+      await answerQuestion(
+        { ...current, question: current.question },
+        answer,
+        rootTs,
+        event,
+        installation,
+      )
+    )
+      await installation.slack.webClient.chat
+        .update({
+          channel,
+          ts,
+          text: question,
+          blocks: [
+            { type: 'markdown', text: question },
+            { type: 'context', elements: [{ type: 'plain_text', text: `✓ ${answer}` }] },
+          ] as never,
+        })
+        .catch(() => log.warn(`question buttons not removed message_ts=${ts}`));
+    return true;
   }
 
   async function refuse(installation: Installation, channel: string, user: string, rootTs: string) {

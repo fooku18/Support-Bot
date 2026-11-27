@@ -164,6 +164,26 @@ const BLOCK_REJECTIONS = new Set([
   'msg_blocks_too_long',
 ]);
 
+export const QUESTION_ACTION = 'ask_user_answer';
+
+export interface QuestionChoices {
+  toolCallId: string;
+  options: string[];
+}
+
+function choiceBlock(choices: QuestionChoices) {
+  return {
+    type: 'actions',
+    block_id: choices.toolCallId,
+    elements: choices.options.map((option, i) => ({
+      type: 'button',
+      action_id: `${QUESTION_ACTION}:${i}`,
+      text: { type: 'plain_text', text: option },
+      value: option,
+    })),
+  };
+}
+
 /** Posts a reply in a thread. Throws SlackPostError on failure. */
 export async function postMessage(
   deps: SlackDeps,
@@ -172,6 +192,7 @@ export async function postMessage(
     thread_ts: string;
     text: string;
     footer?: string | null;
+    choices?: QuestionChoices;
     delivery: DeliveryMetadata;
   },
 ): Promise<PostResult> {
@@ -187,7 +208,10 @@ export async function postMessage(
       // above the `text` bound is sent whole in the blocks only. The footer
       // stays out of `text` and notifications.
       text: previewText(chartFreeText(sent)),
-      blocks: partBlocks(sent, args.footer) as never,
+      blocks: [
+        ...partBlocks(sent, args.footer),
+        ...(args.choices ? [choiceBlock(args.choices)] : []),
+      ] as never,
       metadata: deliveryMetadata(args.delivery),
     });
   try {
