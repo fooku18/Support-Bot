@@ -1326,6 +1326,40 @@ describe('get_job_trace', () => {
     const cut = renderGitlabResultText({ ...result, data: [...issues, ...issues] });
     expect(cut).toContain('[truncated');
   });
+
+  it('drops whole rows of a page over the model bound and points at the first omitted row', () => {
+    const diffs = Array.from({ length: 20 }, (_, i) => ({
+      old_path: `src/file-${i + 1}.ts`,
+      new_path: `src/file-${i + 1}.ts`,
+      diff: `@@ -1,1 +1,1 @@\n${'+changed line\n'.repeat(900)}`,
+      new_file: false,
+      renamed_file: false,
+      deleted_file: false,
+    }));
+    const result = normalizeGitlabOutput({
+      operation: 'get_merge_request_diffs',
+      project: 'g/p',
+      status: 'completed',
+      httpStatus: 200,
+      output: JSON.stringify(diffs),
+      page: 2,
+      per_page: 20,
+    });
+    expect(Array.isArray(result.data)).toBe(true);
+    const rows = result.data as Array<{ new_path: string }>;
+    expect(rows.length).toBe(4);
+    expect(rows.map((row) => row.new_path)).toEqual(diffs.slice(0, 4).map((d) => d.new_path));
+    expect(JSON.stringify(rows).length).toBeLessThanOrEqual(60_000);
+    expect(result.truncated).toBe(true);
+    expect(result.pagination.next_page).toBeNull();
+    expect(result.warnings).toContain(
+      'only rows 21-24 of this page fit the model bound and rows 25-40 were omitted; continue with per_page 4 and page 7',
+    );
+    const text = renderGitlabResultText(result);
+    expect(text).toContain('"new_path":"src/file-4.ts"');
+    expect(text).not.toContain('\\"new_path\\"');
+    expect(text).not.toContain('read page 3');
+  });
 });
 
 describe('change detection (commits, merged merge requests, deployments in a window)', () => {
