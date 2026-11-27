@@ -10,9 +10,6 @@ export interface ChannelMemoryScope {
   teamId: string;
   channelId: string;
 }
-export interface ChannelMemoryTransport {
-  snapshot(scope: ChannelMemoryScope): Promise<ChannelMemorySnapshot>;
-}
 export function validateMemoryScope(value: unknown): ChannelMemoryScope {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw unavailable();
   const v = value as ChannelMemoryScope;

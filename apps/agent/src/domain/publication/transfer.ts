@@ -819,25 +819,6 @@ export function ensureRealParents(
   }
 }
 
-function lstatOrNull(target: string): fs.Stats | null {
-  try {
-    return fs.lstatSync(target);
-  } catch {
-    return null;
-  }
-}
-
-/** Whether every parent of `relative` below `root` is a real directory (no link). */
-export function realParents(root: string, relative: string): boolean {
-  const parts = relative.split('/');
-  let current = root;
-  for (const part of parts.slice(0, -1)) {
-    current = path.join(current, part);
-    if (lstatOrNull(current)?.isDirectory() !== true) return false;
-  }
-  return true;
-}
-
 /** Creates or truncates a regular file; a link at the destination is never followed. */
 const NOFOLLOW_WRITE =
   fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_TRUNC | fs.constants.O_NOFOLLOW;

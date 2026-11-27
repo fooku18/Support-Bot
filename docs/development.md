@@ -65,6 +65,7 @@ consumers import provisioning from the storage module directly.
 ```sh
 npm run typecheck:all
 npm run lint
+npm run knip
 npm run format:check
 SUPPORT_AGENT_TEST_RETAIN_EVIDENCE=1 npm run test:packages
 SUPPORT_AGENT_TEST_RETAIN_EVIDENCE=1 npm test

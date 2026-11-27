@@ -74,28 +74,6 @@ export function progressStageLabel(
 }
 
 /**
- * Fixed server-owned control receipts. Never echo steering text, user IDs,
- * provider errors, tool output, or cancellation internals.
- */
-export const CONTROL_REPLY_NO_ACTIVE_RUN = 'There is no active request to cancel.';
-
-/** Denied cancellation: only the run's author may cancel it (steering is open to the channel's people). */
-export const CONTROL_REPLY_UNAUTHORIZED =
-  'Only the person who started the active request can cancel it.';
-
-export const CONTROL_REPLY_UNCERTAIN =
-  'That update could not be confirmed as applied. Review the final result before retrying.';
-
-export const CONTROL_REPLY_QUEUED_FOLLOWUP =
-  'The update arrived after the active request stopped accepting changes, so it was queued as a follow-up.';
-
-export const CONTROL_REPLY_EMPTY_UPDATE =
-  'That update was empty. Mention the bot with `update: <instruction>` to change the active request.';
-
-export const CONTROL_REPLY_BUSY =
-  'The task queue is at capacity right now, so this request was not started. Try again shortly.';
-
-/**
  * Context line under a completed answer: a check mark and the model key the
  * run used. The model is chosen by admins per channel; there is no user
  * switch to advertise.

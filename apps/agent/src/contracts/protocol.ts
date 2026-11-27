@@ -17,6 +17,8 @@ export {
  * `npm run generate:protocol`; the contract test fails when the generated
  * mirrors drift. Bump together with any incompatible DTO change and
  * regenerate.
+ *
+ * @public
  */
 export const PROTOCOL_VERSION = 30;
 
@@ -164,10 +166,6 @@ export function isAgentToolCategory(value: unknown): value is AgentToolCategory 
 export const SOFT_LIMIT_METRICS = ['tool_calls', 'cost_usd', 'active_time'] as const;
 
 export type SoftLimitMetric = (typeof SOFT_LIMIT_METRICS)[number];
-
-export function isSoftLimitMetric(value: unknown): value is SoftLimitMetric {
-  return typeof value === 'string' && (SOFT_LIMIT_METRICS as readonly string[]).includes(value);
-}
 
 /** One soft-limit metric as the run message shows it: its current value and limit. */
 export interface SoftLimitReading {

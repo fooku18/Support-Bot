@@ -1,0 +1,44 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreExportsUsedInFile": true,
+  "ignore": [
+    "apps/*/src/generated/**",
+    "apps/slack/src/taskkey.ts",
+    "deploy/lib/model-catalog.mjs",
+    "tests/fixtures/repository/**"
+  ],
+  "ignoreIssues": {
+    "apps/agent/src/contracts/channel-commands.ts": ["exports", "types"],
+    "apps/agent/src/contracts/slack-message-content.ts": ["exports", "types"],
+    "apps/agent/src/contracts/slack-messages.ts": ["exports", "types"],
+    "apps/agent/src/contracts/tool-kinds.ts": ["exports", "types"],
+    "apps/agent/src/domain/delivery/slack-charts.ts": ["exports", "types"]
+  },
+  "ignoreBinaries": ["mkfifo"],
+  "workspaces": {
+    ".": {
+      "entry": [
+        ".agents/hooks/deploy-guard.mjs",
+        "scripts/*.mjs",
+        "tests/integration/mastra/*-vertical.ts",
+        "tests/integration/tools/*-qualification.mjs"
+      ]
+    },
+    "apps/agent": {
+      "entry": [
+        "src/bootstrap/main.ts",
+        "src/bootstrap/provision.ts",
+        "src/bootstrap/telemetry.ts",
+        "src/bootstrap/studio-observability.ts",
+        "test/telemetry-postgres.ts"
+      ],
+      "ignoreDependencies": ["@hono/node-server", "@slack/web-api", "https-proxy-agent", "mastra"]
+    },
+    "apps/slack": {
+      "entry": ["test/fixtures/native-command-boundary.ts"]
+    },
+    "apps/tool-runtime": {
+      "ignoreDependencies": ["@modelcontextprotocol/sdk", "ajv", "undici"]
+    }
+  }
+}

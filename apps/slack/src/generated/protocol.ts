@@ -14,6 +14,8 @@
  * `npm run generate:protocol`; the contract test fails when the generated
  * mirrors drift. Bump together with any incompatible DTO change and
  * regenerate.
+ *
+ * @public
  */
 export const PROTOCOL_VERSION = 30;
 
@@ -75,10 +77,6 @@ export const PROGRESS_MARKER = '⏳';
 export const SOFT_LIMIT_METRICS = ['tool_calls', 'cost_usd', 'active_time'] as const;
 
 export type SoftLimitMetric = (typeof SOFT_LIMIT_METRICS)[number];
-
-export function isSoftLimitMetric(value: unknown): value is SoftLimitMetric {
-  return typeof value === 'string' && (SOFT_LIMIT_METRICS as readonly string[]).includes(value);
-}
 
 /** One soft-limit metric as the run message shows it: its current value and limit. */
 export interface SoftLimitReading {
@@ -261,28 +259,6 @@ export type CancellationOutcome =
   | typeof CANCELLATION_CONVERTED_TO_STEERING;
 
 /**
- * Fixed server-owned control receipts. Never echo steering text, user IDs,
- * provider errors, tool output, or cancellation internals.
- */
-export const CONTROL_REPLY_NO_ACTIVE_RUN = 'There is no active request to cancel.';
-
-/** Denied cancellation: only the run's author may cancel it (steering is open to the channel's people). */
-export const CONTROL_REPLY_UNAUTHORIZED =
-  'Only the person who started the active request can cancel it.';
-
-export const CONTROL_REPLY_UNCERTAIN =
-  'That update could not be confirmed as applied. Review the final result before retrying.';
-
-export const CONTROL_REPLY_QUEUED_FOLLOWUP =
-  'The update arrived after the active request stopped accepting changes, so it was queued as a follow-up.';
-
-export const CONTROL_REPLY_EMPTY_UPDATE =
-  'That update was empty. Mention the bot with `update: <instruction>` to change the active request.';
-
-export const CONTROL_REPLY_BUSY =
-  'The task queue is at capacity right now, so this request was not started. Try again shortly.';
-
-/**
  * The registry summary a task cell publishes: pending-work counters that let
  * pollers discover work after any restart without scanning every cell.
  */
@@ -403,28 +379,6 @@ export interface SlackFileDescriptorDto {
   hosted: boolean;
 }
 
-/** Soft-limit metric values in their units: calls, USD (estimated), ms. */
-export interface SoftLimitValuesDto {
-  toolCalls: number;
-  costUsd: number;
-  activeMs: number;
-}
-
-/**
- * A coding run's soft-limit state, reported by the runner with progress and
- * on parking; returned on later claims of the same run so a continuation
- * inherits its counters and raised limits.
- */
-export interface SoftLimitStateDto {
-  /** Current limits (initial values plus every Continue's raise). */
-  limits: SoftLimitValuesDto;
-  usage: SoftLimitValuesDto;
-  /** Metrics an earlier Continue raised; the run message shows them. */
-  raised: SoftLimitMetric[];
-  /** The open pause (id and crossed metrics), null while the run works. */
-  pause: { pauseId: string; crossed: SoftLimitMetric[] } | null;
-}
-
 /**
  * One admin-managed tool instance assigned to the task's channel. Non-secret
  * settings only: credentials stay in the admin store and the runtimes.
@@ -493,14 +447,4 @@ export interface AcceptedRequestDto {
   userId: string;
   authorKind: 'human' | 'bot';
   botId: string | null;
-}
-
-/** Bounded aggregate admission view for PR-4 scrapes (read-only). */
-export interface AdmissionStatsResponse {
-  limits: { perThread: number; perActor: number; perWorkspace: number };
-  active: { total: number; reserved: number; committed: number };
-  /** Active reservations per key, top 10 per scope (bounded output). */
-  perActor: Array<{ key: string; count: number }>;
-  perWorkspace: Array<{ key: string; count: number }>;
-  counters: { admitted: number; rejected: number; expired: number; confirmFailures: number };
 }
