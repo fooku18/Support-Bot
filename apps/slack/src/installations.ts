@@ -16,7 +16,7 @@ import { installationDownload } from './file-download.js';
  * Bot tokens are never logged; log lines carry IDs only.
  */
 
-import type { Agent } from 'node:http';
+import type { Dispatcher } from 'undici';
 import type { BotIdentity } from './intake.js';
 import type { StageLogger } from './logger.js';
 import { createSlackClient, postEphemeral, type SlackDeps } from './slackclient.js';
@@ -43,8 +43,8 @@ export interface InstallationRegistryOptions {
   /** Test-only fake Slack Web API base URL (synthetic qualification only). */
   slackApiUrl?: string;
   boundedReadRetries?: boolean;
-  /** Egress proxy agent for the per-workspace Slack Web API clients. */
-  agent?: Agent;
+  /** Egress proxy dispatcher for the per-workspace Slack Web API clients. */
+  dispatcher?: Dispatcher;
   /** Timeout per admin request (default 10 s). */
   requestTimeoutMs?: number;
   /** Back-off before a failed team setup is retried (default 30 s). */
@@ -278,7 +278,7 @@ export class InstallationRegistry implements InstallationLookup {
       if (mention.user === body.botUserId) return;
       const webClient = createSlackClient(body.botToken, {
         slackApiUrl: this.options.slackApiUrl,
-        agent: this.options.agent,
+        dispatcher: this.options.dispatcher,
       });
       await postEphemeral(
         { webClient, botUserId: String(body.botUserId ?? ''), botId: String(body.botId ?? '') },
@@ -364,7 +364,7 @@ export class InstallationRegistry implements InstallationLookup {
         const token = await this.fetchToken(teamId);
         const webClient = createSlackClient(token, {
           slackApiUrl: this.options.slackApiUrl,
-          agent: this.options.agent,
+          dispatcher: this.options.dispatcher,
           boundedReadRetries: this.options.boundedReadRetries,
         });
         const auth = await webClient.auth.test({});
@@ -387,12 +387,12 @@ export class InstallationRegistry implements InstallationLookup {
             slack: {
               webClient,
               downloadFile: installationDownload(token),
-              fileAgent: this.options.agent,
+              fileDispatcher: this.options.dispatcher,
               botUserId: identity.botUserId,
               botId: identity.botId,
               receiptWebClient: createSlackClient(token, {
                 slackApiUrl: this.options.slackApiUrl,
-                agent: this.options.agent,
+                dispatcher: this.options.dispatcher,
                 receiptTransport: true,
               }),
             },

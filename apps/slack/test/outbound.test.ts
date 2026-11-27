@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { Dispatcher } from 'undici';
-import { RoutingDispatcher, createOutboundAgent, proxiedHost } from '../src/outbound.js';
+import { ProxyAgent, type Dispatcher } from 'undici';
+import { RoutingDispatcher, createOutboundDispatcher, proxiedHost } from '../src/outbound.js';
 
 function recorder(name: string, calls: string[]): Dispatcher {
   return {
@@ -55,12 +55,11 @@ describe('RoutingDispatcher', () => {
   });
 });
 
-describe('createOutboundAgent', () => {
-  it('is undefined without a proxy and a CONNECT agent with one', () => {
-    expect(createOutboundAgent(undefined)).toBeUndefined();
-    const agent = createOutboundAgent('http://egress:3128');
-    expect(agent).toBeDefined();
-    expect(typeof agent?.destroy).toBe('function');
-    agent?.destroy();
+describe('createOutboundDispatcher', () => {
+  it('is undefined without a proxy and a CONNECT dispatcher with one', async () => {
+    expect(createOutboundDispatcher(undefined)).toBeUndefined();
+    const dispatcher = createOutboundDispatcher('http://egress:3128');
+    expect(dispatcher).toBeInstanceOf(ProxyAgent);
+    await dispatcher?.close();
   });
 });

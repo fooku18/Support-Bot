@@ -3,7 +3,7 @@ import { startNativeAnswerProcess } from './application.js';
 import { createNativeStudio } from '../application/studio.js';
 import { coordinatorAdminSnapshot } from '../application/configuration/config.js';
 import { InstallationRegistry } from '../../../slack/src/installations.js';
-import { createOutboundAgent } from '../../../slack/src/outbound.js';
+import { createOutboundDispatcher } from '../../../slack/src/outbound.js';
 import { isChannelMember } from '../../../slack/src/membership.js';
 import { assertPrivateWorkspaceChannel } from '../../../slack/src/file-upload.js';
 import { createStageLogger } from '../../../slack/src/logger.js';
@@ -20,7 +20,7 @@ const registry = new InstallationRegistry({
   adminUrl: env.ADMIN_URL!,
   adminToken: env.ADMIN_INTERNAL_TOKEN!,
   pollIntervalMs: 2000,
-  agent: createOutboundAgent(env.STUDIO_SLACK_PROXY_URL),
+  dispatcher: createOutboundDispatcher(env.STUDIO_SLACK_PROXY_URL),
   log: createStageLogger('studio-installation'),
 });
 await registry.syncOnce();
