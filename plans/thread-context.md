@@ -1,6 +1,6 @@
 # Thread context
 
-Status: In progress
+Status: Done
 
 ## Summary
 
@@ -75,11 +75,19 @@ scope or setting.
 - Live: T5 BLOCKED. The designated test instance is in use for the replay eval
   and its gateway budget is exhausted. Live check after rollout: a thread with
   a root, a reply carrying a fact, then a mention asking about that fact.
+  Passed on 2026-11-27 13:47 UTC after deployment `5806cf3` (upstream
+  `299f98b`): the answer took the latency figures and the shop from the reply
+  and said they came from an earlier thread message (7 s). The two attempts
+  before it, at 13:35 and 13:37, ended with the failure notice because both
+  model dispatches were reset (`ECONNRESET`, the
+  [model transport](model-transport-reconnect.md) problem), not because of
+  this change.
 
 ## Rollout
 
 Adapter and agent ship in one image; both change together. No migration, no
-configuration.
+configuration. Deployed 2026-11-27 13:29 UTC with deployment `5806cf3`
+(image digest `738fa68`); rollback: pin the previous digest `fbdb928`.
 
 ## Open items
 
