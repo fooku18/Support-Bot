@@ -18,9 +18,10 @@ export async function runNativeSegment(segment: DurableAgentStreamResult) {
     }
     const output = await segment.output.getFullOutput();
     rejected ||= !!output.tripwire || output.finishReason === 'tripwire';
+    const answer = output.steps.at(-1)?.text;
     return {
       runId: segment.runId,
-      text: output.text,
+      text: answer?.trim() ? answer : output.text,
       suspended,
       finishReason: output.finishReason,
       usage: output.usage,
