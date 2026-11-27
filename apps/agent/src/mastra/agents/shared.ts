@@ -1,10 +1,6 @@
 import { anthropic } from '@ai-sdk/anthropic';
 import { openai } from '@ai-sdk/openai';
-import {
-  TokenLimiterProcessor,
-  type InputProcessor,
-  type ToolSearchProcessor,
-} from '@mastra/core/processors';
+import type { InputProcessor, ToolSearchProcessor } from '@mastra/core/processors';
 import type { MastraCompositeStore } from '@mastra/core/storage';
 import type { MastraModelConfig } from '@mastra/core/llm';
 import { askUserTool } from '@mastra/core/tools';
@@ -131,9 +127,7 @@ export function nativeAgentConfiguration(options: NativeAgentConfiguration, time
       lastStepProcessor,
       new ContextBudgetProcessor(options.contextTokens),
     ],
-    outputProcessors: [
-      new TokenLimiterProcessor({ limit: options.outputTokens, strategy: 'abort' }),
-    ],
+    outputProcessors: [],
     errorProcessors: [],
     defaultOptions: {
       maxSteps: options.maxSteps,
