@@ -521,19 +521,32 @@ describe('native startup command routing at the Socket Mode call site', () => {
         { type: 'context', elements: [{ type: 'plain_text', text: '✓ PL' }] },
       ],
     });
+    await click();
     await click('tool-0');
     thread(false, 'tool-1');
     await click();
     thread(true);
     await click();
     expect(resumes()).toHaveLength(1);
-    thread(true, 'tool-1');
+    expect(postEphemeral).not.toHaveBeenCalled();
+    responses.set('/agents/thread', () =>
+      Response.json({ error: 'thread_owner_required' }, { status: 409 }),
+    );
+    await click('tool-2');
+    expect(postEphemeral).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        user: 'U1',
+        text: 'Only the person who asked can answer this question.',
+      }),
+    );
+    thread(true, 'tool-2');
     responses.set('/agents/resume', () =>
       Response.json({ error: 'execution_policy_changed' }, { status: 409 }),
     );
-    await click();
-    expect(resumes()).toHaveLength(2);
-    expect(postEphemeral).toHaveBeenCalledOnce();
+    await click('tool-2');
+    await click('tool-2');
+    expect(resumes()).toHaveLength(3);
+    expect(postEphemeral).toHaveBeenCalledTimes(3);
     expect(update).toHaveBeenCalledOnce();
   });
 

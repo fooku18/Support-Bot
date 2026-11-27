@@ -29,11 +29,13 @@ the guards. The design below is their common minimum.
   open question is the button's tool call, so a stale button of an earlier
   question does nothing. It then takes the typed-answer path (`answerQuestion`:
   resume, refusal notice, presentation with the hourglass on the notice). After
-  an accepted answer, `chat.update` replaces the buttons with "✓ label"
-  (best effort). Clicks by others, stale clicks and clicks after the answer are
-  acknowledged and ignored.
-- **Double clicks** are covered by the existing task lock and the
-  `resume:<toolCallId>` receipt.
+  an accepted answer, `chat.update` keeps the posted blocks, drops the buttons
+  and adds "✓ label" (best effort). Stale clicks and clicks after the answer
+  are acknowledged and ignored. Someone other than the requester gets a private
+  "Only the person who asked can answer this question."
+- **Double clicks.** The task lock and the `resume:<toolCallId>` receipt already
+  prevent a second resume; the adapter also drops a repeat click on a question
+  it is answering, so the requester does not get a refusal notice for it.
 - **Typed answers** keep working, so no "Other" button. A typed answer leaves the
   buttons; a later click finds no open question and is ignored.
 - **Cancel.** Only the hint goes. `cancel` stays the general stop for running

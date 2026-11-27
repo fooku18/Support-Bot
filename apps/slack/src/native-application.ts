@@ -28,7 +28,7 @@ import {
 import { buildTaskKey, parseTaskKey, type TaskIdentity } from './taskkey.js';
 import { ChannelCommandHandler, CommandClient } from './channel-commands.js';
 import { createReplyDecider, withoutAttribution, type ThreadMessage } from './reply-decider.js';
-import { flattenMessageContent, flattenOwnAnswer } from './generated/slack-message-content.js';
+import { flattenMessageContent } from './generated/slack-message-content.js';
 
 const STEP_MEMBERSHIP_MS = 60_000;
 const STEP_MEMBERSHIP_ENTRIES = 10_000;
@@ -101,6 +101,7 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
   );
   const pending = new Set<Promise<unknown>>();
   const presentations = new Map<string, Promise<unknown>>();
+  const answering = new Set<string>();
   let stopping = false;
   let connected = false;
   let receiver: ReturnType<typeof createSocketModeReceiver> | undefined;
@@ -601,27 +602,39 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
     try {
       current = (await transport('/agents/thread', decision.request)) as ThreadState;
     } catch (error) {
-      log.info(
-        `question click ignored reason=${error instanceof NativeTransportRefusal ? error.code : 'unavailable'} message_ts=${ts}`,
-      );
+      const code = error instanceof NativeTransportRefusal ? error.code : 'unavailable';
+      log.info(`question click ignored reason=${code} message_ts=${ts}`);
+      if (code === 'thread_owner_required')
+        await postEphemeral(installation.slack, {
+          channel,
+          user,
+          thread_ts: rootTs,
+          text: 'Only the person who asked can answer this question.',
+        }).catch(() => log.warn('question owner notice unconfirmed'));
       return true;
     }
-    if (!current.requester || current.question !== action.block_id) return true;
+    const key = `${current.runId}:${action.block_id}`;
+    if (!current.requester || current.question !== action.block_id || answering.has(key))
+      return true;
+    answering.add(key);
     if (
-      await answerQuestion(
+      !(await answerQuestion(
         { ...current, question: action.block_id },
         answer,
         rootTs,
         event,
         installation,
-      )
-    )
-      await markQuestionAnswered(installation.slack, {
-        channel,
-        ts,
-        question: flattenOwnAnswer(b.message ?? {}) || answer,
-        answer,
-      }).catch(() => log.warn(`question buttons not removed message_ts=${ts}`));
+      ))
+    ) {
+      answering.delete(key);
+      return true;
+    }
+    await markQuestionAnswered(installation.slack, {
+      channel,
+      ts,
+      message: b.message ?? {},
+      answer,
+    }).catch(() => log.warn(`question buttons not removed message_ts=${ts}`));
     return true;
   }
 

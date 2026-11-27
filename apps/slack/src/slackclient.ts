@@ -184,18 +184,25 @@ function choiceBlock(choices: QuestionChoices) {
   };
 }
 
-/** Replaces a question notice's buttons with the chosen answer. Throws SlackPostError on failure. */
 export async function markQuestionAnswered(
   deps: SlackDeps,
-  args: { channel: string; ts: string; question: string; answer: string },
+  args: {
+    channel: string;
+    ts: string;
+    message: { text?: string; blocks?: unknown[] };
+    answer: string;
+  },
 ): Promise<void> {
+  const kept = (args.message.blocks ?? []).filter(
+    (block) => (block as { type?: unknown } | null)?.type !== 'actions',
+  );
   try {
     await deps.webClient.chat.update({
       channel: args.channel,
       ts: args.ts,
-      text: previewText(args.question),
+      text: args.message.text ?? args.answer,
       blocks: [
-        ...replyBlocks(args.question),
+        ...(kept.length ? kept : replyBlocks(args.message.text ?? '')),
         { type: 'context', elements: [{ type: 'plain_text', text: `✓ ${args.answer}` }] },
       ] as never,
     });

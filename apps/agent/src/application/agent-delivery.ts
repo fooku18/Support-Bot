@@ -19,6 +19,7 @@ type Inspection = {
 function buttonChoices(question: NonNullable<Inspection['suspended']>) {
   const options = question.options ?? [];
   return !question.multiSelect &&
+    question.toolCallId.length <= 255 &&
     options.length > 0 &&
     options.length <= 25 &&
     options.every((o) => o.length <= 75)
