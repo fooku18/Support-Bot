@@ -1,6 +1,6 @@
 # Native Slack charts in answers
 
-Status: In progress
+Status: Human review
 
 ## Summary
 
@@ -56,16 +56,26 @@ two per message; only `chat:write`). Answers should use it.
 
 ## Verification
 
-- Deterministic: pending.
+- Deterministic, head `38a72e2` on `62610da`:
+  - T0 on Windows 11, Node 26.13.1: `typecheck:all`, `lint`, `format:check`,
+    `generate-protocol-clients --check` pass.
+  - T1 `test:packages` and T2 `npm test` in a Linux container
+    (`node:26.13.1-bookworm`): pass (slack 21 files with
+    `charts.test.ts`, agent 72, admin 15, egress 3, model-stub 2, root 9).
+  - T3 `test:native:integration -- --suite application`: 81 records pass.
 - Manual Slack check (2026-11-27, sender app in the designated test
   workspace): `chat.postMessage` accepted a `markdown` block plus a line
   chart (3 series × 16 points) and a bar chart (3 × 9); the blocks read back
   intact.
-- Live (T5): pending.
+- T4 stub suite and T5 gateway: BLOCKED. The shared test instance is
+  locked by another session (PR #26 replay panel) until 19:27 UTC. Live
+  acceptance moves to the first chart request in the deployment's test
+  channel after rollout.
 
 ## Rollout
 
-Pending.
+Merge to `main` publishes the image; the deployment repo's digest bump
+deploys it, with the operator's approval (given for this change).
 
 ## Open items
 
