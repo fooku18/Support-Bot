@@ -971,9 +971,11 @@ export async function hintProjectPaths(
     paths.slice(0, MAX_PROJECT_CANDIDATES).join(', ') +
     (paths.length > MAX_PROJECT_CANDIDATES ? ', …' : '');
   const hint =
-    paths.length === 0
-      ? `No project named "${name}" is visible to this token; list_projects shows the reachable ones.`
-      : `Projects named "${name}" this token can reach: ${listed}. Use the full path, starting at the top-level group.`;
+    paths.length > 0
+      ? `Projects named "${name}" this token can reach: ${listed}. Use the full path, starting at the top-level group.`
+      : found.data.length >= 100
+        ? `More than 100 reachable projects match "${name}"; search list_projects with more of the path.`
+        : `No project named "${name}" is visible to this token; list_projects shows the reachable ones.`;
   return { ...result, error: `${result.error}. ${hint}` };
 }
 

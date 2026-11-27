@@ -25,7 +25,9 @@ GitLab instance, without new egress, credentials, caching or settings.
   `list_projects` already is; one page of 100) and appends to the
   `not_found` text the reachable projects with exactly that last segment, a
   full-path match (`…/team/app` for `team/app`) first, at most five. When
-  none matches it says so and points at `list_projects`. A numeric project
+  none matches it says so and points at `list_projects`, unless the page was
+  full (100 results), where it asks for a longer search phrase instead of
+  claiming there is none. A numeric project
   ID gets no hint. A failed or refused lookup leaves the result unchanged.
 - A hint, not silent resolution: several projects can share a name, and the
   model picks the path with the thread context in view. The next call with
