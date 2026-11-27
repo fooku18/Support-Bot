@@ -137,6 +137,11 @@ A stricter criteria wording was worse on both sets (14/18, 40/43).
     ("status _Sent using_ <@app>
     status"), because the dedupe skips keys
     under 20 characters. Controls are now read from the plain event text.
+    Review of that fix: the event text arrives HTML-escaped, so a
+    `continue` answer kept `&amp;`, `&lt;` and `&gt;`. Controls now read the
+    decoded event text, and the flattened content when Slack sends no text.
+    Accepted: an app message whose short fallback text is `status` while
+    its blocks say more now counts as a control.
 - Deterministic, Windows 11, Node 26.13.1, Docker Desktop 29.9.3:
   - T0 on `1b33a18`: pass.
   - T1 and T2 on `1b33a18`: the Slack package (163 tests, 19 new) and
