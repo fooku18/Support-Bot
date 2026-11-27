@@ -124,6 +124,9 @@ export function nativeAgentConfiguration(options: NativeAgentConfiguration, time
         maxRetries: 0,
         timeout: { totalMs: timeoutMs },
       },
+      ...(options.model.selection.route === 'anthropic'
+        ? { providerOptions: { anthropic: { cacheControl: { type: 'ephemeral' as const } } } }
+        : {}),
       toolCallConcurrency: 1,
       disableBackgroundTasks: true,
       autoResumeSuspendedTools: false,

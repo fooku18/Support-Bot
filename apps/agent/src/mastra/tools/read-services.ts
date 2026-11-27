@@ -5,6 +5,7 @@ import { nativeOperationCapability } from './discovery.js';
 import {
   createServiceToolDefinitions,
   type BrokerToolCatalogOptions,
+  type BrokerToolReply,
 } from '../../integrations/tools/service-catalog.js';
 import type { ServiceToolHandlers } from '../../integrations/tools/runtime-client.js';
 import type { EffectiveToolName } from '../../integrations/tools/tool-profile.js';
@@ -69,6 +70,10 @@ export function createReadServiceTools(options: {
           await options.authorize(capability);
           return result;
         },
+        toModelOutput: (reply) => ({
+          type: 'text',
+          value: (reply as BrokerToolReply).content.map((part) => part.text).join('\n'),
+        }),
       }),
     ]),
   );
