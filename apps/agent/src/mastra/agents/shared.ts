@@ -37,6 +37,27 @@ const TOOL_LABELS: Record<string, string> = {
   slack: 'Slack',
 };
 
+type StepArgs = Parameters<NonNullable<InputProcessor['processInputStep']>>[0];
+
+function answerNow(systemMessages: StepArgs['systemMessages']) {
+  return {
+    toolChoice: 'none' as const,
+    systemMessages: [
+      ...systemMessages,
+      {
+        role: 'system' as const,
+        content:
+          'This is the last step of this run and no more tool calls are possible. Answer now from what you have found so far, and say what you could not check.',
+      },
+    ],
+  };
+}
+
+export function answerBefore(deadlineMs: number) {
+  return ({ systemMessages }: StepArgs) =>
+    Date.now() >= deadlineMs ? answerNow(systemMessages) : undefined;
+}
+
 /** Shared limits, model and memory configuration. The framework owns execution,
  * transcripts and suspension; process-local clients never enter request context. */
 export function nativeAgentConfiguration(options: NativeAgentConfiguration, timeoutMs: number) {
@@ -67,17 +88,7 @@ export function nativeAgentConfiguration(options: NativeAgentConfiguration, time
     id: 'answer-on-last-step',
     processInputStep({ stepNumber, systemMessages }) {
       if (stepNumber < options.maxSteps - 1) return;
-      return {
-        toolChoice: 'none',
-        systemMessages: [
-          ...systemMessages,
-          {
-            role: 'system',
-            content:
-              'This is the last step of this run and no more tool calls are possible. Answer now from what you have found so far, and say what you could not check.',
-          },
-        ],
-      };
+      return answerNow(systemMessages);
     },
   };
   const unavailable = (options.unavailableTools ?? []).map((tool) => TOOL_LABELS[tool] ?? tool);
