@@ -35,7 +35,7 @@ says when it found none.
 
 ## Verification
 
-- Deterministic, on `2bd3455` (#26) plus this change, in
+- Deterministic, on `cfa5868` (main with #26) plus this change, in
   `node:26.13.1-bookworm`: T0 (`typecheck:all`, `lint`, `format:check`)
   pass; T1 `test:packages` pass (agent 725 tests); T2 `npm test` 135 pass;
   T3 `application` passed, 82 test records.
