@@ -1,6 +1,6 @@
 # Optimizely datafile read tool
 
-Status: In progress
+Status: Done
 
 ## Summary
 
@@ -84,8 +84,10 @@ One tool, `optimizely_lookup({ query })`, in Code Mode as
   successive `endOfRange` deltas, the allocated share, variations with
   `featureEnabled` and variable overrides by variable key, and the number of
   whitelisted users. The answer names the datafiles without the flag.
-- Any other text is a case-insensitive substring search over flag, rule,
-  audience and event keys (50 matches, total count). No hit returns a note that
+- Any other text is a case-insensitive substring search over experiment, flag,
+  delivery rule, audience and event keys (50 matches, total count).
+  Experiments come first with their status, running ones first, so "which
+  tests are running for X" survives the cap. No hit returns a note that
   a missing key is usually archived or deleted, and that the datafile cannot
   tell which or when.
 - An empty query lists the datafiles (name, environment, project ID, revision,
@@ -138,8 +140,18 @@ says what the datafile lacks and that a disabled variation gets the defaults.
   (`suite-a3672d82`); `stub-cancel-control-stops-a-held-run` fails with
   `expected_answer_fact_missing`, as on every `main` revision since
   2026-11-27 evening, including #41's own run.
-- Live: pending.
-- Evidence: pending.
+- Live (staging, deployment `0c0722b1` = upstream `8a7a85d`, tool in
+  #test-1234 only, 2026-11-28 06:03 UTC): "is `mp_enable_one_webview`
+  rolled out in the native app in production" answered correctly in 24 s
+  (both platform rules at 100 % `on`, audiences resolved, everyone else
+  `off`). "Which running shop tests have pdp in their key" found three of
+  the four in 72 s and missed `ed_pdp__test_route_to_block_enable`: the
+  search ranked 167 flag hits ahead of the experiments and cut at 50, so the
+  model fell back to `web_fetch`. Fixed by listing experiments first.
+  The deployment's workspace prompt still points at `web_fetch` for the
+  datafile URLs, which is why the model reached for it first.
+- Evidence: Slack threads `1795845832.143459` and `1795845873.201879` in
+  #test-1234.
 
 ## Rollout
 

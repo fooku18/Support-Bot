@@ -11,9 +11,9 @@ the Optimizely SDKs download from `https://cdn.optimizely.com/datafiles/<sdkKey>
 
 ## Model tool
 
-| Tool                       | What it does                                                                                                                                                                                                                                |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `optimizely_lookup(query)` | An exact flag key, rule key, experiment ID or variation ID returns each matching flag per configured datafile. Other text searches flag, rule, audience and event keys (at most 50 matches). An empty query lists the configured datafiles. |
+| Tool                       | What it does                                                                                                                                                                                                                                                                                                              |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `optimizely_lookup(query)` | An exact flag key, rule key, experiment ID or variation ID returns each matching flag per configured datafile. Other text searches experiment, flag, delivery rule, audience and event keys (at most 50 matches; experiments first with their status, running ones first). An empty query lists the configured datafiles. |
 
 A flag answer lists the variables with their defaults and the rules in
 evaluation order: running experiments first, then the delivery rules, the last
