@@ -1,6 +1,6 @@
 # Run status line in the thread
 
-Status: In progress
+Status: Done
 
 ## Summary
 
@@ -43,8 +43,8 @@ or question is posted.
 - [x] Bootstrap sends to the adapter's `/native-status` (10 s timeout).
 - [x] Adapter `createRunStatuses` (`apps/slack/src/run-status.ts`), route, delete in `present()`.
 - [x] Tests: labels, throttle, segment callback, route (post, update, refusals, failed post), clear.
-- [ ] T0 to T3 `application`, PR.
-- [ ] Deploy, live check in #test-1234.
+- [x] T0 to T3 `application`, PR [#43](https://github.com/fooku18/Support-Bot/pull/43).
+- [x] Deploy, live check in #test-1234.
 
 ## Verification
 
@@ -53,9 +53,16 @@ or question is posted.
   (82 records).
 - T4: not run. The shared local test instance is locked by another session until
   02:45 UTC.
-- Live: T5 BLOCKED (no gateway test instance with the needed tools). Staging
-  check in #test-1234 after the deploy: pending.
+- Live: T5 BLOCKED (no gateway test instance with the needed tools). Staging,
+  #test-1234, 2026-11-28, image `6c8828b`: a question about merge request !24 and
+  Datadog errors (`1795824026.776139`). One status message (`1795824029.446819`)
+  showed "Thinking…" 3 s after the mention, then "Reading merge request !24…" and
+  "Checking Datadog…" in place. The answer posted after 35 s, and the status
+  message and the hourglass were gone by the next read.
 
 ## Rollout
 
-Pending.
+Merged as `6c8828b` (#43). Deployed to staging with deployment MR
+[!24](https://gitlab.real-digital.de/code/support-agent-backend/app/-/merge_requests/24)
+(merge `7bd5e5f`, deploy pipeline success 2026-11-27 23:58 UTC), together with
+`f4e200a` (answer without an unready tool).
