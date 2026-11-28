@@ -1,6 +1,6 @@
 # Slack SDK 8
 
-Status: In review
+Status: Done
 
 ## Summary
 
@@ -51,10 +51,12 @@ moves from an `https-proxy-agent` agent to an undici dispatcher.
 
 ## Rollout
 
-Ships with the next digest bump of the deployment repo. No new env, secrets
-or Slack scopes. Check after the deploy: exactly one "socket connected" and
-an answer in the test channel.
+Deployed to staging on 2026-11-28 02:06 UTC with the image from `6eb0776`.
+All workloads started without a restart; the adapter synced its installation
+and opened one Socket Mode connection through the egress proxy. Live check at
+06:03 UTC: a mention in the test channel showed its status after 2 s and was
+answered correctly in 16 s, and every model request since the deploy returned 200.
 
 ## Open items
 
-- [ ] Deploy and live-check
+- [x] Deploy and live-check
