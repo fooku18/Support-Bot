@@ -3,16 +3,14 @@
  * The adapter sits on an internal Compose network with no route out; its
  * Slack traffic tunnels through the proxy as CONNECT requests:
  *
- * - `createOutboundAgent`: the http.Agent for the Slack Web API client
- *   (axios) and the Socket Mode websocket (`ws`), which do not use undici.
+ * - `createOutboundDispatcher`: the undici dispatcher for the Slack Web API
+ *   client, Slack file transfers and the Socket Mode websocket.
  * - `configureOutbound`: undici's global dispatcher for `fetch` (the
  *   interaction response_url on hooks.slack.com). Requests to Compose service
  *   names (no dot: native-answer, admin, fake-slack) and loopback stay direct.
  */
 
-import type { Agent as HttpAgent } from 'node:http';
-import { HttpsProxyAgent } from 'https-proxy-agent';
-import { Agent, Dispatcher, ProxyAgent, setGlobalDispatcher } from 'undici';
+import { Agent, Dispatcher, ProxyAgent, fetch, setGlobalDispatcher } from 'undici';
 
 /** Dotted host names and IP literals leave through the proxy; service names and loopback do not. */
 export function proxiedHost(hostname: string): boolean {
@@ -59,8 +57,12 @@ export function configureOutbound(proxyUrl: string | undefined): RoutingDispatch
   return dispatcher;
 }
 
-/** CONNECT agent for the Slack Web API client and the Socket Mode websocket; undefined is direct. */
-export function createOutboundAgent(proxyUrl: string | undefined): HttpAgent | undefined {
+/** CONNECT dispatcher for the Slack Web API client, file transfers and the Socket Mode websocket; undefined is direct. */
+export function createOutboundDispatcher(proxyUrl: string | undefined): Dispatcher | undefined {
   if (proxyUrl === undefined) return undefined;
-  return new HttpsProxyAgent(proxyUrl, { keepAlive: true });
+  return new ProxyAgent({ uri: proxyUrl, proxyTunnel: true });
+}
+
+export function dispatchedFetch(dispatcher: Dispatcher | undefined): typeof fetch {
+  return (input, init) => fetch(input, { ...init, ...(dispatcher ? { dispatcher } : {}) });
 }

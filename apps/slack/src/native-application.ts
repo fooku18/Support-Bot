@@ -2,7 +2,7 @@ import http from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import { InstallationRegistry, type Installation } from './installations.js';
 import { createStageLogger } from './logger.js';
-import { configureOutbound, createOutboundAgent } from './outbound.js';
+import { configureOutbound, createOutboundDispatcher } from './outbound.js';
 import { createSocketModeReceiver, type EnvelopeArgs } from './receiver.js';
 import { decideMention, type MentionEvent } from './intake.js';
 import {
@@ -93,14 +93,14 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
   const log = createStageLogger('native-adapter');
   const decideReply = createReplyDecider(env);
   configureOutbound(env.EGRESS_PROXY_URL);
-  const agent = createOutboundAgent(env.EGRESS_PROXY_URL);
+  const dispatcher = createOutboundDispatcher(env.EGRESS_PROXY_URL);
   const installations = new InstallationRegistry({
     adminUrl: privateUrl(required(env, 'ADMIN_URL')),
     adminToken: required(env, 'ADMIN_INTERNAL_TOKEN'),
     pollIntervalMs: 2000,
     slackApiUrl: env.SLACK_API_URL,
     boundedReadRetries: true,
-    agent,
+    dispatcher,
     log,
   });
   const admin = new CommandClient(
@@ -397,7 +397,7 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
       );
       installations.stop();
       await installations.settled();
-      agent?.destroy();
+      await dispatcher?.close();
     })());
   try {
     await installations.syncOnce();
@@ -423,8 +423,8 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
         },
         clientOptions: {
           ...(env.SLACK_API_URL ? { slackApiUrl: env.SLACK_API_URL } : {}),
-          ...(agent ? { agent } : {}),
         },
+        ...(dispatcher ? { dispatcher } : {}),
         intake: (event, eventId, installation) => track(intake(event, eventId, installation)),
         command: (event, eventId, installation, ack) =>
           track(commands.mention(event, eventId, installation, ack)),

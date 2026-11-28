@@ -1,6 +1,6 @@
 /** Socket Mode routing with acknowledgment after durable native intake. */
 import { isChannelMember } from './membership.js';
-import type { Agent } from 'node:http';
+import type { Dispatcher } from 'undici';
 import { SocketModeClient, LogLevel } from '@slack/socket-mode';
 import { decideMention, type MentionEvent } from './intake.js';
 import type { Installation, InstallationLookup } from './installations.js';
@@ -67,13 +67,13 @@ export interface ReceiverDeps {
    */
   interaction?: (envelope: EnvelopeArgs, installation: Installation) => Promise<void>;
   /**
-   * Extra options for the Socket Mode client's internal Web API client and
-   * its websocket. `agent` is the egress proxy's CONNECT agent (used for
-   * apps.connections.open and the websocket alike). Test-only: `slackApiUrl`
-   * points apps.connections.open at a fake Slack server during automated
-   * container verification.
+   * Extra options for the Socket Mode client's internal Web API client.
+   * Test-only: `slackApiUrl` points apps.connections.open at a fake Slack
+   * server during automated container verification.
    */
-  clientOptions?: { slackApiUrl?: string; agent?: Agent };
+  clientOptions?: { slackApiUrl?: string };
+  /** The egress proxy's CONNECT dispatcher, for apps.connections.open and the websocket alike. */
+  dispatcher?: Dispatcher;
 }
 
 export interface ReceiverHandle {
@@ -87,6 +87,7 @@ export function createSocketModeReceiver(deps: ReceiverDeps): ReceiverHandle {
     appToken: deps.appToken,
     logLevel: LogLevel.INFO,
     ...(deps.clientOptions !== undefined ? { clientOptions: deps.clientOptions } : {}),
+    ...(deps.dispatcher !== undefined ? { dispatcher: deps.dispatcher } : {}),
   });
   let stopping = false;
   const lifecycle = createLifecycleLogger(deps.log, { isShuttingDown: () => stopping });

@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import http from 'node:http';
+import net, { type AddressInfo } from 'node:net';
 import type { Dispatcher } from 'undici';
-import { RoutingDispatcher, createOutboundAgent, proxiedHost } from '../src/outbound.js';
+import {
+  RoutingDispatcher,
+  createOutboundDispatcher,
+  dispatchedFetch,
+  proxiedHost,
+} from '../src/outbound.js';
 
 function recorder(name: string, calls: string[]): Dispatcher {
   return {
@@ -55,12 +62,39 @@ describe('RoutingDispatcher', () => {
   });
 });
 
-describe('createOutboundAgent', () => {
-  it('is undefined without a proxy and a CONNECT agent with one', () => {
-    expect(createOutboundAgent(undefined)).toBeUndefined();
-    const agent = createOutboundAgent('http://egress:3128');
-    expect(agent).toBeDefined();
-    expect(typeof agent?.destroy).toBe('function');
-    agent?.destroy();
+describe('createOutboundDispatcher', () => {
+  it('is undefined without a proxy', () => {
+    expect(createOutboundDispatcher(undefined)).toBeUndefined();
+  });
+
+  it('tunnels plain HTTP through CONNECT, as the egress proxy requires', async () => {
+    const target = http.createServer((_req, res) => res.end('reached'));
+    await new Promise<void>((resolve) => target.listen(0, '127.0.0.1', resolve));
+    const connects: string[] = [];
+    const proxy = http.createServer((_req, res) => res.writeHead(405).end());
+    proxy.on('connect', (req, client) => {
+      connects.push(String(req.url));
+      const upstream = net.connect((target.address() as AddressInfo).port, '127.0.0.1', () => {
+        client.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+        upstream.pipe(client);
+        client.pipe(upstream);
+      });
+    });
+    await new Promise<void>((resolve) => proxy.listen(0, '127.0.0.1', resolve));
+    const dispatcher = createOutboundDispatcher(
+      `http://127.0.0.1:${(proxy.address() as AddressInfo).port}`,
+    );
+    try {
+      const port = (target.address() as AddressInfo).port;
+      const response = await dispatchedFetch(dispatcher)(`http://127.0.0.1:${port}/api/auth.test`);
+      expect(await response.text()).toBe('reached');
+      expect(connects).toEqual([`127.0.0.1:${port}`]);
+    } finally {
+      await dispatcher?.close();
+      proxy.closeAllConnections();
+      target.closeAllConnections();
+      await new Promise((resolve) => proxy.close(resolve));
+      await new Promise((resolve) => target.close(resolve));
+    }
   });
 });

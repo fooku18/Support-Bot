@@ -26,11 +26,10 @@
   },
   "devDependencies": {
     "@hono/node-server": "2.1.11",
-    "@slack/web-api": "7.19.0",
+    "@slack/web-api": "8.5.0",
     "@types/node": "26.6.11",
     "@types/pg": "8.23.1",
     "esbuild": "0.28.2",
-    "https-proxy-agent": "9.1.0",
     "mastra": "1.40.2",
     "typescript": "6.0.3",
     "vitest": "5.1.2"

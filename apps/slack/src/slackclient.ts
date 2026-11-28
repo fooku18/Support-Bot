@@ -6,7 +6,7 @@ import { COMMAND_RECEIPT_TYPE } from './generated/channel-commands.js';
  * payloads are never included in error summaries.
  */
 
-import type { Agent } from 'node:http';
+import type { Dispatcher } from 'undici';
 import { ErrorCode, WebClient } from '@slack/web-api';
 import { setTimeout as delay } from 'node:timers/promises';
 import {
@@ -15,6 +15,7 @@ import {
   type DeliveryMetadata,
 } from './generated/protocol.js';
 import { describePostError, slackErrorCode } from './slackerrors.js';
+import { dispatchedFetch } from './outbound.js';
 import {
   chartFreeText,
   hasCharts,
@@ -42,7 +43,7 @@ export interface PostResult {
 }
 
 export interface SlackDeps {
-  fileAgent?: Agent;
+  fileDispatcher?: Dispatcher;
   downloadFile?: (url: string, signal: AbortSignal) => Promise<Response>;
   webClient: WebClient;
   /** Bounded transport: receipt retries belong to durable reconciliation. */
@@ -86,7 +87,7 @@ export function createSlackClient(
   options: {
     rejectRateLimitedCalls?: boolean;
     slackApiUrl?: string;
-    agent?: Agent;
+    dispatcher?: Dispatcher;
     receiptTransport?: boolean;
     boundedReadRetries?: boolean;
   } = {},
@@ -94,7 +95,7 @@ export function createSlackClient(
   const Client = options.boundedReadRetries ? NativeReadClient : WebClient;
   return new Client(botToken, {
     // Egress proxy (CONNECT) when the instance runs one; undefined is direct.
-    ...(options.agent !== undefined ? { agent: options.agent } : {}),
+    ...(options.dispatcher !== undefined ? { fetch: dispatchedFetch(options.dispatcher) } : {}),
     // Surface rate limits to callers so durable delivery owns retry decisions.
     rejectRateLimitedCalls: options.rejectRateLimitedCalls ?? true,
     maxRequestConcurrency: 3,

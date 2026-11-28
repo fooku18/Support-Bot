@@ -1,5 +1,5 @@
-import { request } from 'node:https';
 import type { SlackDeps } from './slackclient.js';
+import { dispatchedFetch } from './outbound.js';
 
 export function slackFileUrl(value: string): URL {
   const url = new URL(value);
@@ -21,27 +21,26 @@ export async function transferSlackFile(
   bytes: Buffer,
 ): Promise<void> {
   const target = slackFileUrl(url);
-  await new Promise<void>((resolve, reject) => {
-    const req = request(
-      target,
-      {
-        method: 'POST',
-        agent: slack.fileAgent,
-        timeout: 30_000,
-        headers: { 'content-type': 'application/octet-stream', 'content-length': bytes.length },
-      },
-      (res) => {
-        res.resume();
-        res.on('end', () =>
-          res.statusCode === 200 ? resolve() : reject(new Error('Slack byte transfer refused')),
-        );
-        res.on('error', () => reject(new Error('Slack byte transfer failed')));
-      },
+  let status: number;
+  try {
+    const response = await dispatchedFetch(slack.fileDispatcher)(target, {
+      method: 'POST',
+      redirect: 'manual',
+      signal: AbortSignal.timeout(30_000),
+      headers: { 'content-type': 'application/octet-stream' },
+      body: bytes,
+    });
+    status = response.status;
+    await response.body?.cancel();
+  } catch (error) {
+    throw new Error(
+      error instanceof Error && error.name === 'TimeoutError'
+        ? 'Slack byte transfer timed out'
+        : 'Slack byte transfer failed',
+      { cause: error },
     );
-    req.on('timeout', () => req.destroy(new Error('Slack byte transfer timed out')));
-    req.on('error', () => reject(new Error('Slack byte transfer failed')));
-    req.end(bytes);
-  });
+  }
+  if (status !== 200) throw new Error('Slack byte transfer refused');
 }
 
 export async function assertPrivateWorkspaceChannel(
