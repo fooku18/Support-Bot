@@ -218,8 +218,8 @@ export async function startNativeAnswerProcess(
     };
     const limits = {
       outputTokens: 6000,
-      maxSteps: storageDir ? 40 : 12,
-      timeoutMs: storageDir ? 600000 : 120000,
+      maxSteps: storageDir ? 40 : 25,
+      timeoutMs: storageDir ? 600000 : 300000,
     };
     const messages = createNativeMessageClient({ baseUrl: adapterUrl, token });
     stage = 'dependency-readiness';
