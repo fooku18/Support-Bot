@@ -147,11 +147,18 @@ says what the datafile lacks and that a disabled variation gets the defaults.
   `off`). "Which running shop tests have pdp in their key" found three of
   the four in 72 s and missed `ed_pdp__test_route_to_block_enable`: the
   search ranked 167 flag hits ahead of the experiments and cut at 50, so the
-  model fell back to `web_fetch`. Fixed by listing experiments first.
-  The deployment's workspace prompt still points at `web_fetch` for the
-  datafile URLs, which is why the model reached for it first.
-- Evidence: Slack threads `1795845832.143459` and `1795845873.201879` in
-  #test-1234.
+  model fell back to `web_fetch`. Fixed by listing experiments first (#56).
+  The deployment's workspace prompt pointed at `web_fetch` for the datafile
+  URLs; it now says to prefer `optimizely_lookup` where it is assigned.
+- Live after #56 (2026-11-28 09:16 UTC): the same question listed all four
+  running tests in 27 s, including the two with 0 % allocation. "We test on
+  kaufland-pp.de, is `pdp_series_navigation__v2` running there with the same
+  split" answered in 38 s: absent from development, where the same flag runs
+  `ed_pdp__series_navigation_enabled` with both traffic slots unallocated
+  (empty `entityId` in the datafile). Both match a local parse; neither used
+  `web_fetch`.
+- Evidence: Slack threads `1795845832.143459`, `1795845873.201879`,
+  `1795857411.497509` and `1795857460.871879` in #test-1234.
 
 ## Rollout
 
