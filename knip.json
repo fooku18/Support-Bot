@@ -20,11 +20,12 @@
       "entry": [
         "src/bootstrap/main.ts",
         "src/bootstrap/provision.ts",
+        "src/bootstrap/upgrade.ts",
         "src/bootstrap/telemetry.ts",
         "src/bootstrap/studio-observability.ts",
         "test/telemetry-postgres.ts"
       ],
-      "ignoreDependencies": ["@hono/node-server", "@slack/web-api", "https-proxy-agent", "mastra"]
+      "ignoreDependencies": ["@hono/node-server", "@slack/web-api", "mastra"]
     },
     "apps/slack": {
       "entry": ["test/fixtures/native-command-boundary.ts"]
