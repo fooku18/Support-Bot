@@ -68,7 +68,7 @@ export function required(env: NodeJS.ProcessEnv, name: string) {
 }
 export function socketModeEnabled(env: NodeJS.ProcessEnv) {
   const mode = env.SLACK_SOCKET_MODE?.trim() || 'on';
-  if (mode === 'on') return true;
+  if (mode === 'on') return Boolean(required(env, 'SLACK_APP_TOKEN'));
   if (mode === 'off' && !env.SLACK_APP_TOKEN?.trim()) return false;
   throw new Error('SLACK_SOCKET_MODE must be on, or off without SLACK_APP_TOKEN');
 }
@@ -280,6 +280,7 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
           JSON.stringify({
             ok,
             runtime: 'native-answer',
+            socketMode: socketMode ? 'on' : 'off',
             pending: pending.size - 1,
             application,
           }),

@@ -225,6 +225,13 @@ describe('native deployment conversion', () => {
     f.env.SLACK_APP_TOKEN = '';
     f.save();
     expect(deployment(path.join(f.dir, '.env.testing')).socketMode).toBe('off');
+    const preflight = f.run('deploy-preflight.mjs', [
+      '--env-file',
+      path.join(f.dir, '.env.testing'),
+      '--no-docker',
+    ]);
+    expect(preflight.status).toBe(2);
+    expect(preflight.stderr).toContain('test instances only');
   });
 
   it('selects only native application services', () => {

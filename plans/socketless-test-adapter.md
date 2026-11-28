@@ -51,12 +51,17 @@ receives no Slack events`; Studio on it answered a replay case with 13 tool
   and passed the gateway scenarios `answer-continuity` (4 turns, 00:34 UTC) and
   `gitlab-discovery` (00:37 UTC) through Slack. The same env file against a
   source without the switch fails with `SLACK_APP_TOKEN is required`.
-- Live: not applicable; the stub and gateway suites refuse the switch.
+- Live: BLOCKED. The receiver setup moved inside the switch, so the default
+  path needs a gateway run (T5) on the test app's own instance with images
+  that contain this change. The designated instance was held by another
+  session; run it before release.
 
 ## Rollout
 
-Merge only; nothing to deploy, production keeps the default.
+Production keeps the default; `deploy-preflight` refuses `off`. Existing env
+files need an empty `SLACK_SOCKET_MODE=` line for `env:parity`.
 
 ## Open items
 
 - [x] Record the operator check.
+- [ ] T5 on the designated instance with this change (default `on` path).
