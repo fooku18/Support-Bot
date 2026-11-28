@@ -1,6 +1,6 @@
 # Socketless adapter for shared test apps
 
-Status: Human review
+Status: Done
 
 ## Summary
 
@@ -51,17 +51,23 @@ receives no Slack events`; Studio on it answered a replay case with 13 tool
   and passed the gateway scenarios `answer-continuity` (4 turns, 00:34 UTC) and
   `gitlab-discovery` (00:37 UTC) through Slack. The same env file against a
   source without the switch fails with `SLACK_APP_TOKEN is required`.
-- Live: BLOCKED. The receiver setup moved inside the switch, so the default
-  path needs a gateway run (T5) on the test app's own instance with images
-  that contain this change. The designated instance was held by another
-  session; run it before release.
+- Live (default `on` path): passed 2026-11-28 07:11 UTC on the designated
+  test instance with images from `2e37359` (contains `03a5442`), gateway mode.
+  The adapter logged `socket connected`; `answer-continuity` passed with 4
+  turns through Slack (evidence `native-live/c17982dc-59e7-4a5e-96c8-7db9dc9ab2fe`).
 
 ## Rollout
 
 Production keeps the default; `deploy-preflight` refuses `off`. Existing env
 files need an empty `SLACK_SOCKET_MODE=` line for `env:parity`.
 
+Merged as `03a5442`. It reached staging with the image from `6eb0776`
+(deployment repo `ee7a4e6`, 2026-11-28 02:06 UTC); that deploy's live check
+([slack-sdk-8.md](slack-sdk-8.md#rollout)) covered the adapter's default path:
+one Socket Mode connection and a correct answer in the test channel. Rollback:
+revert `03a5442`; the deployment pins an image digest.
+
 ## Open items
 
 - [x] Record the operator check.
-- [ ] T5 on the designated instance with this change (default `on` path).
+- [x] T5 on the designated instance with this change (default `on` path).
