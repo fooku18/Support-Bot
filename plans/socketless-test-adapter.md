@@ -1,6 +1,6 @@
 # Socketless adapter for shared test apps
 
-Status: In progress
+Status: Human review
 
 ## Summary
 
@@ -39,12 +39,19 @@ stack that owns the test app. Default `on` keeps today's behaviour.
 
 ## Verification
 
-- Deterministic: T0, `apps/slack` tests (new `native-socket-mode.test.ts`),
-  `native-deployment` and `native-live` integration tests.
-- Live: not applicable to the stub or gateway suites (they refuse the switch).
-  Operator check: a socketless stack next to the test app's own stack, Studio
-  reaching its adapter, and the test app's stack still receiving every event.
-- Evidence: below once run.
+- Deterministic (2026-11-28, `af5e86d`, Linux runner): lint, `typecheck:all`,
+  `test:packages` (new `native-socket-mode.test.ts`), `npm test` (136, incl.
+  the contract and harness cases) pass. T3 `application`: 82 records pass; a
+  first run failed once in `input-bom-text/plain-explicit-refusal-before-persistence`
+  (input decoding, unrelated), and passed on the rerun and on the base `cfa5868`.
+- Operator check (2026-11-28, local Windows host): a socketless instance
+  (`support-agent-r1`, images `af5e86d`) logged `Socket Mode off: this adapter
+receives no Slack events`; Studio on it answered a replay case with 13 tool
+  calls. Meanwhile the test app's own instance kept its Socket Mode connection
+  and passed the gateway scenarios `answer-continuity` (4 turns, 00:34 UTC) and
+  `gitlab-discovery` (00:37 UTC) through Slack. The same env file against a
+  source without the switch fails with `SLACK_APP_TOKEN is required`.
+- Live: not applicable; the stub and gateway suites refuse the switch.
 
 ## Rollout
 
@@ -52,4 +59,4 @@ Merge only; nothing to deploy, production keeps the default.
 
 ## Open items
 
-- [ ] Record the operator check.
+- [x] Record the operator check.
