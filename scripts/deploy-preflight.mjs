@@ -16,6 +16,10 @@ try {
     },
   });
   const d = deployment(values['env-file']);
+  if (d.socketMode !== 'on')
+    throw new Error(
+      'SLACK_SOCKET_MODE=off is for test instances only; production needs Socket Mode',
+    );
   if (values['no-docker'])
     console.log('Native configuration validated; no runtime inspection or drain marker.');
   else {

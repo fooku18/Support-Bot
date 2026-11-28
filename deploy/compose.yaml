@@ -88,7 +88,8 @@ services:
       NATIVE_APPLICATION_URL: http://native-answer:9879
       NATIVE_ADAPTER_PORT: '9881'
       SERVICE_TOKEN: ${SUPPORT_AGENT_SERVICE_TOKEN:?service token required}
-      SLACK_APP_TOKEN: ${SLACK_APP_TOKEN:?single Socket Mode app token required}
+      SLACK_APP_TOKEN: ${SLACK_APP_TOKEN:-}
+      SLACK_SOCKET_MODE: ${SLACK_SOCKET_MODE:-}
       ADMIN_URL: http://admin:9883
       ADMIN_INTERNAL_TOKEN: ${ADMIN_INTERNAL_TOKEN:?admin token required}
       EGRESS_PROXY_URL: http://egress:3128

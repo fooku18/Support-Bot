@@ -228,6 +228,7 @@ separate value for each.
 | `NATIVE_ANTHROPIC_BASE_URL`                                                         | Optional Anthropic-compatible gateway URL; empty calls `api.anthropic.com`                |
 | `SUPPORT_AGENT_SERVICE_TOKEN`, `ADMIN_INTERNAL_TOKEN`, `CLI_RUNTIME_TOKEN`          | Random tokens                                                                             |
 | `SLACK_APP_TOKEN`                                                                   | Test app's `xapp-…` token                                                                 |
+| `SLACK_SOCKET_MODE`                                                                 | Empty or `on`; `off` only for a Studio-only instance that shares a test app (below)       |
 | `MODEL_CATALOG`                                                                     | One JSON array, e.g. `[{"key":"sonnet","route":"anthropic","model":"claude-sonnet-5-5"}]` |
 | `MODEL_DEFAULT_KEY`                                                                 | One of the keys, e.g. `sonnet`                                                            |
 | `ADMIN_PUBLIC_URL`                                                                  | The settings UI's HTTPS origin, e.g. `https://admin-test.example.com`                     |
@@ -302,6 +303,13 @@ agent and keeps every volume, store and the recorded mode. See
 
 Run exactly one adapter per Slack app. Never start a second Socket Mode
 receiver for the test app.
+
+A second stack that only serves Studio replays can share the test app with
+`SLACK_SOCKET_MODE=off` and an empty `SLACK_APP_TOKEN` in its `.env.testing`.
+Its adapter opens no Socket Mode connection and receives no Slack events, but
+still serves Studio. Stub and gateway scenarios refuse such an instance, and so
+does `deploy-preflight`. Slack sends clicks and thread replies on anything such
+an instance posts to the stack that owns the test app.
 
 ## 9. Configure the settings service
 

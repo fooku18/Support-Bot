@@ -40,6 +40,10 @@ export function deployment(file, { modelMode = 'gateway' } = {}) {
   if (!MODEL_MODES.includes(modelMode)) throw new Error('--model-mode must be stub or gateway');
   const envFile = path.resolve(file),
     env = readEnvFile(envFile);
+  const socketMode = env.SLACK_SOCKET_MODE?.trim() || 'on';
+  if (!['on', 'off'].includes(socketMode)) throw new Error('SLACK_SOCKET_MODE is invalid');
+  if (socketMode === 'off' && env.SLACK_APP_TOKEN?.trim())
+    throw new Error('SLACK_APP_TOKEN must be empty when SLACK_SOCKET_MODE is off');
   for (const key of [
     'COMPOSE_PROJECT_NAME',
     'SUPPORT_AGENT_INSTANCE',
@@ -51,7 +55,6 @@ export function deployment(file, { modelMode = 'gateway' } = {}) {
     'ADMIN_INTERNAL_TOKEN',
     'CLI_RUNTIME_TOKEN',
     'GITLAB_HOSTS',
-    'SLACK_APP_TOKEN',
     'ADMIN_PUBLIC_URL',
     'ADMIN_HOST_PORT',
     'ADMIN_STORE_DIR',
@@ -59,6 +62,7 @@ export function deployment(file, { modelMode = 'gateway' } = {}) {
     'ADMIN_SESSION_KEY',
     'SLACK_CLIENT_ID',
     'SLACK_CLIENT_SECRET',
+    ...(socketMode === 'on' ? ['SLACK_APP_TOKEN'] : []),
   ]) {
     if (!env[key]?.trim() || /<operator:|placeholder/i.test(env[key]))
       throw new Error(`${key} is required`);
@@ -155,6 +159,7 @@ export function deployment(file, { modelMode = 'gateway' } = {}) {
     overrides: modelMode === 'stub' ? { NATIVE_MODEL_STUB: '1' } : {},
     project: env.COMPOSE_PROJECT_NAME,
     modelMode,
+    socketMode,
   };
 }
 /** `extra` adds explicit interpolation values (they take precedence over the env file). */
