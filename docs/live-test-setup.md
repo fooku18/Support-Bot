@@ -303,6 +303,11 @@ agent and keeps every volume, store and the recorded mode. See
 Run exactly one adapter per Slack app. Never start a second Socket Mode
 receiver for the test app.
 
+A second stack that only serves Studio replays can share the test app with
+`SLACK_SOCKET_MODE=off` and an empty `SLACK_APP_TOKEN` in its `.env.testing`.
+Its adapter opens no Socket Mode connection and receives no Slack events, but
+still serves Studio. Stub and gateway scenarios refuse such an instance.
+
 ## 9. Configure the settings service
 
 Create the first administrator in the test admin container listed by

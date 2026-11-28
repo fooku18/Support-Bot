@@ -66,6 +66,12 @@ export function required(env: NodeJS.ProcessEnv, name: string) {
   if (!value || /^(<|placeholder|change-?me)/i.test(value)) throw new Error(`${name} required`);
   return value;
 }
+export function socketModeEnabled(env: NodeJS.ProcessEnv) {
+  const mode = env.SLACK_SOCKET_MODE?.trim() || 'on';
+  if (mode === 'on') return true;
+  if (mode === 'off' && !env.SLACK_APP_TOKEN?.trim()) return false;
+  throw new Error('SLACK_SOCKET_MODE must be on, or off without SLACK_APP_TOKEN');
+}
 export function privateUrl(value: string) {
   const url = new URL(value);
   if (
@@ -81,6 +87,7 @@ export function privateUrl(value: string) {
 }
 
 export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: AbortSignal) {
+  const socketMode = socketModeEnabled(env);
   const token = required(env, 'SERVICE_TOKEN');
   const baseUrl = privateUrl(required(env, 'NATIVE_APPLICATION_URL'));
   const log = createStageLogger('native-adapter');
@@ -268,7 +275,7 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
         ['/healthz', '/readyz', '/native/status'].includes(req.url ?? '')
       ) {
         const application = await transport('/native/status');
-        const ok = !stopping && connected && installations.synced;
+        const ok = !stopping && (connected || !socketMode) && installations.synced;
         res.writeHead(ok ? 200 : 503, { 'content-type': 'application/json' }).end(
           JSON.stringify({
             ok,
@@ -403,88 +410,96 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
         resolve,
       );
     });
-    receiver = createSocketModeReceiver({
-      appToken: required(env, 'SLACK_APP_TOKEN'),
-      log,
-      installations,
-      connection: {
-        transitioned: (state) => {
-          connected = state === 'connected';
+    if (socketMode)
+      receiver = createSocketModeReceiver({
+        appToken: required(env, 'SLACK_APP_TOKEN'),
+        log,
+        installations,
+        connection: {
+          transitioned: (state) => {
+            connected = state === 'connected';
+          },
         },
-      },
-      clientOptions: {
-        ...(env.SLACK_API_URL ? { slackApiUrl: env.SLACK_API_URL } : {}),
-        ...(agent ? { agent } : {}),
-      },
-      intake: (event, eventId, installation) => track(intake(event, eventId, installation)),
-      command: (event, eventId, installation, ack) =>
-        track(commands.mention(event, eventId, installation, ack)),
-      interaction: (envelope, installation) =>
-        track(
-          (async () => {
-            if (await commands.interaction(envelope, installation)) return;
-            if (await feedbackClick(envelope, installation)) return;
-            if (!(await questionClick(envelope, installation))) await envelope.ack();
-          })(),
-        ),
-      reply: (event, eventId, installation) =>
-        track(
-          (async () => {
-            const normalized = nativeThreadReply(event, installation.identity);
-            if (!normalized || !eventId) return;
-            const decision = decideMention(normalized, installation.identity);
-            if (decision.kind !== 'accept') return;
-            // Silence unrelated threads and other participants. The service rechecks
-            // current authorization and the owner atomically at admission.
-            let current: ThreadState;
-            try {
-              current = (await transport('/agents/thread', {
-                ...decision.request,
-                anyParticipant: Boolean(decideReply),
-              })) as ThreadState;
-            } catch (error) {
-              if (
-                error instanceof NativeTransportRefusal &&
-                ['thread_owner_required', 'origin_revoked', 'authorization_revoked'].includes(
-                  error.code,
+        clientOptions: {
+          ...(env.SLACK_API_URL ? { slackApiUrl: env.SLACK_API_URL } : {}),
+          ...(agent ? { agent } : {}),
+        },
+        intake: (event, eventId, installation) => track(intake(event, eventId, installation)),
+        command: (event, eventId, installation, ack) =>
+          track(commands.mention(event, eventId, installation, ack)),
+        interaction: (envelope, installation) =>
+          track(
+            (async () => {
+              if (await commands.interaction(envelope, installation)) return;
+              if (await feedbackClick(envelope, installation)) return;
+              if (!(await questionClick(envelope, installation))) await envelope.ack();
+            })(),
+          ),
+        reply: (event, eventId, installation) =>
+          track(
+            (async () => {
+              const normalized = nativeThreadReply(event, installation.identity);
+              if (!normalized || !eventId) return;
+              const decision = decideMention(normalized, installation.identity);
+              if (decision.kind !== 'accept') return;
+              // Silence unrelated threads and other participants. The service rechecks
+              // current authorization and the owner atomically at admission.
+              let current: ThreadState;
+              try {
+                current = (await transport('/agents/thread', {
+                  ...decision.request,
+                  anyParticipant: Boolean(decideReply),
+                })) as ThreadState;
+              } catch (error) {
+                if (
+                  error instanceof NativeTransportRefusal &&
+                  ['thread_owner_required', 'origin_revoked', 'authorization_revoked'].includes(
+                    error.code,
+                  )
                 )
+                  return;
+                throw error;
+              }
+              const typed = controlText(decision.request);
+              const control = REQUEST_CONTROL.test(typed);
+              if (
+                current.requester &&
+                current.question &&
+                !control &&
+                typed &&
+                !event.files?.length
               )
-                return;
-              throw error;
-            }
-            const typed = controlText(decision.request);
-            const control = REQUEST_CONTROL.test(typed);
-            if (current.requester && current.question && !control && typed && !event.files?.length)
-              return void (await answerQuestion(
-                { ...current, question: current.question },
-                typed,
-                decision.request.rootTs,
-                normalized,
-                installation,
-              ));
-            if (decideReply && current.autoReplies && current.delivered && !control) {
-              const verdict = await decideReply(
-                decision.request.canonicalText,
-                Boolean(event.files?.length),
-                current.requester,
-                await recentThreadMessages(
-                  installation,
-                  decision.request.channelId,
+                return void (await answerQuestion(
+                  { ...current, question: current.question },
+                  typed,
                   decision.request.rootTs,
-                  decision.request.messageTs,
-                  current.requesterId,
-                ),
-              );
-              const detail = `reason=${verdict.reason}${verdict.failure ? ` failure=${verdict.failure}` : ''}${verdict.probability === undefined ? '' : ` p=${verdict.probability.toFixed(3)}`} channel=${event.channel} message_ts=${event.ts}`;
-              if (verdict.reason === 'decider_unavailable')
-                log.warn(`thread reply decider unavailable; automatic reply skipped ${detail}`);
-              else log.info(`automatic reply ${verdict.reply ? 'accepted' : 'skipped'} ${detail}`);
-              if (!verdict.reply) return;
-            }
-            await intake(normalized, eventId, installation, current.owner, !current.requester);
-          })(),
-        ),
-    });
+                  normalized,
+                  installation,
+                ));
+              if (decideReply && current.autoReplies && current.delivered && !control) {
+                const verdict = await decideReply(
+                  decision.request.canonicalText,
+                  Boolean(event.files?.length),
+                  current.requester,
+                  await recentThreadMessages(
+                    installation,
+                    decision.request.channelId,
+                    decision.request.rootTs,
+                    decision.request.messageTs,
+                    current.requesterId,
+                  ),
+                );
+                const detail = `reason=${verdict.reason}${verdict.failure ? ` failure=${verdict.failure}` : ''}${verdict.probability === undefined ? '' : ` p=${verdict.probability.toFixed(3)}`} channel=${event.channel} message_ts=${event.ts}`;
+                if (verdict.reason === 'decider_unavailable')
+                  log.warn(`thread reply decider unavailable; automatic reply skipped ${detail}`);
+                else
+                  log.info(`automatic reply ${verdict.reply ? 'accepted' : 'skipped'} ${detail}`);
+                if (!verdict.reply) return;
+              }
+              await intake(normalized, eventId, installation, current.owner, !current.requester);
+            })(),
+          ),
+      });
     const deadline = Date.now() + 60000;
     for (;;) {
       shutdown?.throwIfAborted();
@@ -497,7 +512,8 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
       }
     }
     shutdown?.throwIfAborted();
-    await receiver.start();
+    if (receiver) await receiver.start();
+    else log.info('Socket Mode off: this adapter receives no Slack events');
     installations.start();
     commands.start();
     return { close, port: (server.address() as { port: number }).port };

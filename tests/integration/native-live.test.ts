@@ -710,6 +710,9 @@ describe('native live driver', () => {
     fs.chmodSync(root + '/.env.e2e', 0o600);
     write('.env.testing', { ...env, SLACK_APP_TOKEN: 'synthetic-sender' });
     expect(() => loadLive(root)).toThrow('sender_credential_not_harness_only');
+    const socketless = { ...env, SLACK_APP_TOKEN: '' };
+    write('.env.testing', { ...socketless, SLACK_SOCKET_MODE: 'off' });
+    expect(() => loadLive(root)).toThrow('slack_socket_mode_off');
   });
   it('fills GitLab fixture placeholders from .env.e2e and blocks a missing value', () => {
     const gitlab = {

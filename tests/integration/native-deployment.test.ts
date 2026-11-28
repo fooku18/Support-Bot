@@ -204,6 +204,29 @@ describe('native deployment conversion', () => {
       expect(f.calls()).toEqual([]);
     }
   });
+  it('requires the Socket Mode app token unless Socket Mode is off, and refuses it when off', () => {
+    for (const [mode, token] of [
+      ['', ''],
+      ['on', ''],
+      ['off', 'synthetic-slack'],
+      ['disabled', 'synthetic-slack'],
+    ]) {
+      const f = fixture();
+      f.env.SLACK_SOCKET_MODE = mode;
+      f.env.SLACK_APP_TOKEN = token;
+      f.save();
+      const r = f.run('test-stack.mjs', ['up', '--instance-dir', f.dir]);
+      expect(r.status, `${mode}/${token}`).toBe(2);
+      expect(r.stderr, `${mode}/${token}`).toMatch(/SLACK_APP_TOKEN|SLACK_SOCKET_MODE/);
+      expect(f.calls()).toEqual([]);
+    }
+    const f = fixture();
+    f.env.SLACK_SOCKET_MODE = 'off';
+    f.env.SLACK_APP_TOKEN = '';
+    f.save();
+    expect(() => deployment(path.join(f.dir, '.env.testing'))).not.toThrow();
+  });
+
   it('selects only native application services', () => {
     const c = parse(fs.readFileSync('deploy/compose.yaml', 'utf8'));
     expect(Object.keys(c.services).sort()).toEqual([

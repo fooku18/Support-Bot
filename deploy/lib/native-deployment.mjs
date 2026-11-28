@@ -51,7 +51,6 @@ export function deployment(file, { modelMode = 'gateway' } = {}) {
     'ADMIN_INTERNAL_TOKEN',
     'CLI_RUNTIME_TOKEN',
     'GITLAB_HOSTS',
-    'SLACK_APP_TOKEN',
     'ADMIN_PUBLIC_URL',
     'ADMIN_HOST_PORT',
     'ADMIN_STORE_DIR',
@@ -63,6 +62,15 @@ export function deployment(file, { modelMode = 'gateway' } = {}) {
     if (!env[key]?.trim() || /<operator:|placeholder/i.test(env[key]))
       throw new Error(`${key} is required`);
   }
+  const socketMode = env.SLACK_SOCKET_MODE?.trim() || 'on';
+  if (!['on', 'off'].includes(socketMode)) throw new Error('SLACK_SOCKET_MODE is invalid');
+  if (socketMode === 'off' && env.SLACK_APP_TOKEN?.trim())
+    throw new Error('SLACK_APP_TOKEN must be empty when SLACK_SOCKET_MODE is off');
+  if (
+    socketMode === 'on' &&
+    (!env.SLACK_APP_TOKEN?.trim() || /<operator:|placeholder/i.test(env.SLACK_APP_TOKEN))
+  )
+    throw new Error('SLACK_APP_TOKEN is required');
   if (!/^[a-z0-9][a-z0-9_-]*$/.test(env.COMPOSE_PROJECT_NAME))
     throw new Error('COMPOSE_PROJECT_NAME is invalid');
   const subnets = ['NATIVE_FRONTEND_SUBNET', 'NATIVE_TOOLS_SUBNET', 'NATIVE_DB_SUBNET'];
