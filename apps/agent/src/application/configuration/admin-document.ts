@@ -28,6 +28,7 @@ const TOOL_SETTINGS_FIELDS: Record<ChannelToolAssignment['tools'][number]['kind'
   slack: [],
   webSearch: [],
   webFetch: [],
+  optimizely: ['datafiles'],
   codeMode: [],
 };
 

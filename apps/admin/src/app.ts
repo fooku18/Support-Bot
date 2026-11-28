@@ -1854,6 +1854,19 @@ function settingsFromForm(kind: ToolKind, body: Record<string, unknown>): Record
           .map((name) => name.trim())
           .filter((name) => name.length > 0),
       };
+    case 'optimizely':
+      return {
+        datafiles: field('datafiles')
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter((line) => line.length > 0)
+          .map((line) => {
+            const split = line.lastIndexOf(' ');
+            return split < 0
+              ? { name: '', sdkKey: line }
+              : { name: line.slice(0, split).trim(), sdkKey: line.slice(split + 1) };
+          }),
+      };
     default:
       return {};
   }

@@ -1153,6 +1153,28 @@ describe('admin app', () => {
         hasCredential: true,
       });
       expect(await page('/workspaces/T0TEAM1/tools')).not.toContain('cf-secret-token-0001');
+      await form(
+        '/workspaces/T0TEAM1/tools',
+        {
+          csrf,
+          kind: 'optimizely',
+          label: 'Optimizely',
+          datafiles: 'Shop AbCdEf0123456789\r\n\r\nNative app ZyXwVu9876543210\r\n',
+        },
+        cookie,
+      );
+      expect(
+        (await store.listToolInstances('T0TEAM1')).find((row) => row.kind === 'optimizely'),
+      ).toMatchObject({
+        host: null,
+        settings: {
+          datafiles: [
+            { name: 'Shop', sdkKey: 'AbCdEf0123456789' },
+            { name: 'Native app', sdkKey: 'ZyXwVu9876543210' },
+          ],
+        },
+        hasCredential: false,
+      });
       // A validation error comes back as a notice, not a stored instance.
       await form(
         '/workspaces/T0TEAM1/tools',

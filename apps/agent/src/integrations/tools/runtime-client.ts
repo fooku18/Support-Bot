@@ -172,6 +172,7 @@ export type SlackTransportResponse = SlackCallResult;
 /** Methods bound by the application to current authorized service instances. */
 export interface ServiceToolHandlers {
   webFetch(input: { url?: unknown; question?: unknown }): Promise<BrokerToolResult>;
+  optimizely(input: { query?: unknown }): Promise<BrokerToolResult>;
   /** `output` is the rendered model text, header included (`renderGitlabResultText`). */
   gitlab(operation: unknown, args: unknown): Promise<BrokerToolResult>;
   atlassian(operation: unknown, args: unknown): Promise<BrokerToolResult>;

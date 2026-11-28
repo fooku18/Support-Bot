@@ -8,7 +8,8 @@
  *   frontend: Slack, the operations webhook and reply decider hosts, extra hosts (443)
  *   tools:    the frontend set plus model endpoints, GitLab hosts, api.atlassian.com (when a
  *             site is admitted), mcp.<site> per Datadog site, api.cloudflare.com
- *             (when admitted) and the executor's package registries (443)
+ *             (when admitted), cdn.optimizely.com (public Optimizely datafiles) and the
+ *             executor's package registries (443)
  *   web:      any hostname whose resolved addresses are all public (80, 443);
  *             the private-range check happens on the resolved addresses
  *   unknown:  denied
@@ -25,6 +26,8 @@ export const SLACK_HOSTS = [
   // interaction response_url (replacing an ephemeral after a click)
   'hooks.slack.com',
 ] as const;
+
+const OPTIMIZELY_DATAFILE_HOST = 'cdn.optimizely.com';
 
 export const DEFAULT_REGISTRY_HOSTS = [
   'registry.npmjs.org',
@@ -160,6 +163,7 @@ export function policyFromEnv(get: PolicyEnv): Policy {
     if (host === 'api.cloudflare.com') tools.add(host);
     else problems.push(`CLOUDFLARE_HOSTS: "${host}" is not api.cloudflare.com; not admitted`);
   }
+  tools.add(OPTIMIZELY_DATAFILE_HOST);
   const registries = list(get('EXECUTOR_EGRESS_HOSTS'));
   for (const host of registries.length > 0 ? registries : [...DEFAULT_REGISTRY_HOSTS]) {
     if (isHostName(host)) tools.add(host);

@@ -46,6 +46,7 @@ import {
   type NativeMessageClient,
 } from '../../integrations/slack/message-client.js';
 import { publicWebUrl, readWebPage, type WebReader } from '../../integrations/web/gemini-reader.js';
+import { DatafileReader, readOptimizely } from '../../integrations/optimizely/datafile.js';
 
 function webQuestion(value: unknown): string {
   const question = typeof value === 'string' ? value.trim() : '';
@@ -65,6 +66,7 @@ export function nativeReadServices(options: {
   /** Linked message reads; offered with an assigned, ready Slack instance. */
   messages?: NativeMessageClient;
 }): NativeAgentOptions['services'] {
+  const datafiles = new DatafileReader();
   return async (identity, signal) => {
     const config = await options.configuration();
     const current = coordinatorRunConfiguration(config, identity.teamId, identity.channelId);
@@ -79,6 +81,7 @@ export function nativeReadServices(options: {
     const { cli } = options;
     const find = (kind: EffectiveToolName) => profile.tools.find((t) => t.name === kind);
     const webFetch = options.web ? find('webFetch') : undefined;
+    const optimizely = find('optimizely');
     const at = find('atlassian'),
       dd = find('datadog'),
       cf = find('cloudflare'),
@@ -160,6 +163,7 @@ export function nativeReadServices(options: {
         ...(cloudflare ? ['cloudflare' as const] : []),
         ...(slack ? ['slack' as const] : []),
         ...(webFetch ? ['webFetch' as const] : []),
+        ...(optimizely?.datafiles?.length ? ['optimizely' as const] : []),
       ]),
       catalog: {
         gitlab: !!gitlab,
@@ -169,6 +173,11 @@ export function nativeReadServices(options: {
         slackMessages: !!slack && !!options.messages,
       },
       services: {
+        async optimizely(input) {
+          if (!optimizely?.datafiles?.length) return unavailable();
+          const result = await readOptimizely(datafiles, optimizely.datafiles, input.query, signal);
+          return { ok: true, ...result, operationId: 'native-optimizely' };
+        },
         async webFetch(input) {
           if (!webFetch || !options.web) return unavailable();
           if ('reader' in options.web) {

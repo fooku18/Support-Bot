@@ -66,6 +66,7 @@ outside model context.
 | [Slack](slack-tool.md)              | Reuse the installed workspace bot token for linked messages and lookup.      |
 | Web search                          | Assign the provider search tool. Requests use the selected model connection. |
 | Web fetch                           | Assign the read tool and enable the isolated web runtime or the page reader. |
+| [Optimizely](optimizely.md)         | List the projects' SDK datafile keys. No credential: datafiles are public.   |
 | Code Mode                           | Assign it next to read tools.                                                |
 
 Service endpoints and allowed names are bounded by the deployment

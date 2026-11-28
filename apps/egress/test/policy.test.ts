@@ -40,6 +40,7 @@ describe('policyFromEnv', () => {
       'api.atlassian.com',
       'mcp.datadoghq.eu',
       'api.cloudflare.com',
+      'cdn.optimizely.com',
       'registry.npmjs.org',
       'proxy.golang.org',
       'slack.com',
@@ -65,6 +66,8 @@ describe('policyFromEnv', () => {
     expect(p.toolsHosts.has('api.atlassian.com')).toBe(false);
     expect(p.toolsHosts.has('api.cloudflare.com')).toBe(false);
     expect(p.toolsHosts.has('gitlab.com')).toBe(false);
+    expect(p.frontendHosts.has('cdn.optimizely.com')).toBe(false);
+    expect(p.toolsHosts.has('cdn.optimizely.com')).toBe(true);
     expect(p.frontendHosts.has('hooks.slack.com')).toBe(true); // always a Slack host
     expect(p.subnets.web).toBeNull();
     expect(p.problems).toContain(

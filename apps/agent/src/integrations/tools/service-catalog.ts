@@ -633,5 +633,25 @@ export function createServiceToolDefinitions(
       ),
     );
   }
+  if (enabled.has('optimizely')) {
+    definitions.push(
+      tool(
+        'optimizely_lookup',
+        'Read the Optimizely feature flags and A/B tests of the configured projects from their current SDK datafiles, one per project environment (read-only, refreshed every 5 minutes). An exact flag key, rule key, experiment or variation ID returns each matching flag per environment: variables with defaults, rules in evaluation order (running experiments first, then delivery rules, the last one applies to everyone else) with audience logic and conditions, traffic per variation in percent, variable overrides per variation (a variation with featureEnabled false gets the defaults) and the number of whitelisted users. Any other text searches flag, rule, audience and event keys; an empty query lists the datafiles. The datafile has no results, metrics, change history, start dates, or paused, concluded or archived rules: say so instead of guessing.',
+        {
+          query: z
+            .string()
+            .max(200)
+            .describe(
+              'A flag key, rule key, experiment or variation ID, or words to search for; empty lists the datafiles',
+            ),
+        },
+        async (args) => {
+          const result = await broker.optimizely(args);
+          return { result, content: [{ type: 'text' as const, text: result.output }] };
+        },
+      ),
+    );
+  }
   return definitions;
 }

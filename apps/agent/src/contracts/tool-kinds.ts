@@ -19,6 +19,7 @@ export const TOOL_KINDS = [
   'slack',
   'webSearch',
   'webFetch',
+  'optimizely',
   'codeMode',
 ] as const;
 export type ToolKind = (typeof TOOL_KINDS)[number];
@@ -32,6 +33,7 @@ export const TOOL_KIND_TITLES: Record<ToolKind, string> = {
   slack: 'Slack',
   webSearch: 'Web search',
   webFetch: 'Web fetch',
+  optimizely: 'Optimizely',
   codeMode: 'Code Mode',
 };
 
@@ -81,6 +83,7 @@ export const TOOL_KIND_CODES: Record<ToolKind, string> = {
   slack: 'sl',
   webSearch: 'ws',
   webFetch: 'wf',
+  optimizely: 'op',
   codeMode: 'cm',
 };
 
@@ -114,6 +117,9 @@ export const CLOUDFLARE_ID = /^[0-9a-f]{32}$/;
 export const CLOUDFLARE_ZONE_NAME =
   /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/;
 export const MAX_CLOUDFLARE_ZONES = 200;
+export const OPTIMIZELY_SDK_KEY = /^[A-Za-z0-9]{10,64}$/;
+export const MAX_OPTIMIZELY_DATAFILES = 10;
+export const MAX_OPTIMIZELY_NAME_CHARS = 64;
 /** The Slack Web API host: the only legal host of a Slack instance. */
 export const SLACK_API_HOST = 'slack.com';
 const CLOUD_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -146,6 +152,13 @@ export interface CloudflareSettings {
   /** Zone names the instance exposes (sorted); null = every zone the token can see. */
   zones: string[] | null;
 }
+export interface OptimizelyDatafile {
+  name: string;
+  sdkKey: string;
+}
+export interface OptimizelySettings {
+  datafiles: OptimizelyDatafile[];
+}
 export type EmptySettings = Record<string, never>;
 
 export interface ToolSettingsByKind {
@@ -156,6 +169,7 @@ export interface ToolSettingsByKind {
   slack: EmptySettings;
   webSearch: EmptySettings;
   webFetch: EmptySettings;
+  optimizely: OptimizelySettings;
   codeMode: EmptySettings;
 }
 export type ToolSettings = ToolSettingsByKind[ToolKind];
@@ -261,6 +275,34 @@ export function normalizeCloudflareZones(value: unknown): string[] | null {
   return seen.size === 0 ? null : [...seen].sort();
 }
 
+export function normalizeOptimizelyDatafiles(value: unknown): OptimizelyDatafile[] {
+  if (!Array.isArray(value) || value.length === 0)
+    throw new ToolKindError('settings.datafiles must list at least one datafile');
+  if (value.length > MAX_OPTIMIZELY_DATAFILES)
+    throw new ToolKindError(`settings.datafiles may list at most ${MAX_OPTIMIZELY_DATAFILES}`);
+  const keys = new Set<string>();
+  return value.map((entry, index) => {
+    const where = `settings.datafiles[${index}]`;
+    const item = record(entry, where);
+    noUnknown(item, ['name', 'sdkKey'], where);
+    const name = text(item.name ?? '', `${where}.name`);
+    // eslint-disable-next-line no-control-regex -- intentional control-character rejection
+    const control = /[\u0000-\u001f\u007f-\u009f]/.test(name);
+    if (name.length === 0 || name.length > MAX_OPTIMIZELY_NAME_CHARS || control)
+      throw new ToolKindError(
+        `${where}.name must be 1 to ${MAX_OPTIMIZELY_NAME_CHARS} printable characters`,
+      );
+    const sdkKey = text(item.sdkKey ?? '', `${where}.sdkKey`);
+    if (!OPTIMIZELY_SDK_KEY.test(sdkKey))
+      throw new ToolKindError(
+        `${where}.sdkKey must be an Optimizely SDK key (10 to 64 letters and digits)`,
+      );
+    if (keys.has(sdkKey)) throw new ToolKindError(`${where}.sdkKey is listed twice`);
+    keys.add(sdkKey);
+    return { name, sdkKey };
+  });
+}
+
 /** Validates and normalizes an instance's kind, label, host and settings. */
 export function validateToolInstance(input: {
   kind: unknown;
@@ -349,6 +391,14 @@ export function validateToolInstance(input: {
         throw new ToolKindError(`host must be ${SLACK_API_HOST} (or be omitted)`);
       return { kind, label, host: SLACK_API_HOST, settings: {} };
     }
+    case 'optimizely':
+      noUnknown(settings, ['datafiles'], 'settings');
+      return {
+        kind,
+        label,
+        host: noHost(),
+        settings: { datafiles: normalizeOptimizelyDatafiles(settings.datafiles) },
+      };
     case 'webSearch':
     case 'webFetch':
     case 'codeMode':
@@ -435,6 +485,7 @@ export interface AssignedTool {
   accountId?: string | null;
   /** Cloudflare only: the zone names exposed (null: every zone the token sees). */
   zones?: string[] | null;
+  datafiles?: OptimizelyDatafile[];
 }
 
 export interface ChannelToolAssignment {

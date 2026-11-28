@@ -29,7 +29,7 @@ export function createReadServiceTools(options: {
     | 'slackLookupUserByEmail'
     | 'slackSearchMessages'
   > &
-    Partial<Pick<ServiceToolHandlers, 'webFetch' | 'slackReadMessage'>>;
+    Partial<Pick<ServiceToolHandlers, 'webFetch' | 'slackReadMessage' | 'optimizely'>>;
   enabled: ReadonlySet<EffectiveToolName>;
   catalog: BrokerToolCatalogOptions;
   authorize(capability: string): Promise<void>;
@@ -44,6 +44,7 @@ export function createReadServiceTools(options: {
     'slack_get_user',
     'slack_lookup_user_by_email',
     'web_fetch',
+    'optimizely_lookup',
     ...(options.catalog.slackMessages ? ['slack_read_message'] : []),
     ...(options.catalog.slackSearch ? ['slack_search_messages'] : []),
   ]);
@@ -53,6 +54,7 @@ export function createReadServiceTools(options: {
     {
       ...options.services,
       webFetch: options.services.webFetch ?? unavailable,
+      optimizely: options.services.optimizely ?? unavailable,
       slackReadMessage: options.services.slackReadMessage ?? unavailable,
     },
     options.enabled,

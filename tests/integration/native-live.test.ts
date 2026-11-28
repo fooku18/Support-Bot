@@ -2480,6 +2480,7 @@ describe('driver-managed tools, tool scopes and the model mode switch', () => {
           'slack',
           'webSearch',
           'webFetch',
+          'optimizely',
           'codeMode',
         ],
       },

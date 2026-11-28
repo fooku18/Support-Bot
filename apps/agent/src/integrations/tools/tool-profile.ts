@@ -10,6 +10,7 @@
  */
 
 import type { ChannelToolDto, ChannelToolsDto } from '../../contracts/dto.js';
+import type { OptimizelyDatafile } from '../../contracts/tool-kinds.js';
 import {
   ATLASSIAN_ADAPTER,
   ATLASSIAN_CONTRACT_VERSION,
@@ -22,6 +23,7 @@ import {
   CLOUDFLARE_CONTRACT_VERSION,
 } from '../cloudflare/cloudflare-api-adapter.js';
 import { SLACK_ADAPTER, SLACK_CONTRACT_VERSION } from '../slack/slack-api-adapter.js';
+import { OPTIMIZELY_ADAPTER } from '../optimizely/datafile.js';
 
 /** Adapter id of the web fetch tool. */
 export const WEB_RUNTIME_ADAPTER = 'web-runtime-v1';
@@ -30,7 +32,7 @@ export const WEB_RUNTIME_ADAPTER = 'web-runtime-v1';
 export const WEB_SEARCH_ADAPTER = 'anthropic-web-search-v1';
 
 export type EffectiveToolName =
-  'atlassian' | 'datadog' | 'cloudflare' | 'slack' | 'webSearch' | 'webFetch';
+  'atlassian' | 'datadog' | 'cloudflare' | 'slack' | 'webSearch' | 'webFetch' | 'optimizely';
 
 export interface EffectiveTool {
   name: EffectiveToolName;
@@ -47,6 +49,7 @@ export interface EffectiveTool {
   /** Cloudflare: the configured account (null: zone-level only) and zone names (null: all). */
   accountId?: string | null;
   zones?: string[] | null;
+  datafiles?: OptimizelyDatafile[];
 }
 
 /** The channel's GitLab instance. */
@@ -106,6 +109,13 @@ function effectiveTool(tool: ChannelToolDto): EffectiveTool | null {
       return { ...base, name: 'webSearch', adapter: WEB_SEARCH_ADAPTER };
     case 'webFetch':
       return { ...base, name: 'webFetch', adapter: WEB_RUNTIME_ADAPTER };
+    case 'optimizely':
+      return {
+        ...base,
+        name: 'optimizely',
+        adapter: OPTIMIZELY_ADAPTER,
+        datafiles: (tool.datafiles ?? []).map((d) => ({ name: d.name, sdkKey: d.sdkKey })),
+      };
     default:
       return null;
   }

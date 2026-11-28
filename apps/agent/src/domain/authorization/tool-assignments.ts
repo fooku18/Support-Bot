@@ -13,6 +13,7 @@ import {
   CLOUDFLARE_ID,
   MAX_CLOUDFLARE_ZONES,
   MAX_LABEL_CHARS,
+  normalizeOptimizelyDatafiles,
   TOOL_INSTANCE_ID,
   TOOL_KINDS,
   type ChannelToolAssignment,
@@ -118,6 +119,13 @@ function parseTool(value: unknown, where: string): ChannelToolDto {
           fail(`${where}.zones has an invalid zone name`);
         return entry;
       });
+    }
+  }
+  if (input.datafiles !== undefined) {
+    try {
+      tool.datafiles = normalizeOptimizelyDatafiles(input.datafiles);
+    } catch {
+      fail(`${where}.datafiles is not a valid datafile list`);
     }
   }
   if (kind === 'gitlab' && tool.host === undefined) fail(`${where}.host is required for gitlab`);
