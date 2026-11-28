@@ -60,7 +60,7 @@ export function configureOutbound(proxyUrl: string | undefined): RoutingDispatch
 /** CONNECT dispatcher for the Slack Web API client, file transfers and the Socket Mode websocket; undefined is direct. */
 export function createOutboundDispatcher(proxyUrl: string | undefined): Dispatcher | undefined {
   if (proxyUrl === undefined) return undefined;
-  return new ProxyAgent(proxyUrl);
+  return new ProxyAgent({ uri: proxyUrl, proxyTunnel: true });
 }
 
 export function dispatchedFetch(dispatcher: Dispatcher | undefined): typeof fetch {
