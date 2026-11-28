@@ -1,6 +1,6 @@
 # Dependency update, November 2026
 
-Status: In progress
+Status: Done
 
 ## Summary
 
@@ -84,8 +84,12 @@ STUB_REPLY …` prompt as JSON, and the stub's unanchored
 
 ## Rollout
 
-Pending.
+Deployed to staging on 2026-11-28 01:25 UTC with the image from `1aa0251`.
+The deployment's bootstrap Job ran `support-agent upgrade` in 27 s and added
+the five framework columns; all workloads started without a restart, with one
+Socket Mode connection.
 
 ## Open items
 
-- [ ] Deploy to staging with the bootstrap upgrade (deployment repo) and live-check
+- [x] Deploy to staging with the bootstrap upgrade (deployment repo)
+- [ ] Live check in the test channel
