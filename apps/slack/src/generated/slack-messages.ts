@@ -51,6 +51,7 @@ export type SlackMessageRead =
     };
 
 export interface SlackThreadContext {
+  rootImages?: { userId: string; files: unknown[] };
   messages: SlackThreadMessage[];
   omitted: number;
   truncated: boolean;

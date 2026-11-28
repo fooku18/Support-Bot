@@ -82,6 +82,7 @@ export function createNativeAgentService(options: NativeAgentOptions) {
       const context = await options.messages.thread(r.accepted, after, signal);
       return {
         seen: true,
+        rootImages: after === null ? context.rootImages : undefined,
         request: context.messages.length ? withThreadContext(prompt, context, after) : prompt,
       };
     } catch {
@@ -211,7 +212,23 @@ export function createNativeAgentService(options: NativeAgentOptions) {
       const request = thread.request;
       if ('prompt' in input && request !== input.prompt) await guard();
       let prompt: Parameters<typeof runtime.agent.stream>[0] = request;
-      if (options.inputs && r.accepted.files?.length && 'prompt' in input) {
+      const requester = inputIdentity(r.accepted);
+      const inputs = (r.accepted.files ?? []).map((file) => ({ file, identity: requester }));
+      if (thread.rootImages) {
+        const identity = {
+          ...requester,
+          messageTs: requester.rootTs,
+          userId: thread.rootImages.userId,
+          authorBotId: null,
+        };
+        inputs.push(
+          ...nativeInputFiles(thread.rootImages.files, identity.messageTs).map((file) => ({
+            file,
+            identity,
+          })),
+        );
+      }
+      if (options.inputs && inputs.length && 'prompt' in input) {
         // Return the admitted handle before downloading. Cancellation and drain
         // cover acquisition too. An ambiguous read is never replayed on this run.
         started();
@@ -220,7 +237,7 @@ export function createNativeAgentService(options: NativeAgentOptions) {
         await admit(r, 'input-acquire');
         const prior = await inputReceipts(r);
         const union = new Map(prior.map((p) => [`${p.file.id}:${p.file.sourceTs}`, p.file]));
-        for (const file of r.accepted.files) {
+        for (const { file } of inputs) {
           const key = `${file.id}:${file.sourceTs}`;
           if (union.has(key)) fail('input_already_exposed_follow_up_without_reattachment');
           union.set(key, file);
@@ -231,18 +248,14 @@ export function createNativeAgentService(options: NativeAgentOptions) {
         )
           fail('input_thread_bounds_start_fresh_thread');
         const acquired = [];
-        for (const file of r.accepted.files) {
+        for (const { file, identity } of inputs) {
           await guard();
-          const bytes = await options.inputs.acquire(
-            inputIdentity(r.accepted),
-            file,
-            signal.signal,
-          );
+          const bytes = await options.inputs.acquire(requester, file, signal.signal, identity);
           await guard();
           acquired.push({
             bytes,
             receipt: {
-              identity: inputIdentity(r.accepted),
+              identity,
               file,
               sha256: createHash('sha256').update(bytes).digest('hex'),
             },

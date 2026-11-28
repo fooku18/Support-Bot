@@ -43,8 +43,21 @@ export function nativeInputHandler(options: { token: string; installations: Inst
       const body = JSON.parse(Buffer.concat(chunks).toString());
       const identity = body.identity as NativeInputIdentity;
       const installation = resolve(identity);
+      const source: NativeInputIdentity = body.source ?? identity;
+      if (
+        body.source &&
+        source.messageTs !== identity.messageTs &&
+        source.messageTs !== identity.rootTs
+      )
+        throw new Error('invalid input source');
       const receipts: NativeInputReceipt[] = req.url?.endsWith('/acquire')
-        ? [{ identity, file: nativeInputFiles([body.file], identity.messageTs)[0]!, sha256: '' }]
+        ? [
+            {
+              identity: source,
+              file: nativeInputFiles([body.file], source.messageTs)[0]!,
+              sha256: '',
+            },
+          ]
         : body.receipts;
       if (!Array.isArray(receipts) || !receipts.length || receipts.length > NATIVE_INPUT_COUNT)
         throw new Error('input receipt bounds');

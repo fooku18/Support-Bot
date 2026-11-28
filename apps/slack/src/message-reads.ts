@@ -1,4 +1,6 @@
 import type { Installation } from './installations.js';
+import { fileDescriptors } from './file-descriptors.js';
+import { NATIVE_IMAGE_TYPES, nativeInputFiles } from './generated/native-inputs.js';
 import { isChannelMember } from './membership.js';
 import { fetchRepliesPage, SlackPostError, type ReplyPage } from './slackclient.js';
 import { flattenMessageContent, flattenOwnAnswer } from './generated/slack-message-content.js';
@@ -163,7 +165,28 @@ export async function readThreadContext(
     kept.add(message.ts);
   }
   const messages = earlier.flatMap(({ message }) => (kept.has(message.ts) ? [message] : []));
-  return { messages, omitted: earlier.length - messages.length, truncated };
+  const root = after === null ? thread.find((reply) => reply.ts === origin.rootTs) : undefined;
+  const files =
+    root?.user && !root.bot_id && root.subtype !== 'tombstone'
+      ? fileDescriptors(
+          root.files?.filter(
+            (f) =>
+              f &&
+              typeof f === 'object' &&
+              'mimetype' in f &&
+              NATIVE_IMAGE_TYPES.includes(String(f.mimetype)),
+          ),
+          root.ts,
+        )
+      : [];
+  return {
+    messages,
+    omitted: earlier.length - messages.length,
+    truncated,
+    ...(root?.user && files.length
+      ? { rootImages: { userId: root.user, files: nativeInputFiles(files, root.ts) } }
+      : {}),
+  };
 }
 
 /** The linked message and the root come first in the budget, then the thread in order. */

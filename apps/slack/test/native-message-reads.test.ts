@@ -150,6 +150,31 @@ async function setup(
 }
 
 describe('linked message reads', () => {
+  it('includes a root screenshot from another author in the initial origin context', async () => {
+    const { thread } = await setup({
+      origin: [
+        {
+          ts: rootTs,
+          user: 'U2',
+          files: [
+            {
+              id: 'F123',
+              user: 'U2',
+              name: 'bug.png',
+              mimetype: 'image/png',
+              size: 100,
+              mode: 'hosted',
+              is_external: false,
+            },
+          ],
+        },
+        { ts: mentionTs, user: 'U1' },
+      ],
+    });
+    expect(await (await thread()).json()).toMatchObject({
+      rootImages: { userId: 'U2', files: [{ id: 'F123', sourceTs: rootTs }] },
+    });
+  });
   it('returns an alert built from attachments with its thread, the linked message marked', async () => {
     const { linked } = await setup({
       thread: [alert, { ts: replyTs, user: 'U2', text: 'Looking into it' }],

@@ -55,6 +55,9 @@ const linkedRead = z.union([
   }),
 ]);
 const threadRead = z.object({
+  rootImages: z
+    .object({ userId: z.string().regex(/^[UW][A-Z0-9]+$/), files: z.array(z.unknown()) })
+    .optional(),
   messages: z.array(message).max(SLACK_READ_MESSAGES),
   omitted: z.number().int().min(0),
   truncated: z.boolean(),

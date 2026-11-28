@@ -7,6 +7,7 @@ export interface NativeInputClient {
     identity: NativeInputIdentity,
     file: SlackFileDescriptorDto,
     signal: AbortSignal,
+    source?: NativeInputIdentity,
   ): Promise<Buffer>;
   check(
     identity: NativeInputIdentity,
@@ -37,8 +38,8 @@ export function createNativeInputClient(options: {
     return response;
   }
   return {
-    async acquire(identity, file, signal) {
-      const response = await call('acquire', { identity, file }, signal);
+    async acquire(identity, file, signal, source = identity) {
+      const response = await call('acquire', { identity, file, source }, signal);
       if (!response.body) throw new Error('native input bytes unavailable');
       const parts: Buffer[] = [];
       let size = 0;
