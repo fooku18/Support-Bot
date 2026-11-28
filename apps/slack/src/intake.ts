@@ -40,8 +40,7 @@ export interface BotIdentity {
 }
 
 export type MentionDecision =
-  | { kind: 'ignore'; reason: string }
-  | { kind: 'accept'; request: IntakeRequest };
+  { kind: 'ignore'; reason: string } | { kind: 'accept'; request: IntakeRequest };
 
 /** Human mentions and the explicitly configured trusted bot sender may invoke the bot. */
 export function decideMention(event: MentionEvent, identity: BotIdentity): MentionDecision {

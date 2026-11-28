@@ -151,7 +151,7 @@ try {
         if (typeof body[key] === 'string') body[key] = JSON.parse(body[key]);
       const method = req.url!.split('/').at(-1)!;
       timeline.push({ kind: 'slack', detail: method });
-      let result: unknown = { ok: true };
+      let result: unknown;
       if (method === 'auth.test')
         result = { ok: true, team_id: 'T1', user_id: 'UBOT', bot_id: 'B1' };
       else if (method === 'apps.connections.open')

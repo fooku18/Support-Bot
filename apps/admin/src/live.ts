@@ -114,7 +114,7 @@ export class LiveSockets {
 
   constructor(private readonly options: LiveOptions) {
     this.limits = { ...LIVE_LIMITS, ...(options.limits ?? {}) };
-    let origin: string | null = null;
+    let origin: string | null;
     try {
       origin = options.publicUrl.length > 0 ? new URL(options.publicUrl).origin : null;
     } catch {

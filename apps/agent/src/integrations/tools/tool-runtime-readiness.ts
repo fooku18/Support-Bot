@@ -442,7 +442,7 @@ export async function verifyDatadogInstance(
   const ready = requireReady(status, 'datadog', teamId);
   const state = ready.datadog;
   if (state === undefined || !state.ready) throw new Error('Datadog readiness is missing');
-  let endpoint: string | null = null;
+  let endpoint: string | null;
   try {
     endpoint = state.site ? datadogEndpoint(state.site) : null;
   } catch {

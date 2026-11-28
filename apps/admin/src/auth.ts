@@ -58,8 +58,7 @@ export async function verifyPassword(password: string, stored: string): Promise<
 const DUMMY_HASH = `scrypt$${SCRYPT.N}$${SCRYPT.r}$${SCRYPT.p}$${randomBytes(16).toString('base64')}$${randomBytes(64).toString('base64')}`;
 
 export type LoginResult =
-  | { ok: true; admin: AdminUser }
-  | { ok: false; reason: 'locked' | 'invalid' | 'busy' };
+  { ok: true; admin: AdminUser } | { ok: false; reason: 'locked' | 'invalid' | 'busy' };
 
 /** Password checks running at once (scrypt is deliberately expensive). */
 export const MAX_CONCURRENT_LOGINS = 4;

@@ -213,7 +213,8 @@ function countRecords() {
         n += report.tests.length;
       }
     } catch (e) {
-      if (e instanceof assert.AssertionError) throw new Error(`failed record in ${file}`);
+      if (e instanceof assert.AssertionError)
+        throw new Error(`failed record in ${file}`, { cause: e });
     }
   }
   return n;

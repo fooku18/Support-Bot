@@ -101,12 +101,7 @@ import {
  * forbidden / unreachable = probe classifications.
  */
 export type ProviderStatus =
-  | 'ready'
-  | 'pending'
-  | 'invalid_auth'
-  | 'forbidden'
-  | 'unreachable'
-  | 'error';
+  'ready' | 'pending' | 'invalid_auth' | 'forbidden' | 'unreachable' | 'error';
 
 /** GitLab readiness of one instance (sanitized; never the credential). */
 export interface ProviderState {

@@ -353,7 +353,7 @@ async function main() {
   let drifted = [];
   for (const [target, expected] of mirrors) {
     const file = path.join(REPO_ROOT, target);
-    let current = null;
+    let current;
     try {
       current = readFileSync(file, 'utf8');
     } catch {

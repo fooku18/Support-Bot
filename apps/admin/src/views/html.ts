@@ -607,13 +607,7 @@ export function icon(name: IconName): Raw {
 }
 
 export type Section =
-  | 'overview'
-  | 'workspaces'
-  | 'costs'
-  | 'admins'
-  | 'tokens'
-  | 'audit'
-  | 'config';
+  'overview' | 'workspaces' | 'costs' | 'admins' | 'tokens' | 'audit' | 'config';
 
 const ORGANIZATION: Array<[Section, string, string]> = [
   ['workspaces', '/workspaces', 'Workspaces'],
@@ -730,25 +724,29 @@ function sidebar(context: PageContext, options: PageOptions): Raw {
         <summary aria-label="Switch workspace">${switcherLabel}${icon('updown')}</summary>
         <div class="ws-menu">
           <div class="menu-h">Workspaces</div>
-          ${workspaces.length === 0
-            ? html`<p class="sub" style="padding:4px 10px">No workspace yet.</p>`
-            : workspaces.map((row) => {
-                const [kind, state] = workspaceState(row);
-                const label = row.teamName || row.teamId;
-                return html`<a
-                  class="menu-item"
-                  href="${row.hasToken ? `/workspaces/${row.teamId}/channels` : '/workspaces'}"
-                  ${current(row.teamId === scope?.teamId)}
-                  ><span class="av">${initials(label)}</span
-                  ><span class="meta"
-                    >${label}<span class="sub"
-                      ><span class="lamp ${kind}">${state}</span></span
-                    ></span
-                  >${row.teamId === scope?.teamId
-                    ? html`<span class="check">${icon('check')}</span>`
-                    : ''}</a
-                >`;
-              })}
+          ${
+            workspaces.length === 0
+              ? html`<p class="sub" style="padding:4px 10px">No workspace yet.</p>`
+              : workspaces.map((row) => {
+                  const [kind, state] = workspaceState(row);
+                  const label = row.teamName || row.teamId;
+                  return html`<a
+                    class="menu-item"
+                    href="${row.hasToken ? `/workspaces/${row.teamId}/channels` : '/workspaces'}"
+                    ${current(row.teamId === scope?.teamId)}
+                    ><span class="av">${initials(label)}</span
+                    ><span class="meta"
+                      >${label}<span class="sub"
+                        ><span class="lamp ${kind}">${state}</span></span
+                      ></span
+                    >${
+                      row.teamId === scope?.teamId
+                        ? html`<span class="check">${icon('check')}</span>`
+                        : ''
+                    }</a
+                  >`;
+                })
+          }
           <div class="menu-sep"></div>
           <a class="menu-item" href="/workspaces">${icon('workspaces')}All workspaces</a>
           <a class="menu-item" href="/slack/install">${icon('plus')}Add to Slack</a>
@@ -762,23 +760,25 @@ function sidebar(context: PageContext, options: PageOptions): Raw {
       <a href="/" ${current(options.section === 'overview')} class="sb-link"
         >${icon('overview')}<span class="sb-label">Overview</span></a
       >
-      ${scope === undefined
-        ? ''
-        : html`<div class="sb-group">
-            <div class="sb-h">${scope.teamName || scope.teamId}</div>
-            <a
-              href="/workspaces/${scope.teamId}/channels"
-              ${current(options.workspace?.page === 'channels')}
-              class="sb-link"
-              >${icon('channels')}<span class="sb-label">Channels</span></a
-            >
-            <a
-              href="/workspaces/${scope.teamId}/tools"
-              ${current(options.workspace?.page === 'tools')}
-              class="sb-link"
-              >${icon('tools')}<span class="sb-label">Tools, model and prompt</span></a
-            >
-          </div>`}
+      ${
+        scope === undefined
+          ? ''
+          : html`<div class="sb-group">
+              <div class="sb-h">${scope.teamName || scope.teamId}</div>
+              <a
+                href="/workspaces/${scope.teamId}/channels"
+                ${current(options.workspace?.page === 'channels')}
+                class="sb-link"
+                >${icon('channels')}<span class="sb-label">Channels</span></a
+              >
+              <a
+                href="/workspaces/${scope.teamId}/tools"
+                ${current(options.workspace?.page === 'tools')}
+                class="sb-link"
+                >${icon('tools')}<span class="sb-label">Tools, model and prompt</span></a
+              >
+            </div>`
+      }
       <div class="sb-group">
         <div class="sb-h">Organization</div>
         ${ORGANIZATION.map(([section, href, label]) => link(section, href, label))}
@@ -786,15 +786,17 @@ function sidebar(context: PageContext, options: PageOptions): Raw {
       <div class="sb-group">
         <div class="sb-h">Administration</div>
         ${ADMINISTRATION.map(([section, href, label]) => link(section, href, label))}
-        ${context.studioUrl == null
-          ? ''
-          : html`<a
-              href="${context.studioUrl}"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="sb-link"
-              >${icon('external')}<span class="sb-label">Mastra Studio</span></a
-            >`}
+        ${
+          context.studioUrl == null
+            ? ''
+            : html`<a
+                href="${context.studioUrl}"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="sb-link"
+                >${icon('external')}<span class="sb-label">Mastra Studio</span></a
+              >`
+        }
       </div>
     </nav>
     <div class="sb-foot">
@@ -845,15 +847,17 @@ function tabbar(context: PageContext, options: PageOptions): Raw {
               >${icon(section)}${label}</a
             >`,
         )}
-        ${context.studioUrl == null
-          ? ''
-          : html`<a
-              class="menu-item"
-              href="${context.studioUrl}"
-              target="_blank"
-              rel="noopener noreferrer"
-              >${icon('external')}Mastra Studio</a
-            >`}
+        ${
+          context.studioUrl == null
+            ? ''
+            : html`<a
+                class="menu-item"
+                href="${context.studioUrl}"
+                target="_blank"
+                rel="noopener noreferrer"
+                >${icon('external')}Mastra Studio</a
+              >`
+        }
         <div class="menu-sep"></div>
         <button type="button" class="menu-item" data-theme-toggle hidden>
           ${icon('moon')}Switch theme
@@ -954,9 +958,11 @@ export function page(
     <div class="ph">
       <div class="ph-title">
         <h1>${title}</h1>
-        ${options.badge === undefined && options.sub === undefined
-          ? ''
-          : html`<div class="ph-sub">${options.badge ?? ''}${options.sub ?? ''}</div>`}
+        ${
+          options.badge === undefined && options.sub === undefined
+            ? ''
+            : html`<div class="ph-sub">${options.badge ?? ''}${options.sub ?? ''}</div>`
+        }
       </div>
       ${options.actions === undefined ? '' : html`<div class="ph-actions">${options.actions}</div>`}
     </div>
@@ -992,9 +998,11 @@ export function page(
         </head>
         <body>
           ${document}
-          ${options.liveNotice !== undefined
-            ? raw('<script src="/assets/live.js" defer></script>')
-            : ''}
+          ${
+            options.liveNotice !== undefined
+              ? raw('<script src="/assets/live.js" defer></script>')
+              : ''
+          }
         </body>
       </html>`,
   );

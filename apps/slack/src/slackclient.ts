@@ -499,8 +499,7 @@ function safeSummary(err: unknown): string {
 
 function commandReceiptId(metadata: unknown): string | undefined {
   const m = metadata as
-    | { event_type?: unknown; event_payload?: { receiptId?: unknown } }
-    | undefined;
+    { event_type?: unknown; event_payload?: { receiptId?: unknown } } | undefined;
   return m?.event_type === COMMAND_RECEIPT_TYPE && typeof m.event_payload?.receiptId === 'string'
     ? m.event_payload.receiptId
     : undefined;

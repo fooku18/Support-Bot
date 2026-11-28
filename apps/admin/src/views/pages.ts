@@ -71,12 +71,14 @@ export function loginPage(context: PageContext, bootstrap: boolean): string {
           <div><button type="submit">${icon('login')}Sign in</button></div>
         </div>
       </form>
-      ${bootstrap
-        ? html`<p class="muted small">
-            No admin exists yet. Create the first one inside the container:
-            <code>node dist/cli.js create-admin &lt;name&gt;</code>
-          </p>`
-        : html``}`,
+      ${
+        bootstrap
+          ? html`<p class="muted small">
+              No admin exists yet. Create the first one inside the container:
+              <code>node dist/cli.js create-admin &lt;name&gt;</code>
+            </p>`
+          : html``
+      }`,
     { narrow: true },
   );
 }
@@ -145,9 +147,11 @@ function workspaceRow(row: Installation, actions: Raw): Raw {
     <span class="row-ic">${initials(name)}</span>
     <div class="row-main">
       <div class="row-title">
-        ${row.hasToken
-          ? html`<a href="/workspaces/${row.teamId}/channels">${name}</a>`
-          : html`<span>${name}</span>`}
+        ${
+          row.hasToken
+            ? html`<a href="/workspaces/${row.teamId}/channels">${name}</a>`
+            : html`<span>${name}</span>`
+        }
       </div>
       <div class="row-meta">
         <span class="id">${row.teamId}</span>
@@ -171,29 +175,37 @@ export function workspacesPage(
   const rows = installations.map((row) =>
     workspaceRow(
       row,
-      html`${row.hasToken
-        ? html`<a href="/workspaces/${row.teamId}/tools" ${iconAttrs('Tools')}>${icon('tools')}</a>`
-        : html``}
-      ${row.status !== 'whitelisted' && row.hasToken
-        ? postButton(
-            `/workspaces/${row.teamId}/status`,
-            'Whitelist',
-            context.csrf,
-            { status: 'whitelisted' },
-            'primary',
-            { icon: 'check', iconOnly: true, tone: 'go' },
-          )
-        : html``}
-      ${row.status === 'whitelisted'
-        ? postButton(
-            `/workspaces/${row.teamId}/status`,
-            'Disable',
-            context.csrf,
-            { status: 'disabled' },
-            'quiet',
-            { icon: 'disable', iconOnly: true, tone: 'stop' },
-          )
-        : html``}
+      html`${
+        row.hasToken
+          ? html`<a href="/workspaces/${row.teamId}/tools" ${iconAttrs('Tools')}
+              >${icon('tools')}</a
+            >`
+          : html``
+      }
+      ${
+        row.status !== 'whitelisted' && row.hasToken
+          ? postButton(
+              `/workspaces/${row.teamId}/status`,
+              'Whitelist',
+              context.csrf,
+              { status: 'whitelisted' },
+              'primary',
+              { icon: 'check', iconOnly: true, tone: 'go' },
+            )
+          : html``
+      }
+      ${
+        row.status === 'whitelisted'
+          ? postButton(
+              `/workspaces/${row.teamId}/status`,
+              'Disable',
+              context.csrf,
+              { status: 'disabled' },
+              'quiet',
+              { icon: 'disable', iconOnly: true, tone: 'stop' },
+            )
+          : html``
+      }
       ${confirmButton(
         `/workspaces/${row.teamId}/delete`,
         'Remove',
@@ -234,24 +246,28 @@ export function workspacesPage(
         channels.
       </p>
       <div class="list">
-        ${rows.length > 0
-          ? rows
-          : html`<p class="empty">
-              No workspace yet. Use Add to Slack to install the bot, then whitelist it here.
-            </p>`}
+        ${
+          rows.length > 0
+            ? rows
+            : html`<p class="empty">
+                No workspace yet. Use Add to Slack to install the bot, then whitelist it here.
+              </p>`
+        }
       </div>
-      ${senders.length === 0
-        ? ''
-        : html`<section class="card">
-            <div class="card-h">
-              <h2>${icon('bot')}Test senders</h2>
-              <p>
-                Lets one bot (the live-test harness) talk to the agent as if it were a person, in
-                one channel only. Leave all three empty in production.
-              </p>
-            </div>
-            <div class="card-b">${senders}</div>
-          </section>`}
+      ${
+        senders.length === 0
+          ? ''
+          : html`<section class="card">
+              <div class="card-h">
+                <h2>${icon('bot')}Test senders</h2>
+                <p>
+                  Lets one bot (the live-test harness) talk to the agent as if it were a person, in
+                  one channel only. Leave all three empty in production.
+                </p>
+              </div>
+              <div class="card-b">${senders}</div>
+            </section>`
+      }
       <p class="muted small">
         The agent enforces configuration version ${document.version}.
         <a href="/config">See what it contains</a>.
@@ -344,9 +360,11 @@ export function channelsPage(
         <span class="row-ic">${icon(row.isPrivate ? 'lock' : 'channels')}</span>
         <div class="row-main">
           <div class="row-title">
-            ${row.current !== undefined
-              ? html`<a href="${base}/${row.id}/blocked-members">#${row.name}</a>`
-              : html`<span>#${row.name}</span>`}
+            ${
+              row.current !== undefined
+                ? html`<a href="${base}/${row.id}/blocked-members">#${row.name}</a>`
+                : html`<span>#${row.name}</span>`
+            }
           </div>
           <div class="row-meta">
             <span>${row.isPrivate ? 'Private' : 'Public'}</span><span class="id">${row.id}</span>
@@ -356,49 +374,55 @@ export function channelsPage(
           ${channelLamp(workspaceLive, row.enabled, row.botMember, row.blockedCount)}
         </div>
         <div class="row-actions">
-          ${row.enabled
-            ? postButton(
-                `${base}/${row.id}`,
-                'Disable',
-                context.csrf,
-                { enabled: 'false' },
-                'quiet',
-                { icon: 'disable', iconOnly: true, tone: 'stop' },
-              )
-            : row.botMember
+          ${
+            row.enabled
               ? postButton(
                   `${base}/${row.id}`,
-                  'Enable',
+                  'Disable',
                   context.csrf,
-                  { enabled: 'true' },
-                  'primary',
-                  { icon: 'enable', iconOnly: true, tone: 'go' },
+                  { enabled: 'false' },
+                  'quiet',
+                  { icon: 'disable', iconOnly: true, tone: 'stop' },
                 )
-              : html``}
-          ${row.current !== undefined
-            ? html`<a
-                  href="${base}/${row.id}/blocked-members"
-                  ${iconAttrs(`Blocked members (${row.blockedCount})`)}
-                  >${icon('users')}<span class="count ${row.blockedCount === 0 ? 'zero' : ''}"
-                    >${row.blockedCount}</span
-                  ></a
-                >
-                <a href="${base}/${row.id}/tools" ${iconAttrs('Tools')}>${icon('tools')}</a>`
-            : html``}
+              : row.botMember
+                ? postButton(
+                    `${base}/${row.id}`,
+                    'Enable',
+                    context.csrf,
+                    { enabled: 'true' },
+                    'primary',
+                    { icon: 'enable', iconOnly: true, tone: 'go' },
+                  )
+                : html``
+          }
+          ${
+            row.current !== undefined
+              ? html`<a
+                    href="${base}/${row.id}/blocked-members"
+                    ${iconAttrs(`Blocked members (${row.blockedCount})`)}
+                    >${icon('users')}<span class="count ${row.blockedCount === 0 ? 'zero' : ''}"
+                      >${row.blockedCount}</span
+                    ></a
+                  >
+                  <a href="${base}/${row.id}/tools" ${iconAttrs('Tools')}>${icon('tools')}</a>`
+              : html``
+          }
         </div>
       </div>`,
   );
   return page(
     teamName(installation),
     context,
-    html`${workspaceLive
-        ? html``
-        : html`<div class="notice wait">
-            <div>
-              This workspace is ${installation.status}. No channel answers until it is whitelisted
-              on <a href="/workspaces">Workspaces</a>.
-            </div>
-          </div>`}
+    html`${
+        workspaceLive
+          ? html``
+          : html`<div class="notice wait">
+              <div>
+                This workspace is ${installation.status}. No channel answers until it is whitelisted
+                on <a href="/workspaces">Workspaces</a>.
+              </div>
+            </div>`
+      }
       ${listingNotice(live, 'the channels', 'Only channels saved earlier are shown.')}
       <p class="lead">
         Channels appear here once the bot is invited to them with <code>/invite</code>. The bot
@@ -407,11 +431,13 @@ export function channelsPage(
         <a href="/workspaces/${installation.teamId}/tools">Tools</a> and assigned per channel.
       </p>
       <div class="list">
-        ${rows.length > 0
-          ? rows
-          : html`<p class="empty">
-              The bot sees no channels. Invite it to one with <code>/invite</code>, then reload.
-            </p>`}
+        ${
+          rows.length > 0
+            ? rows
+            : html`<p class="empty">
+                The bot sees no channels. Invite it to one with <code>/invite</code>, then reload.
+              </p>`
+        }
       </div>`,
     workspaceOptions(installation, 'channels', `Channels of ${teamName(installation)}`),
   );
@@ -484,9 +510,11 @@ function circuit(
   return html`<section class="card">
     <div class="card-h">
       <h2>${icon('activity')}Readiness</h2>
-      ${firstBroken === -1
-        ? lamp('live', 'The bot answers unblocked members in this channel.')
-        : lamp('off', 'The bot does not answer here yet.')}
+      ${
+        firstBroken === -1
+          ? lamp('live', 'The bot answers unblocked members in this channel.')
+          : lamp('off', 'The bot does not answer here yet.')
+      }
     </div>
     <div class="card-b">
       <ol class="circuit" aria-label="What the bot needs to answer here">
@@ -557,9 +585,11 @@ export function blockedMembersPage(
           </p>
         </div>
         <div class="list">
-          ${rows.length > 0
-            ? rows
-            : html`<p class="empty">Nobody is blocked. All channel members have access.</p>`}
+          ${
+            rows.length > 0
+              ? rows
+              : html`<p class="empty">Nobody is blocked. All channel members have access.</p>`
+          }
         </div>
       </section>
       <form class="card" method="post" action="${base}">
@@ -698,8 +728,7 @@ function settingsFields(kind: ToolKind, instance: ToolInstance | null): Raw {
         <label class="field"
           >Zones (optional, one per line; empty = every zone the token can see)
           <textarea name="zones" rows="4" placeholder="example.com">
-${(settings?.zones ?? []).join('\n')}</textarea
-          >
+${(settings?.zones ?? []).join('\n')}</textarea>
         </label>`;
     }
     case 'webSearch':
@@ -763,11 +792,13 @@ export function toolsPage(
             >${credentialText(instance)}</span
           >
           <span
-            >${users.length === 0
-              ? 'No channel'
-              : users
-                  .map((row) => `#${channelNames.get(row.channelId) ?? row.channelId}`)
-                  .join(', ')}</span
+            >${
+              users.length === 0
+                ? 'No channel'
+                : users
+                    .map((row) => `#${channelNames.get(row.channelId) ?? row.channelId}`)
+                    .join(', ')
+            }</span
           >
           <span class="id">${instance.id}</span>
         </div>
@@ -808,14 +839,16 @@ export function toolsPage(
             </div>
           </form>
         </div>
-        ${users.length > 0
-          ? html`<span class="sub">Unassign to delete</span>`
-          : confirmButton(
-              `${base}/${instance.id}/delete`,
-              'Delete',
-              'Deletes the instance and its stored credential.',
-              context.csrf,
-            )}
+        ${
+          users.length > 0
+            ? html`<span class="sub">Unassign to delete</span>`
+            : confirmButton(
+                `${base}/${instance.id}/delete`,
+                'Delete',
+                'Deletes the instance and its stored credential.',
+                context.csrf,
+              )
+        }
       </div>
     </div>`;
   });
@@ -894,29 +927,33 @@ function modelPanel(
   const options = keys.map(
     (key) =>
       html`<option value="${key}" ${key === stored ? 'selected' : ''}>
-        ${key}${key === view.deployment ? ' (deployment default)' : ''}${view.keys.includes(key)
-          ? ''
-          : ' (no longer offered)'}
+        ${key}${key === view.deployment ? ' (deployment default)' : ''}${
+          view.keys.includes(key) ? '' : ' (no longer offered)'
+        }
       </option>`,
   );
   return html`<form class="card" method="post" action="${action}" id="model">
     <div class="card-h">
       <h2>${icon('model')}Model</h2>
       <p>
-        ${level === 'channel'
-          ? 'The model every new run in this channel uses. A route, connection or model change starts a fresh model conversation in the same Slack thread.'
-          : 'The default model of channels in this workspace that have no model of their own.'}
+        ${
+          level === 'channel'
+            ? 'The model every new run in this channel uses. A route, connection or model change starts a fresh model conversation in the same Slack thread.'
+            : 'The default model of channels in this workspace that have no model of their own.'
+        }
       </p>
     </div>
     <div class="card-b stack">
       <input type="hidden" name="fingerprint" value="${view.fingerprint ?? ''}" />
       ${csrfField(context.csrf)}
-      ${view.route
-        ? html`<p class="muted small">
-            ${view.route} · ${view.modelId} · Hosted search
-            ${view.webSearch ? 'configured' : 'unavailable'}
-          </p>`
-        : html``}
+      ${
+        view.route
+          ? html`<p class="muted small">
+              ${view.route} · ${view.modelId} · Hosted search
+              ${view.webSearch ? 'configured' : 'unavailable'}
+            </p>`
+          : html``
+      }
       <label class="field"
         >Model
         <select name="key" aria-label="Model">
@@ -927,13 +964,15 @@ function modelPanel(
         </select></label
       >
       <div>
-        ${view.available
-          ? lamp('live', `Runs use ${view.effective ?? '—'}`, `from the ${view.source}`)
-          : lamp(
-              'off',
-              `${view.effective ?? '—'} is no longer offered`,
-              'Choose a model from the deployment catalog to allow new runs.',
-            )}
+        ${
+          view.available
+            ? lamp('live', `Runs use ${view.effective ?? '—'}`, `from the ${view.source}`)
+            : lamp(
+                'off',
+                `${view.effective ?? '—'} is no longer offered`,
+                'Choose a model from the deployment catalog to allow new runs.',
+              )
+        }
       </div>
     </div>
     <div class="card-f"><button type="submit">${icon('save')}Save model</button></div>
@@ -972,9 +1011,11 @@ function promptPanel(
     <div class="card-h">
       <h2>${icon('prompt')}System prompt</h2>
       <p>
-        ${level === 'channel'
-          ? "Runs in this channel receive these instructions after the assistant's fixed rules. Changing them rotates the native session of every active coding thread in this channel at its next run. Leave empty to inherit the workspace prompt."
-          : "The instructions every channel in this workspace receives unless the channel has a prompt of its own. Runs receive them after the assistant's fixed rules."}
+        ${
+          level === 'channel'
+            ? "Runs in this channel receive these instructions after the assistant's fixed rules. Changing them rotates the native session of every active coding thread in this channel at its next run. Leave empty to inherit the workspace prompt."
+            : "The instructions every channel in this workspace receives unless the channel has a prompt of its own. Runs receive them after the assistant's fixed rules."
+        }
         At most ${view.maxChars} characters; a long prompt leaves less room for the thread
         (CLAUDE_MAX_PROMPT_CHARS).
       </p>
@@ -985,28 +1026,31 @@ function promptPanel(
       <label class="field"
         >Instructions
         <textarea name="text" maxlength="${view.maxChars}" rows="8" aria-label="System prompt">
-${stored ?? ''}</textarea
-        >
+${stored ?? ''}</textarea>
       </label>
       <div>${status}</div>
-      ${level === 'channel' && view.source === 'workspace'
-        ? html`<details class="disclose">
-            <summary>${icon('chevron')}Inherited workspace prompt</summary>
-            <pre>${view.workspace ?? ''}</pre>
-          </details>`
-        : html``}
+      ${
+        level === 'channel' && view.source === 'workspace'
+          ? html`<details class="disclose">
+              <summary>${icon('chevron')}Inherited workspace prompt</summary>
+              <pre>${view.workspace ?? ''}</pre>
+            </details>`
+          : html``
+      }
     </form>
     <div class="card-f">
-      ${stored !== null
-        ? postButton(
-            action,
-            'Clear (inherit)',
-            context.csrf,
-            { reset: 'true', fingerprint: view.fingerprint ?? '' },
-            'quiet',
-            { icon: 'reset' },
-          )
-        : html``}
+      ${
+        stored !== null
+          ? postButton(
+              action,
+              'Clear (inherit)',
+              context.csrf,
+              { reset: 'true', fingerprint: view.fingerprint ?? '' },
+              'quiet',
+              { icon: 'reset' },
+            )
+          : html``
+      }
       <button type="submit" form="prompt-form">${icon('save')}Save prompt</button>
     </div>
   </section>`;
@@ -1050,19 +1094,21 @@ export function channelToolsPage(
           ${options.map(
             (row) =>
               html`<option value="${row.id}" ${row.id === assigned?.instanceId ? 'selected' : ''}>
-                ${row.label}${row.host === null ? '' : ` (${row.host})`}${row.status === 'enabled'
-                  ? ''
-                  : ' (disabled)'}
+                ${row.label}${row.host === null ? '' : ` (${row.host})`}${
+                  row.status === 'enabled' ? '' : ' (disabled)'
+                }
               </option>`,
           )}
         </select>
       </td>
       <td data-label="Readiness">
-        ${assigned === undefined
-          ? html`<span class="faint">—</span>`
-          : assigned.ready
-            ? lamp('live', 'Ready')
-            : lamp('wait', 'Not ready', assigned.detail ?? '')}
+        ${
+          assigned === undefined
+            ? html`<span class="faint">—</span>`
+            : assigned.ready
+              ? lamp('live', 'Ready')
+              : lamp('wait', 'Not ready', assigned.detail ?? '')
+        }
       </td>
     </tr>`;
   });
@@ -1103,17 +1149,19 @@ export function channelToolsPage(
       <section class="card">
         <div class="card-h"><h2>${icon('shield')}What the agent enforces</h2></div>
         <div class="card-b">
-          ${view.compiled === null
-            ? html`<div class="notice wait">
-                <div>
-                  Not in the current configuration: the channel is not enabled or its workspace is
-                  not whitelisted.
-                </div>
-              </div>`
-            : html`<details class="disclose">
-                <summary>${icon('chevron')}Compiled channel configuration</summary>
-                <pre>${JSON.stringify(view.compiled, null, 2)}</pre>
-              </details>`}
+          ${
+            view.compiled === null
+              ? html`<div class="notice wait">
+                  <div>
+                    Not in the current configuration: the channel is not enabled or its workspace is
+                    not whitelisted.
+                  </div>
+                </div>`
+              : html`<details class="disclose">
+                  <summary>${icon('chevron')}Compiled channel configuration</summary>
+                  <pre>${JSON.stringify(view.compiled, null, 2)}</pre>
+                </details>`
+          }
         </div>
       </section>`,
     channelOptions(installation, channel, 'tools', `Tools in ${name}`),
@@ -1135,18 +1183,20 @@ export function adminsPage(context: PageContext, admins: AdminUser[], selfId: nu
           ${row.disabled ? lamp('off', 'Disabled') : lamp('live', 'Active')}
         </div>
         <div class="row-actions">
-          ${row.id === selfId
-            ? html``
-            : postButton(
-                `/admins/${row.id}`,
-                row.disabled ? 'Enable' : 'Disable',
-                context.csrf,
-                { disabled: row.disabled ? 'false' : 'true' },
-                row.disabled ? 'primary' : 'quiet',
-                row.disabled
-                  ? { icon: 'enable', iconOnly: true, tone: 'go' }
-                  : { icon: 'disable', iconOnly: true, tone: 'stop' },
-              )}
+          ${
+            row.id === selfId
+              ? html``
+              : postButton(
+                  `/admins/${row.id}`,
+                  row.disabled ? 'Enable' : 'Disable',
+                  context.csrf,
+                  { disabled: row.disabled ? 'false' : 'true' },
+                  row.disabled ? 'primary' : 'quiet',
+                  row.disabled
+                    ? { icon: 'enable', iconOnly: true, tone: 'go' }
+                    : { icon: 'disable', iconOnly: true, tone: 'stop' },
+                )
+          }
         </div>
       </div>`,
   );
@@ -1207,41 +1257,45 @@ export function tokensPage(
   return page(
     'API tokens',
     context,
-    html`${created === null
-        ? html``
-        : html`<div class="notice ok">
-            <div>
-              <strong>Copy the new token now. It is not shown again.</strong>
-              <code class="secret">${created}</code>
-            </div>
-          </div>`}
+    html`${
+        created === null
+          ? html``
+          : html`<div class="notice ok">
+              <div>
+                <strong>Copy the new token now. It is not shown again.</strong>
+                <code class="secret">${created}</code>
+              </div>
+            </div>`
+      }
       <p class="lead">
         A token has full admin rights on <code>/api/*</code>. Use one per automation, such as the
         live-test harness, so you can revoke it alone.
       </p>
       <div class="list">
-        ${tokens.length > 0
-          ? tokens.map(
-              (row) =>
-                html`<div class="row">
-                  <span class="row-ic">${icon('tokens')}</span>
-                  <div class="row-main">
-                    <div class="row-title">${row.name}</div>
-                    <div class="row-meta">
-                      <span>Created ${time(row.createdAt)} by ${row.createdBy}</span>
+        ${
+          tokens.length > 0
+            ? tokens.map(
+                (row) =>
+                  html`<div class="row">
+                    <span class="row-ic">${icon('tokens')}</span>
+                    <div class="row-main">
+                      <div class="row-title">${row.name}</div>
+                      <div class="row-meta">
+                        <span>Created ${time(row.createdAt)} by ${row.createdBy}</span>
+                      </div>
                     </div>
-                  </div>
-                  <div class="row-side">
-                    ${confirmButton(
-                      `/tokens/${row.id}/delete`,
-                      'Delete',
-                      'Anything still using this token loses access at once.',
-                      context.csrf,
-                    )}
-                  </div>
-                </div>`,
-            )
-          : html`<p class="empty">No tokens.</p>`}
+                    <div class="row-side">
+                      ${confirmButton(
+                        `/tokens/${row.id}/delete`,
+                        'Delete',
+                        'Anything still using this token loses access at once.',
+                        context.csrf,
+                      )}
+                    </div>
+                  </div>`,
+              )
+            : html`<p class="empty">No tokens.</p>`
+        }
       </div>
       <form class="card" method="post" action="/tokens">
         <div class="card-h"><h2>${icon('tokens')}Create a token</h2></div>
@@ -1383,33 +1437,37 @@ function costTable(rows: CostRow[], title: string): Raw {
         </tr>
       </thead>
       <tbody>
-        ${rows.length === 0
-          ? html`<tr>
-              <td class="empty" colspan="7">No model attempts in this range.</td>
-            </tr>`
-          : rows.map(
-              (row) =>
-                html`<tr>
-                  <td>
-                    <span
-                      >${row.label}${row.detail
-                        ? html`<span class="sub id">${row.detail}</span>`
-                        : ''}</span
-                    >
-                  </td>
-                  <td class="num" data-label="Attempts">
-                    <span
-                      >${grouped(row.requests)}<span class="bar" aria-hidden="true"
-                        ><i style="width:${Math.round((row.requests / most) * 100)}%"></i></span
-                    ></span>
-                  </td>
-                  <td class="num" data-label="Completed">${grouped(row.completedRequests)}</td>
-                  <td class="num" data-label="Failed">${grouped(row.failedRequests)}</td>
-                  <td class="num" data-label="Interrupted">${grouped(row.interruptedRequests)}</td>
-                  <td class="num" data-label="Input tokens">${grouped(row.inputTokens)}</td>
-                  <td class="num" data-label="Output tokens">${grouped(row.outputTokens)}</td>
-                </tr>`,
-            )}
+        ${
+          rows.length === 0
+            ? html`<tr>
+                <td class="empty" colspan="7">No model attempts in this range.</td>
+              </tr>`
+            : rows.map(
+                (row) =>
+                  html`<tr>
+                    <td>
+                      <span
+                        >${row.label}${
+                          row.detail ? html`<span class="sub id">${row.detail}</span>` : ''
+                        }</span
+                      >
+                    </td>
+                    <td class="num" data-label="Attempts">
+                      <span
+                        >${grouped(row.requests)}<span class="bar" aria-hidden="true"
+                          ><i style="width:${Math.round((row.requests / most) * 100)}%"></i></span
+                      ></span>
+                    </td>
+                    <td class="num" data-label="Completed">${grouped(row.completedRequests)}</td>
+                    <td class="num" data-label="Failed">${grouped(row.failedRequests)}</td>
+                    <td class="num" data-label="Interrupted">
+                      ${grouped(row.interruptedRequests)}
+                    </td>
+                    <td class="num" data-label="Input tokens">${grouped(row.inputTokens)}</td>
+                    <td class="num" data-label="Output tokens">${grouped(row.outputTokens)}</td>
+                  </tr>`,
+              )
+        }
       </tbody>
     </table>
   </div>`;
@@ -1527,25 +1585,27 @@ function feedbackTable(rows: AnswerFeedback[]): Raw {
         </tr>
       </thead>
       <tbody>
-        ${rows.length === 0
-          ? html`<tr>
-              <td class="empty" colspan="4">No votes yet.</td>
-            </tr>`
-          : rows.map(
-              (row) =>
-                html`<tr>
-                  <td>
-                    <span
-                      >${row.channelId} · ${row.answerTs}<span class="sub id"
-                        >run ${row.runId}</span
-                      ></span
-                    >
-                  </td>
-                  <td class="num" data-label="Helpful">${grouped(row.up)}</td>
-                  <td class="num" data-label="Not helpful">${grouped(row.down)}</td>
-                  <td data-label="Last vote">${time(row.lastAt)}</td>
-                </tr>`,
-            )}
+        ${
+          rows.length === 0
+            ? html`<tr>
+                <td class="empty" colspan="4">No votes yet.</td>
+              </tr>`
+            : rows.map(
+                (row) =>
+                  html`<tr>
+                    <td>
+                      <span
+                        >${row.channelId} · ${row.answerTs}<span class="sub id"
+                          >run ${row.runId}</span
+                        ></span
+                      >
+                    </td>
+                    <td class="num" data-label="Helpful">${grouped(row.up)}</td>
+                    <td class="num" data-label="Not helpful">${grouped(row.down)}</td>
+                    <td data-label="Last vote">${time(row.lastAt)}</td>
+                  </tr>`,
+              )
+        }
       </tbody>
     </table>
   </div>`;
@@ -1569,9 +1629,11 @@ export function costsPage(
             (preset) =>
               html`<a
                 href="${costsHref(preset.range, view.group)}"
-                ${preset.range.from === view.from && preset.range.to === view.to
-                  ? raw('aria-current="page"')
-                  : ''}
+                ${
+                  preset.range.from === view.from && preset.range.to === view.to
+                    ? raw('aria-current="page"')
+                    : ''
+                }
                 >${preset.label}</a
               >`,
           )}
@@ -1590,11 +1652,13 @@ export function costsPage(
           <a class="button ghost" href="${costsHref(view, 'day', '/costs.csv')}"
             >${icon('download')}Daily CSV</a
           >
-          ${view.group === 'day'
-            ? ''
-            : html`<a class="button ghost" href="${costsHref(view, view.group, '/costs.csv')}"
-                >${icon('download')}Breakdown CSV</a
-              >`}
+          ${
+            view.group === 'day'
+              ? ''
+              : html`<a class="button ghost" href="${costsHref(view, view.group, '/costs.csv')}"
+                  >${icon('download')}Breakdown CSV</a
+                >`
+          }
         </p>
       </form>
       <div class="stats">
@@ -1651,9 +1715,11 @@ export function costsPage(
       ${feedbackTable(feedback)}
       <p class="muted small">
         Ledger:
-        ${ledger.lastReceivedAt === null
-          ? 'no rows received yet'
-          : html`last row received ${time(ledger.lastReceivedAt)}`}
+        ${
+          ledger.lastReceivedAt === null
+            ? 'no rows received yet'
+            : html`last row received ${time(ledger.lastReceivedAt)}`
+        }
         · ${ledger.requestRows} request rows, ${ledger.runRows} run
         rows${ledger.firstDay === null ? '' : ` since ${ledger.firstDay}`} · instance
         ${ledger.instances.length === 0 ? '—' : ledger.instances.join(', ')} · kept
@@ -1820,19 +1886,21 @@ export function overviewPage(context: PageContext, view: OverviewView): string {
             >
           </div>
           <div class="list">
-            ${attention.length === 0
-              ? html`<p class="empty">Nothing needs attention. Every line holds.</p>`
-              : attention.map(
-                  (item) =>
-                    html`<a class="row row-go" href="${item.href}">
-                      <span class="row-ic ${item.tone}">${icon(item.icon)}</span>
-                      <span class="row-main">
-                        <span class="row-title">${item.title}</span>
-                        <span class="row-meta">${item.detail}</span>
-                      </span>
-                      <span class="row-side faint small">${item.action}${icon('chevron')}</span>
-                    </a>`,
-                )}
+            ${
+              attention.length === 0
+                ? html`<p class="empty">Nothing needs attention. Every line holds.</p>`
+                : attention.map(
+                    (item) =>
+                      html`<a class="row row-go" href="${item.href}">
+                        <span class="row-ic ${item.tone}">${icon(item.icon)}</span>
+                        <span class="row-main">
+                          <span class="row-title">${item.title}</span>
+                          <span class="row-meta">${item.detail}</span>
+                        </span>
+                        <span class="row-side faint small">${item.action}${icon('chevron')}</span>
+                      </a>`,
+                  )
+            }
           </div>
         </section>
         <section class="card">
@@ -1841,9 +1909,11 @@ export function overviewPage(context: PageContext, view: OverviewView): string {
             <a class="small" href="/audit">Audit log</a>
           </div>
           <div class="list audit">
-            ${view.audit.length === 0
-              ? html`<p class="empty">No entries yet.</p>`
-              : view.audit.map(auditRow)}
+            ${
+              view.audit.length === 0
+                ? html`<p class="empty">No entries yet.</p>`
+                : view.audit.map(auditRow)
+            }
           </div>
         </section>
       </div>
@@ -1852,28 +1922,34 @@ export function overviewPage(context: PageContext, view: OverviewView): string {
         <a class="small" href="/workspaces">Manage</a>
       </div>
       <div class="list">
-        ${view.installations.length === 0
-          ? html`<p class="empty">
-              No workspace yet. <a href="/slack/install">Add to Slack</a> to install the bot.
-            </p>`
-          : view.installations.map(
-              (row) =>
-                html`<div class="row">
-                  <span class="row-ic">${initials(teamName(row))}</span>
-                  <div class="row-main">
-                    <div class="row-title">
-                      ${row.hasToken
-                        ? html`<a href="/workspaces/${row.teamId}/channels">${teamName(row)}</a>`
-                        : html`<span>${teamName(row)}</span>`}
+        ${
+          view.installations.length === 0
+            ? html`<p class="empty">
+                No workspace yet. <a href="/slack/install">Add to Slack</a> to install the bot.
+              </p>`
+            : view.installations.map(
+                (row) =>
+                  html`<div class="row">
+                    <span class="row-ic">${initials(teamName(row))}</span>
+                    <div class="row-main">
+                      <div class="row-title">
+                        ${
+                          row.hasToken
+                            ? html`<a href="/workspaces/${row.teamId}/channels"
+                                >${teamName(row)}</a
+                              >`
+                            : html`<span>${teamName(row)}</span>`
+                        }
+                      </div>
+                      <div class="row-meta">
+                        <span class="id">${row.teamId}</span
+                        ><span>${channelCounts.get(row.teamId) ?? 0} channels</span>
+                      </div>
                     </div>
-                    <div class="row-meta">
-                      <span class="id">${row.teamId}</span
-                      ><span>${channelCounts.get(row.teamId) ?? 0} channels</span>
-                    </div>
-                  </div>
-                  <div class="row-side">${workspaceLamp(row, false)}</div>
-                </div>`,
-            )}
+                    <div class="row-side">${workspaceLamp(row, false)}</div>
+                  </div>`,
+              )
+        }
       </div>`,
     {
       section: 'overview',

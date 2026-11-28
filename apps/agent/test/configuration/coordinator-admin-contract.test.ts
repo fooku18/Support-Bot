@@ -15,30 +15,28 @@ import { parseCoordinatorAdminDocument } from '../../src/application/configurati
 import { createAdminConfigSync } from '../../src/application/configuration/admin-sync.js';
 
 function fixture(version = 7, status: 'whitelisted' | 'disabled' = 'whitelisted') {
-  const instances: ToolInstanceRow[] = TOOL_KINDS.map(
-    (kind, i): ToolInstanceRow => ({
-      id: `ti_${String(i + 1).padStart(16, '0')}`,
-      teamId: 'TTEAM',
-      kind,
-      label: kind,
-      host: kind === 'gitlab' ? 'gitlab.example.test' : null,
-      settings:
-        kind === 'atlassian'
-          ? {
-              cloudId: '00000000-0000-4000-8000-000000000115',
-              email: 'fixture@example.test',
-              operations: ['getJiraIssue'],
-            }
-          : kind === 'datadog'
-            ? { denyTools: ['search_datadog_logs'], toolsets: 'logs' }
-            : kind === 'cloudflare'
-              ? { accountId: 'a'.repeat(32), zones: ['fixture.example.test'] }
-              : {},
-      hasCredential: true,
-      credentialVersion: 1,
-      status: 'enabled',
-    }),
-  );
+  const instances: ToolInstanceRow[] = TOOL_KINDS.map((kind, i): ToolInstanceRow => ({
+    id: `ti_${String(i + 1).padStart(16, '0')}`,
+    teamId: 'TTEAM',
+    kind,
+    label: kind,
+    host: kind === 'gitlab' ? 'gitlab.example.test' : null,
+    settings:
+      kind === 'atlassian'
+        ? {
+            cloudId: '00000000-0000-4000-8000-000000000115',
+            email: 'fixture@example.test',
+            operations: ['getJiraIssue'],
+          }
+        : kind === 'datadog'
+          ? { denyTools: ['search_datadog_logs'], toolsets: 'logs' }
+          : kind === 'cloudflare'
+            ? { accountId: 'a'.repeat(32), zones: ['fixture.example.test'] }
+            : {},
+    hasCredential: true,
+    credentialVersion: 1,
+    status: 'enabled',
+  }));
   const rows: CompileRows = {
     installations: [
       {
@@ -82,7 +80,10 @@ it.each([
   ['cloudflare', 'zones'],
 ])('refuses omitted %s.%s even with a valid recomputed hash', (kind, field) => {
   const source = fixture();
-  Reflect.deleteProperty(source.toolAssignments[0]!.tools.find((t) => t.kind === kind)!, field);
+  Reflect.deleteProperty(
+    source.toolAssignments[0]!.tools.find((t) => t.kind === kind)!,
+    field,
+  );
   expect(() => parseCoordinatorAdminDocument(rehash(source))).toThrow(
     'Invalid coordinator admin document',
   );
