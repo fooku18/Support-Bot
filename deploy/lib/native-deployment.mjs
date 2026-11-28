@@ -234,6 +234,7 @@ export function requireNativeProject(d) {
           'adapter',
           'native-postgres',
           'native-provision',
+          'native-upgrade',
           'native-observability',
           'native-cli-runtime',
           'admin',

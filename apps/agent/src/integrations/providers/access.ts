@@ -202,12 +202,10 @@ export function loadModelProviders(env: NodeJS.ProcessEnv, fetchImpl?: typeof fe
     }
   }
   const effective = stub ? stubModelCatalog(catalog) : catalog;
-  const models = effective.models.map(
-    (model): ResolvedModel => ({
-      ...model,
-      connection: credentials.get(modelConnection(model.route))!.identity,
-    }),
-  );
+  const models = effective.models.map((model): ResolvedModel => ({
+    ...model,
+    connection: credentials.get(modelConnection(model.route))!.identity,
+  }));
   function bind(selection: ResolvedModel, accounting?: ModelBinding['accounting']): ModelBinding {
     const credential = credentials.get(modelConnection(selection.route));
     if (

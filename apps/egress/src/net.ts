@@ -75,7 +75,7 @@ function parseIpv6(value: string): bigint | null {
     }
     return out;
   };
-  let front: number[] = [];
+  let front: number[];
   let back: number[] = [];
   if (doubleColons.length === 2) {
     const f = parseGroups(doubleColons[0] ?? '');

@@ -225,9 +225,8 @@ describe('Datadog MCP session', () => {
       .listTools(5_000)
       .catch((e: unknown) => e);
     expect(err).toBeInstanceOf(Error);
-    const { classifyDatadogError } = await import(
-      '../../src/integrations/datadog/datadog-mcp-adapter.js'
-    );
+    const { classifyDatadogError } =
+      await import('../../src/integrations/datadog/datadog-mcp-adapter.js');
     expect(classifyDatadogError(err)).toBe('invalid_auth');
   });
 

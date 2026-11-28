@@ -17,17 +17,17 @@
   "dependencies": {
     "@slack/socket-mode": "2.0.7",
     "@slack/web-api": "7.19.0",
-    "dotenv": "17.4.2",
+    "dotenv": "18.0.10",
     "https-proxy-agent": "9.1.0",
-    "undici": "8.12.3"
+    "undici": "8.14.0"
   },
   "devDependencies": {
-    "@types/node": "26.6.5",
+    "@types/node": "26.6.11",
     "@types/ws": "8.18.2",
     "tsx": "4.23.13",
-    "typescript": "5.9.3",
-    "vitest": "5.0.5",
-    "ws": "8.22.1",
+    "typescript": "6.0.3",
+    "vitest": "5.1.2",
+    "ws": "8.23.1",
     "esbuild": "0.28.2"
   }
 }

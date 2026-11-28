@@ -115,6 +115,21 @@ services:
     mem_limit: 384m
     pids_limit: 64
 
+  native-upgrade:
+    profiles: [maintenance]
+    image: support-agent/native-answer:${NATIVE_IMAGE_TAG:?explicit image tag required}
+    command: [upgrade]
+    network_mode: none
+    read_only: true
+    depends_on:
+      native-postgres: { condition: service_healthy }
+    environment:
+      NATIVE_PG_SOCKET: /run/native-postgres
+    volumes:
+      - native-pg-socket:/run/native-postgres
+    mem_limit: 384m
+    pids_limit: 64
+
   native-cli-runtime:
     build: { context: .., dockerfile: deploy/Dockerfile, target: cli-runtime }
     image: support-agent/cli-runtime:${NATIVE_IMAGE_TAG:?explicit image tag required}

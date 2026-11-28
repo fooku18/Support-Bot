@@ -132,8 +132,7 @@ export function createSocketModeReceiver(deps: ReceiverDeps): ReceiverHandle {
 export async function handleEnvelope(args: EnvelopeArgs, deps: ReceiverDeps): Promise<void> {
   if (args.type === 'interactive' && deps.interaction !== undefined) {
     const body = args.body as
-      | { team?: { id?: unknown }; user?: { id?: string }; channel?: { id?: string } }
-      | undefined;
+      { team?: { id?: unknown }; user?: { id?: string }; channel?: { id?: string } } | undefined;
     const installation = resolveInstallation(body?.team?.id, 'interaction', deps);
     if (installation === undefined) {
       await args.ack();

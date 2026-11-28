@@ -30,12 +30,7 @@ export const WEB_RUNTIME_ADAPTER = 'web-runtime-v1';
 export const WEB_SEARCH_ADAPTER = 'anthropic-web-search-v1';
 
 export type EffectiveToolName =
-  | 'atlassian'
-  | 'datadog'
-  | 'cloudflare'
-  | 'slack'
-  | 'webSearch'
-  | 'webFetch';
+  'atlassian' | 'datadog' | 'cloudflare' | 'slack' | 'webSearch' | 'webFetch';
 
 export interface EffectiveTool {
   name: EffectiveToolName;

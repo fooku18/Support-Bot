@@ -3,6 +3,7 @@ await build({
   entryPoints: {
     main: 'src/bootstrap/main.ts',
     provision: 'src/bootstrap/provision.ts',
+    upgrade: 'src/bootstrap/upgrade.ts',
     telemetry: 'src/bootstrap/telemetry.ts',
   },
   bundle: true,

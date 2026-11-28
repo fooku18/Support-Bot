@@ -40,8 +40,7 @@ export const CODE_MODE_READ_SHAPE =
 
 export function codeModeReadResult(value: unknown): unknown {
   const result = (value as { result?: unknown } | null)?.result as
-    | { ok?: unknown; output?: unknown; data?: unknown; warnings?: unknown }
-    | undefined;
+    { ok?: unknown; output?: unknown; data?: unknown; warnings?: unknown } | undefined;
   if (typeof result?.ok !== 'boolean' || typeof result.output !== 'string') return value;
   if (!result.ok) return { ok: false, output: result.output };
   if (result.data !== undefined)

@@ -288,7 +288,10 @@ then starts the egress proxy, the settings service, the agent, adapter and
 CLI runtime in gateway mode. A project that already has containers, or a
 database that already exists, is refused. Inspect it instead of resetting it.
 
-Later starts use `test:stack:up` without `--provision`. Add
+Later starts use `test:stack:up` without `--provision`. Each one first
+runs `native-upgrade`, which applies framework schema changes of the
+current image to the retained store and refuses a store without the current
+seal. Add
 `--model-mode stub` to start `model-stub` before the agent instead of using
 the direct providers. The driver's `--switch-mode` does this for a stub run and
 returns to gateway mode afterwards:

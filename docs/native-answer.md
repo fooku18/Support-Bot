@@ -126,7 +126,14 @@ for what a change does to a running request. See the
 Provision a **fresh dedicated** native PostgreSQL cluster/database using the
 maintenance identity and `native-provision` entrypoint. It refuses an existing
 `native_answer` database/role or framework/app schema. Preserve retained databases and require a fresh destination for provisioning. The framework DDL runs only in
-maintenance. Runtime uses `disableInit`, a non-owner `native_answer` role, no
+maintenance. On an existing store, the `upgrade` maintenance entrypoint
+(`native-upgrade` in Compose) runs the framework's own `init()`: it creates
+missing tables, columns and indexes and runs the framework's built-in
+migrations of its own tables. Then it grants the runtime DML on framework
+tables. It requires the store's seal at the current version and leaves
+application tables, roles and the seal unchanged. It waits at most 10 s for a
+table lock, so a busy store fails it instead of blocking. Take a dump before
+running it on retained data. `test:stack:up` runs it before the agent starts. Runtime uses `disableInit`, a non-owner `native_answer` role, no
 schema/database creation rights, framework DML and narrow application grants.
 The schema seal records the application store version. Runtime also holds one
 database advisory lock for the selected native execution authority, so a second

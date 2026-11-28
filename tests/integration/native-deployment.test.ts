@@ -245,9 +245,18 @@ describe('native deployment conversion', () => {
       'native-cli-runtime',
       'native-postgres',
       'native-provision',
+      'native-upgrade',
     ]);
     expect(c.services.adapter.environment.NATIVE_APPLICATION_URL).toBe('http://native-answer:9879');
     expect(c.services['native-provision'].profiles).toEqual(['maintenance']);
+    expect(c.services['native-upgrade']).toMatchObject({
+      profiles: ['maintenance'],
+      command: ['upgrade'],
+      network_mode: 'none',
+      depends_on: { 'native-postgres': { condition: 'service_healthy' } },
+    });
+    expect(c.services['native-upgrade'].secrets).toBeUndefined();
+    expect(c.services['native-upgrade'].image).toBe(c.services['native-provision'].image);
     // The model stub: tools network only, no route out, no ports, no secrets.
     const stub = c.services['model-stub'];
     expect(stub.profiles).toEqual(['stub']);
@@ -284,7 +293,7 @@ describe('native deployment conversion', () => {
     expect(c.services.admin.ports).toEqual([
       '127.0.0.1:${ADMIN_HOST_PORT:?loopback port for the settings reverse proxy required}:9883',
     ]);
-    for (const name of ['native-answer', 'native-provision'])
+    for (const name of ['native-answer', 'native-provision', 'native-upgrade'])
       expect(JSON.stringify(c.services[name])).not.toMatch(/LIFECYCLE|native-generation/);
     expect(fs.existsSync('compose.native-answer.yaml')).toBe(false);
   });
@@ -533,7 +542,8 @@ describe('native deployment conversion', () => {
     // The overrides reach Compose interpolation only, for this command only.
     expect(compose.every((c) => c.stub === '1')).toBe(true);
     expect(compose.every((c) => !c.args.some((arg) => /compose\.model-/.test(arg)))).toBe(true);
-    const start = compose.map((c) => c.args).find((a) => a.includes('up'))!;
+    const steps = compose.map((c) => c.args);
+    const start = steps.find((a) => a.includes('up'))!;
     expect(start.slice(start.indexOf('egress'))).toEqual([
       'egress',
       'admin',
@@ -542,6 +552,10 @@ describe('native deployment conversion', () => {
       'native-answer',
       'adapter',
     ]);
+    const upgrade = steps.findIndex((a) => a.at(-1) === 'native-upgrade');
+    expect(upgrade).toBeGreaterThan(-1);
+    expect(steps[upgrade]).toContain('--rm');
+    expect(upgrade).toBeLessThan(steps.indexOf(start));
 
     fs.writeFileSync(
       path.join(f.dir, 'services.json'),

@@ -191,9 +191,7 @@ export function normalizeSlackPageArgument(value: unknown): number {
 }
 
 export type ValidatedSlackRequest =
-  | { user: string }
-  | { email: string }
-  | { query: string; page: number };
+  { user: string } | { email: string } | { query: string; page: number };
 
 /** Validates an operation's arguments (broker and runtime). */
 export function validateSlackRequest(
@@ -302,8 +300,7 @@ function parseScopes(header: string | null): string[] | null {
 
 /** A `GET` with query parameters, or the search method's `POST` with a JSON body. */
 export type SlackRequest =
-  | { verb: 'GET'; params: Record<string, string> }
-  | { verb: 'POST'; body: Record<string, unknown> };
+  { verb: 'GET'; params: Record<string, string> } | { verb: 'POST'; body: Record<string, unknown> };
 
 /**
  * The pinned search body: public channels and messages only, Slack's page

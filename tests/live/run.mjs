@@ -925,6 +925,7 @@ export function assertAnswer(messages, inspection, bot, expected, citationIds) {
   if (message.blocks?.length) {
     const parts = [];
     for (const block of message.blocks) {
+      if (block.type === 'actions') continue;
       if (block.type === 'markdown' && typeof block.text === 'string') parts.push(block.text);
       // The footer (check mark and model key) is a context line outside the answer.
       else if (block.type === 'context' && Array.isArray(block.elements) && footer === undefined)

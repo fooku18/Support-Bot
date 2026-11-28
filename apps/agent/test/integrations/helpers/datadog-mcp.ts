@@ -83,7 +83,7 @@ export function fakeDatadog(options: FakeDatadogOptions = {}) {
   const active = new Set<string>();
   const fetchImpl: DatadogFetch = async (input, init) => {
     const headers = new Headers(init.headers);
-    let body: unknown = null;
+    let body: unknown;
     try {
       body = typeof init.body === 'string' ? JSON.parse(init.body) : null;
     } catch {

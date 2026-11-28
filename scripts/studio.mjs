@@ -511,7 +511,7 @@ try {
       '--entrypoint',
       'node',
       image,
-      '/studio/apps/agent/node_modules/mastra/dist/index.js',
+      '/studio/node_modules/mastra/dist/index.js',
       'dev',
       '--dir',
       'src/mastra',

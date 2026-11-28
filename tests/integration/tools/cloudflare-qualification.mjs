@@ -260,7 +260,7 @@ if (values['write-probe']) {
       `${adapter.CLOUDFLARE_BASE_PATH}/zones/${zone.id}/purge_cache`,
       adapter.CLOUDFLARE_API_ORIGIN,
     );
-    let status = null;
+    let status;
     let codes = [];
     try {
       const response = await fetch(url, {

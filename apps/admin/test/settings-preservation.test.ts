@@ -64,7 +64,7 @@ it('reopens SQLite without changing settings, auth, memory or encrypted bindings
   };
   const config = loadConfig((name) => settings[name]);
   const store = await AdminStore.open({ path: file }, config.storeKey);
-  let opened = before;
+  let opened: typeof before;
   const server = http.createServer(
     createApp({ config, store, slack: new SlackApi(), log: () => undefined }),
   );

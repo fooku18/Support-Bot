@@ -72,7 +72,7 @@ try {
       if (found.length) throw new Error('fresh provisioning requires an empty project');
       compose(d, ['up', '-d', '--no-build', '--pull', 'never', '--wait', 'native-postgres']);
       compose(d, ['run', '--no-deps', 'native-provision']);
-    }
+    } else compose(d, ['run', '--rm', '--pull', 'never', 'native-upgrade']);
     // Recorded before the start: containers may carry this mode's configuration
     // even if the start fails.
     writeModelMode(dir, mode);
