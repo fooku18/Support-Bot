@@ -23,15 +23,12 @@ services:
     security_opt: [no-new-privileges:true]
 
   native-answer:
-    build: { context: .., dockerfile: deploy/Dockerfile, target: native-coding }
-    image: support-agent/native-coding:${NATIVE_IMAGE_TAG:?explicit image tag required}
+    build: { context: .., dockerfile: deploy/Dockerfile, target: native-answer }
+    image: support-agent/native-answer:${NATIVE_IMAGE_TAG:?explicit image tag required}
     init: true
     read_only: true
-    user: '0:0'
     cap_drop: [ALL]
-    # Mastra LocalSandbox uses bubblewrap for isolated Workspace commands.
-    cap_add: [SYS_ADMIN, NET_ADMIN]
-    security_opt: [no-new-privileges:true, seccomp:unconfined, apparmor:unconfined]
+    security_opt: [no-new-privileges:true]
     networks:
       nativedb: {}
       frontend: {}
@@ -42,7 +39,6 @@ services:
       admin: { condition: service_healthy }
       native-cli-runtime: { condition: service_healthy }
     environment:
-      NATIVE_CODING_STORE: /var/lib/native-coding
       NATIVE_APPLICATION_PORT: '9879'
       NATIVE_ADAPTER_URL: http://adapter:9881
       NATIVE_PG_HOST: native-postgres
@@ -58,8 +54,6 @@ services:
       NATIVE_MODEL_STUB: ${NATIVE_MODEL_STUB:-}
       NATIVE_ANTHROPIC_BASE_URL: ${NATIVE_ANTHROPIC_BASE_URL:-}
       SUPPORT_AGENT_INSTANCE: ${SUPPORT_AGENT_INSTANCE:?instance required}
-    volumes:
-      - native-coding-data:/var/lib/native-coding
     secrets: [native_runtime_password]
     tmpfs:
       - /tmp:rw,nosuid,nodev,size=128m
@@ -107,7 +101,7 @@ services:
 
   native-provision:
     profiles: [maintenance]
-    image: support-agent/native-coding:${NATIVE_IMAGE_TAG:?explicit image tag required}
+    image: support-agent/native-answer:${NATIVE_IMAGE_TAG:?explicit image tag required}
     command: [provision]
     network_mode: none
     read_only: true
@@ -300,7 +294,6 @@ networks:
 volumes:
   native-pg-data: {}
   native-pg-socket: {}
-  native-coding-data: {}
 secrets:
   native_runtime_password:
     file: ${NATIVE_RUNTIME_PASSWORD_FILE:?fresh native runtime secret path required}

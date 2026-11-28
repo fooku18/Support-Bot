@@ -1,7 +1,6 @@
 import type { NativeAgentOptions, NativeAgentSender } from './agent-options.js';
 import { digest, fail, reason } from './agent-support.js';
 import { CoordinatorError } from './errors.js';
-import type { NativeExport, NativeExportReceipt } from '../domain/delivery/native-exports.js';
 import type { createNativeAgentStorage } from '../infrastructure/storage/agent-storage.js';
 import type { createNativeAgentAuthority } from './agent-authority.js';
 import type { IdentityRow } from './agent-options.js';
@@ -193,29 +192,6 @@ export function createNativeAgentDelivery(
       if (!admitted.rowCount) fail('delivery_not_admitted');
       return { ok: true };
     },
-    async exportReceipt(
-      runId: string,
-      actor: string,
-      owner: string,
-      operationId: string,
-      receipt: NativeExportReceipt,
-    ) {
-      await this.deliveryAuthority(runId, actor, owner, operationId);
-      if (
-        !receipt ||
-        !/^F[A-Z0-9]+$/.test(receipt.fileId) ||
-        !receipt.permalink?.startsWith('https://')
-      )
-        fail('export_receipt_invalid');
-      const saved = await options.pool.query(
-        `UPDATE native_agents.exports SET receipt=$3
-        WHERE run_id=$1 AND id=$2 AND sha256=$4 AND octet_length(content)=$5
-        AND (receipt IS NULL OR receipt=$3::jsonb) RETURNING id`,
-        [runId, receipt.id, JSON.stringify(receipt), receipt.sha256, receipt.bytes],
-      );
-      if (!saved.rowCount) fail('export_receipt_mismatch');
-      return { ok: true };
-    },
     /** Transport owns Slack; this boundary owns current recipient authority and
      * the one-shot delivery identity. Unknown sends stay uncertain, never retry. */
     deliver(
@@ -260,18 +236,6 @@ export function createNativeAgentDelivery(
           if (!(await policyCurrent(r, admitted.cfg).catch(() => true)))
             options.log.info(`native delivery policy_changed_delivered run_id=${runId}`);
           try {
-            const files: NativeExport[] = (
-              await options.pool.query(
-                'SELECT id,name,sha256,content FROM native_agents.exports WHERE run_id=$1 ORDER BY id',
-                [runId],
-              )
-            ).rows.map((f) => ({
-              id: f.id,
-              name: f.name,
-              sha256: f.sha256,
-              bytes: f.content.length,
-              data: f.content.toString('base64'),
-            }));
             // Above Slack's limit the message carries a preview, and the full
             // answer goes to the thread as a file in the same one-shot delivery.
             const long = splitLongAnswer(d.text);
@@ -285,9 +249,7 @@ export function createNativeAgentDelivery(
               footer: buildAnswerFooter(modelKey!),
               feedbackRunId: runId,
               requesterUserId: r.accepted.userId,
-              ...(files.length ? { files } : {}),
-              ...(long ? { answerFile: long.file } : {}),
-              ...(files.length || long ? { authority: { runId, actor, owner } } : {}),
+              ...(long ? { answerFile: long.file, authority: { runId, actor, owner } } : {}),
             });
             await recipient(r);
             if (long) {
@@ -308,24 +270,6 @@ export function createNativeAgentDelivery(
                   d.sha256,
                 ],
               );
-            }
-            if (files.length) {
-              if (sent.files?.length !== files.length) fail('export_delivery_unconfirmed');
-              for (const f of files) {
-                const receipt = sent.files.find((p) => p.id === f.id);
-                if (
-                  !receipt ||
-                  receipt.sha256 !== f.sha256 ||
-                  receipt.bytes !== f.bytes ||
-                  !/^F[A-Z0-9]+$/.test(receipt.fileId) ||
-                  !receipt.permalink.startsWith('https://')
-                )
-                  fail('export_delivery_unconfirmed');
-                await options.pool.query(
-                  'UPDATE native_agents.exports SET receipt=$2 WHERE id=$1 AND receipt IS NULL',
-                  [f.id, JSON.stringify(receipt)],
-                );
-              }
             }
             if (!sent.ts) fail('delivery_receipt_missing');
             const confirmed = await options.pool.query(

@@ -43,11 +43,8 @@ export interface GitlabTextMeta {
 
 export interface GitlabRequest {
   operation: GitlabTransportOperationName;
-  method: 'GET' | 'POST' | 'PUT';
   /** API path relative to /api/v4 (encoded literals only). */
   endpoint: string;
-  /** JSON body for writes (null for reads). */
-  body: Record<string, unknown> | null;
   /** Human-readable resource identity for journals (no content). */
   resourceIdentity: string;
   /** Body format: JSON for every endpoint except the job trace. */
@@ -106,23 +103,7 @@ function query(params: Record<string, string | number | boolean | undefined>): s
 export function buildGitlabRequest(validated: ValidatedGitlabArgs): GitlabRequest {
   const get = (endpoint: string, resourceIdentity: string): GitlabRequest => ({
     operation: validated.kind,
-    method: 'GET',
     endpoint,
-    body: null,
-    resourceIdentity,
-    responseKind: 'json',
-    retain: null,
-  });
-  const write = (
-    method: 'POST' | 'PUT',
-    endpoint: string,
-    body: Record<string, unknown>,
-    resourceIdentity: string,
-  ): GitlabRequest => ({
-    operation: validated.kind,
-    method,
-    endpoint,
-    body,
     resourceIdentity,
     responseKind: 'json',
     retain: null,
@@ -290,75 +271,6 @@ export function buildGitlabRequest(validated: ValidatedGitlabArgs): GitlabReques
         `${base}/deployments${query({ environment: validated.environment, updated_after: validated.updated_after, updated_before: validated.updated_before, order_by: 'updated_at', sort: 'desc', page: validated.page, per_page: validated.per_page })}`,
         `deployments${at}`,
       );
-    case 'create_merge_request_note':
-      return write(
-        'POST',
-        `${base}/merge_requests/${validated.merge_request_iid}/notes`,
-        { body: validated.body },
-        `note on merge_request !${validated.merge_request_iid}${at}`,
-      );
-    case 'create_issue_note':
-      return write(
-        'POST',
-        `${base}/issues/${validated.issue_iid}/notes`,
-        { body: validated.body },
-        `note on issue #${validated.issue_iid}${at}`,
-      );
-    case 'create_issue':
-      return write(
-        'POST',
-        `${base}/issues`,
-        {
-          title: validated.title,
-          ...(validated.description !== undefined ? { description: validated.description } : {}),
-          ...(validated.labels !== undefined ? { labels: validated.labels.join(',') } : {}),
-          ...(validated.assignee_ids !== undefined ? { assignee_ids: validated.assignee_ids } : {}),
-          ...(validated.confidential !== undefined ? { confidential: validated.confidential } : {}),
-        },
-        `new issue${at}`,
-      );
-    case 'update_merge_request':
-      return write(
-        'PUT',
-        `${base}/merge_requests/${validated.merge_request_iid}`,
-        {
-          ...(validated.title !== undefined ? { title: validated.title } : {}),
-          ...(validated.description !== undefined ? { description: validated.description } : {}),
-          ...(validated.labels !== undefined ? { labels: validated.labels.join(',') } : {}),
-          ...(validated.assignee_ids !== undefined ? { assignee_ids: validated.assignee_ids } : {}),
-          ...(validated.reviewer_ids !== undefined ? { reviewer_ids: validated.reviewer_ids } : {}),
-          ...(validated.state_event !== undefined ? { state_event: validated.state_event } : {}),
-        },
-        `merge_request !${validated.merge_request_iid}${at}`,
-      );
-    case 'create_merge_request':
-      return write(
-        'POST',
-        `${base}/merge_requests`,
-        {
-          source_branch: validated.source_branch,
-          target_branch: validated.target_branch,
-          title: validated.title,
-          remove_source_branch: false,
-          ...(validated.description !== undefined ? { description: validated.description } : {}),
-          ...(validated.labels !== undefined ? { labels: validated.labels.join(',') } : {}),
-        },
-        `new merge_request ${validated.source_branch.slice(0, 80)} -> ${validated.target_branch.slice(0, 80)}${at}`,
-      );
-    case 'retry_job':
-      return write(
-        'POST',
-        `${base}/jobs/${validated.job_id}/retry`,
-        {},
-        `retry job ${validated.job_id}${at}`,
-      );
-    case 'create_pipeline':
-      return write(
-        'POST',
-        `${base}/pipeline${query({ ref: validated.ref })}`,
-        {},
-        `new pipeline @${validated.ref.slice(0, 80)}${at}`,
-      );
     default:
       throw new Error('unsupported GitLab operation mapping');
   }
@@ -494,15 +406,12 @@ export async function sendGitlabRequest(
     try {
       signal.throwIfAborted();
       response = await doFetch(url, {
-        method: request.method,
         redirect: 'manual',
         signal,
         headers: {
           accept: request.responseKind === 'text' ? 'text/plain' : 'application/json',
           'private-token': token,
-          ...(request.body !== null ? { 'content-type': 'application/json' } : {}),
         },
-        ...(request.body !== null ? { body: JSON.stringify(request.body) } : {}),
       });
     } catch {
       return failed(null, 'GitLab could not be reached');
@@ -510,7 +419,7 @@ export async function sendGitlabRequest(
     if (![301, 302, 303, 307, 308].includes(response.status)) break;
     const next = redirectTarget(response, url);
     await response.body?.cancel().catch(() => {});
-    if (request.method !== 'GET' || next === null || redirects === MAX_REDIRECTS)
+    if (next === null || redirects === MAX_REDIRECTS)
       return failed(response.status, 'GitLab answered with a redirect that is not followed');
     url = next;
   }
@@ -1208,8 +1117,6 @@ function boundEntry(
     }
     case 'list_merge_requests':
     case 'get_merge_request':
-    case 'create_merge_request':
-    case 'update_merge_request':
       return pick(bounded, MR_FIELDS);
     case 'get_merge_request_diffs':
       return pick(bounded, [
@@ -1234,14 +1141,11 @@ function boundEntry(
       ]);
     case 'get_merge_request_notes':
     case 'get_issue_notes':
-    case 'create_merge_request_note':
-    case 'create_issue_note':
       return pick(bounded, NOTE_FIELDS);
     case 'list_pipelines':
     case 'get_merge_request_pipelines':
       return pick(bounded, ['id', 'sha', 'ref', 'status', 'web_url', 'created_at', 'updated_at']);
     case 'get_pipeline':
-    case 'create_pipeline':
       return pick(bounded, [
         'id',
         'sha',
@@ -1265,7 +1169,6 @@ function boundEntry(
         'finished_at',
       ]);
     case 'get_job':
-    case 'retry_job':
       return pick(bounded, [
         'id',
         'name',
@@ -1299,7 +1202,6 @@ function boundEntry(
       ]);
     case 'get_issue':
     case 'list_issues':
-    case 'create_issue':
       return pick(bounded, ISSUE_FIELDS);
     default:
       return bounded;

@@ -63,6 +63,52 @@ describe('admin store startup', () => {
     expect(recompiled).not.toHaveProperty('feedbackIssues');
     await second.close();
   });
+  it('removes instances and assignments of a tool kind the current code no longer has', async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'admin-store-'));
+    dirs.push(dir);
+    const file = path.join(dir, 'admin.sqlite');
+    const first = await AdminStore.open({ path: file }, KEY);
+    await configure(first);
+    const code = (
+      await first.createToolInstance('test', 'T0TEAM1', { kind: 'codeMode', label: 'Code' })
+    ).instance;
+    await first.assignTool('test', 'T0TEAM1', 'C0CHAN1', 'codeMode', code.id);
+    const now = Date.now();
+    await first.run(
+      `INSERT INTO tool_instances (id, team_id, kind, label, host, settings_json, credential_enc,
+       credential_ver, status, created_at, updated_at)
+       VALUES ('ti_00000000000000aa', 'T0TEAM1', 'files', 'Task files', NULL, '{"readOnly":false}', NULL, 0, 'enabled', ?, ?)`,
+      now,
+      now,
+    );
+    await first.run(
+      `INSERT INTO channel_tools (team_id, channel_id, kind, instance_id, updated_at)
+       VALUES ('T0TEAM1', 'C0CHAN1', 'files', 'ti_00000000000000aa', ?)`,
+      now,
+    );
+    await first.close();
+
+    const second = await AdminStore.open({ path: file }, KEY);
+    expect((await second.listToolInstances('T0TEAM1')).map((row) => row.kind)).toEqual([
+      'codeMode',
+    ]);
+    expect((await second.listChannelTools('T0TEAM1', 'C0CHAN1')).map((row) => row.kind)).toEqual([
+      'codeMode',
+    ]);
+    const document = (await second.currentDocument())!;
+    expect(document.toolAssignments[0]?.tools.map((row) => row.kind)).toEqual(['codeMode']);
+    const removed = (await second.listAudit(10)).find((row) => row.action === 'tool.kind.remove');
+    expect(removed?.detail).toEqual({
+      kinds: ['files'],
+      instances: ['ti_00000000000000aa'],
+      assignments: 1,
+    });
+    await second.close();
+
+    const third = await AdminStore.open({ path: file }, KEY);
+    expect((await third.currentDocument())!.version).toBe(document.version);
+    await third.close();
+  });
 });
 
 const configure = async (store: AdminStore): Promise<void> => {

@@ -33,9 +33,7 @@ function fixture(version = 7, status: 'whitelisted' | 'disabled' = 'whitelisted'
             ? { denyTools: ['search_datadog_logs'], toolsets: 'logs' }
             : kind === 'cloudflare'
               ? { accountId: 'a'.repeat(32), zones: ['fixture.example.test'] }
-              : kind === 'files'
-                ? { readOnly: true }
-                : {},
+              : {},
       hasCredential: true,
       credentialVersion: 1,
       status: 'enabled',
@@ -72,7 +70,7 @@ function rehash(input: ReturnType<typeof fixture>) {
 
 it('accepts complete actual compiler output for every tool kind', () => {
   const source = fixture();
-  expect(source.toolAssignments[0]!.tools).toHaveLength(10);
+  expect(source.toolAssignments[0]!.tools).toHaveLength(8);
   expect(parseCoordinatorAdminDocument(source).document).toEqual(source);
 });
 
@@ -82,7 +80,6 @@ it.each([
   ['datadog', 'denyTools'],
   ['cloudflare', 'accountId'],
   ['cloudflare', 'zones'],
-  ['files', 'readOnly'],
 ])('refuses omitted %s.%s even with a valid recomputed hash', (kind, field) => {
   const source = fixture();
   Reflect.deleteProperty(source.toolAssignments[0]!.tools.find((t) => t.kind === kind)!, field);
@@ -93,8 +90,8 @@ it.each([
 
 it('refuses settings belonging to another tool kind', () => {
   const source = fixture();
-  const files = source.toolAssignments[0]!.tools.find((t) => t.kind === 'files')!;
-  files.operations = ['getJiraIssue'];
+  const code = source.toolAssignments[0]!.tools.find((t) => t.kind === 'codeMode')!;
+  code.operations = ['getJiraIssue'];
   expect(() => parseCoordinatorAdminDocument(rehash(source))).toThrow(
     'Invalid coordinator admin document',
   );

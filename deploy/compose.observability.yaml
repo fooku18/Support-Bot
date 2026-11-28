@@ -10,7 +10,7 @@ services:
     depends_on:
       native-observability: { condition: service_healthy }
   native-observability:
-    image: support-agent/native-coding:${NATIVE_IMAGE_TAG:?explicit image tag required}
+    image: support-agent/native-answer:${NATIVE_IMAGE_TAG:?explicit image tag required}
     command: [telemetry]
     init: true
     network_mode: none

@@ -274,11 +274,6 @@ function serviceFixture() {
     else if (sql.includes('FROM native_agents.actions'))
       rows = cancelled ? [{ action: 'cancel' }] : [];
     else if (sql.includes('FROM native_agents.deliveries')) rows = delivery ? [delivery] : [];
-    else if (
-      sql.includes('FROM native_agents.publications') ||
-      sql.includes('FROM native_agents.exports')
-    )
-      rows = [];
     else throw new Error(`unexpected query: ${sql}`);
     return { rows, rowCount: rows.length };
   });

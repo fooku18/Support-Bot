@@ -2,13 +2,11 @@ import type { ResolvedModel } from '../contracts/model-catalog.js';
 import type { ModelBinding } from '../integrations/providers/access.js';
 import type { Pool } from 'pg';
 import type { MastraCompositeStore } from '@mastra/core/storage';
-import type { NativeCodingOptions } from '../mastra/tools/coding.js';
 import type { createReadServiceTools } from '../mastra/tools/read-services.js';
 import type { IntakeRequest } from '../contracts/dto.js';
 import type { NativeInputClient } from '../integrations/slack/input-client.js';
 import type { NativeMessageClient } from '../integrations/slack/message-client.js';
 import type { CoordinatorConfig } from './configuration/config.js';
-import type { NativeExport, NativeExportReceipt } from '../domain/delivery/native-exports.js';
 import type { AnswerFileReceipt, NativeAnswerFile } from '../domain/delivery/long-answer.js';
 import type { StageLogger } from '../infrastructure/logger.js';
 
@@ -26,21 +24,6 @@ export interface NativeAgentOptions {
     runId: string;
     text: string;
   }): Promise<unknown>;
-  /** Trusted workspace and publication binding. The binding is absent when GitLab is unavailable. */
-  coding?: {
-    version: string;
-    prepare(input: {
-      identity: IntakeRequest;
-      taskKey: string;
-      workspaceId: string;
-      runId: string;
-      signal: AbortSignal;
-      authorize(): Promise<void>;
-    }): Promise<
-      | Omit<NativeCodingOptions, 'workspaceId' | 'run' | 'signal' | 'authorize' | 'publication'>
-      | undefined
-    >;
-  };
   pool: Pool;
   storage: MastraCompositeStore;
   /** Operational log for refused, unknown and unconfirmed outcomes. Lines carry
@@ -91,14 +74,12 @@ export type NativeAgentSender = (value: {
   /** Context line under a final answer (check mark and model); absent on notices. */
   footer?: string;
   feedbackRunId?: string;
-  files?: NativeExport[];
   /** The full answer when `text` is only its preview (long answers). */
   answerFile?: NativeAnswerFile;
   choices?: { toolCallId: string; options: string[] };
   authority?: { runId: string; actor: string; owner: string };
 }) => Promise<{
   ts?: string;
-  files?: NativeExportReceipt[];
   /** Outcome of `answerFile`: the confirmed thread file, or not attached. */
   answerFile?: AnswerFileReceipt;
 }>;

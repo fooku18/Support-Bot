@@ -20,8 +20,8 @@ for scopes, event subscriptions and interactivity.
    must be `<ADMIN_PUBLIC_URL>/slack/oauth/callback`. Keep all credentials
    in private instance configuration.
 4. Keep the bot scopes of the manifest. `files:write` and `files:read`
-   attach [long answers](slack-files.md#long-answers) as `answer.md` and
-   deliver exports.
+   read attached inputs and attach [long answers](slack-files.md#long-answers)
+   as `answer.md`.
 5. Keep Socket Mode and interactivity enabled. Subscribe to `app_mention`,
    `message.channels` and `message.groups`. The message events support
    [automatic thread replies](thread-replies.md), and interactivity

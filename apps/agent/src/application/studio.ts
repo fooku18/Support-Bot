@@ -1,7 +1,6 @@
-import { registerNativeExport } from '../domain/delivery/register-export.js';
 import { providerSearchEnabled } from '../mastra/tools/provider-search.js';
 import { createStudioDiagnostics } from '../mastra/studio-observability.js';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { Mastra } from '@mastra/core/mastra';
 import type { Middleware } from '@mastra/core/server';
 import type { NativeAgentOptions } from './agent-options.js';
@@ -10,7 +9,6 @@ import {
   NATIVE_AGENT_ID,
   NATIVE_AGENT_VERSION,
 } from '../mastra/agents/coding.js';
-import { createNativeCodingBinding } from '../mastra/tools/coding.js';
 import { nativeCodeModeTools } from '../mastra/tools/code-mode.js';
 import { channelToolGranted } from './tool-grant.js';
 import { createReadServiceTools } from '../mastra/tools/read-services.js';
@@ -205,97 +203,10 @@ export async function createNativeStudio(options: {
     catalog: { ...binding.catalog, slackMessages: false },
     authorize: guard,
   });
-  const workspaceId = hash(`studio:${identity.teamId}:${identity.channelId}:${identity.userId}`);
-  const taskKey = `studio:${workspaceId}`;
-  const runId = randomUUID();
-  // Existing application receipt tables in the DEDICATED Studio database. Each
-  // publication has a fresh operation identity; unknown writes survive restart.
-  const request = async (id: string) =>
-    service.pool.query(
-      'INSERT INTO native_agents.requests(run_id,task_key,event_id,owner,accepted,execution_policy_hash) VALUES($1::uuid,$2,$1::uuid::text,$1::uuid,$3,$4)',
-      [id, taskKey, JSON.stringify({ source: 'studio', ...identity }), initial.hash],
-    );
-  await request(runId);
-  const workspace = await service.coding?.prepare({
-    identity,
-    taskKey,
-    workspaceId,
-    runId,
-    signal: stop.signal,
-    authorize: () => guard('gitlab'),
-  });
-  const coding = workspace
-    ? await createNativeCodingBinding(
-        {
-          ...workspace,
-          workspaceId,
-          run: { runId, runSeq: 1, attempt: 1 },
-          signal: stop.signal,
-          authorize: () => guard('gitlab'),
-          publication: async (project, send) => {
-            await guard('gitlab');
-            const id = randomUUID();
-            return send(async () => {
-              await guard('gitlab');
-              const tx = await service.pool.connect();
-              try {
-                await tx.query('BEGIN');
-                await tx.query('SELECT pg_advisory_xact_lock(hashtextextended($1,11514))', [
-                  taskKey,
-                ]);
-                if (
-                  (
-                    await tx.query(
-                      "SELECT 1 FROM native_agents.publications WHERE task_key=$1 AND outcome='uncertain'",
-                      [taskKey],
-                    )
-                  ).rowCount
-                )
-                  throw new Error(
-                    'publication uncertain; inspect retained evidence, do not replay',
-                  );
-                await tx.query(
-                  'INSERT INTO native_agents.requests(run_id,task_key,event_id,owner,accepted,execution_policy_hash) VALUES($1::uuid,$2,$1::uuid::text,$1::uuid,$3,$4)',
-                  [id, taskKey, JSON.stringify({ source: 'studio', ...identity }), initial.hash],
-                );
-                await tx.query(
-                  "INSERT INTO native_agents.publications(task_key,run_id,project,outcome) VALUES($1,$2,$3,'uncertain')",
-                  [taskKey, id, project],
-                );
-                await tx.query('COMMIT');
-              } catch (e) {
-                await tx.query('ROLLBACK');
-                throw e;
-              } finally {
-                tx.release();
-              }
-            }).then(async (evidence) => {
-              await guard('gitlab');
-              await service.pool.query(
-                "UPDATE native_agents.publications SET outcome='confirmed',evidence=$2 WHERE run_id=$1 AND outcome='uncertain'",
-                [id, JSON.stringify(evidence)],
-              );
-              return evidence;
-            });
-          },
-          exportFile: async (file) => {
-            await guard();
-            const receipt = await registerNativeExport(service.pool, runId, file);
-            return {
-              ...receipt,
-              delivery:
-                'Retained in Studio; download the file from the Workspace tab. No Slack upload.',
-            };
-          },
-        },
-        reads,
-      )
-    : undefined;
   const codeMode =
-    coding?.codeMode ??
-    (Object.keys(reads).length > 0 && channelToolGranted(initial, identity, 'codeMode')
+    Object.keys(reads).length > 0 && channelToolGranted(initial, identity, 'codeMode')
       ? nativeCodeModeTools(reads, () => guard('codeMode'))
-      : undefined);
+      : undefined;
   const modelBinding = service.bindModel(model, identity);
   const agent = createNativeAgent({
     storage: service.storage,
@@ -306,13 +217,12 @@ export async function createNativeStudio(options: {
       ? { webSearch: { authorize: () => guard('webSearch') } }
       : {}),
     tools: reads,
-    coding,
     codeMode,
     instructions: [
       nativeInstructions(service.limits),
       current.channel.systemPrompt ?? '',
       instructions,
-      'This is a local Studio test session. Do not post or upload to Slack. Coding chats share this Studio workspace; exported snapshots are retained locally and files can be downloaded from the Workspace tab.',
+      'This is a local Studio test session. Do not post or upload to Slack.',
     ].join('\n\n'),
     contextTokens: modelBinding.selection.contextTokens,
     outputTokens: service.limits.outputTokens,
@@ -387,7 +297,6 @@ export async function createNativeStudio(options: {
     async close() {
       stop.abort();
       await mastra.shutdown({ drainTimeout: 30000 });
-      await coding?.close();
     },
   };
 }

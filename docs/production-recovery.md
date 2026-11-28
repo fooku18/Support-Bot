@@ -12,7 +12,7 @@ connections in the deployment catalog. The model stub is for
 test instances only: only `test:stack:up --model-mode stub` starts it. See the [live test setup](live-test-setup.md) for every
 value.
 
-Build or promote the exact `native-coding`, `adapter`, `cli-runtime`, `admin`
+Build or promote the exact `native-answer`, `adapter`, `cli-runtime`, `admin`
 and `egress` images under the selected
 `NATIVE_IMAGE_TAG`. Fresh PostgreSQL setup is a separate `native-provision`
 maintenance operation. It refuses an existing native database/schema.
@@ -45,7 +45,6 @@ intake stopped and requires inspection; uncertainty is not permission to replay.
 ## 3. Backup and restore
 
 Use the [quiesced logical backup and fresh restore recipe](native-answer.md#quiesced-logical-backup-and-fresh-restore).
-Coding additionally requires the [coherent Workspace archive](native-answer.md#coding-database-and-workspace-backup).
 Retain whole framework/application schemas, bytes, ACLs and current external
 authority. Restore into a fresh isolated destination, keep the
 source fenced, inspect without inference/sends, and allow only a current
@@ -60,9 +59,8 @@ this recipe against the image you deploy, with synthetic services.
 
 Current-source tests, image checks, exact dependency identities, scan results,
 backup/restore evidence, actual provider and Slack acceptance and operator handover
-are distinct gates. The default deployment provides the shared agent with an
-isolated coding workspace and verified publication. Optional saved-artifact recovery
-stays disabled. Production rollout requires operator authorization.
+are distinct gates. The default deployment provides the shared agent with
+answers and read tools. Optional saved-artifact recovery stays disabled. Production rollout requires operator authorization.
 Qualify a non-SQLite settings backend before production rollout.
 Record verification and its live outcome in the work plan before merge.
 Record the deployed revision, time, rollback reference and evidence in

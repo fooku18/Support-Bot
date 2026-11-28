@@ -23,7 +23,6 @@ import {
   type ChannelToolAssignment,
   type CloudflareSettings,
   type DatadogSettings,
-  type FilesSettings,
   type ToolInstanceState,
   type ToolKind,
   type ToolSettings,
@@ -279,9 +278,6 @@ function assignedTool(instance: ToolInstanceRow, status: ToolStatusRow | undefin
       tool.zones = settings.zones === null ? null : [...settings.zones];
       break;
     }
-    case 'files':
-      tool.readOnly = (instance.settings as FilesSettings).readOnly;
-      break;
     default:
       break;
   }

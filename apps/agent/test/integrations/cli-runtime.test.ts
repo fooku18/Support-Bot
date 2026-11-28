@@ -658,12 +658,8 @@ describe('isolated tool runtime (GitLab REST; scoped Atlassian REST)', () => {
         /unknown argument/,
       ],
       [
-        {
-          ...target,
-          operation: 'create_issue_note',
-          operationArgs: { project: 'g/p', issue_iid: 1, body: 'x'.repeat(60_001) },
-        },
-        /body/,
+        { ...target, operation: 'create_issue_note', operationArgs: { project: 'g/p' } },
+        /operation/,
       ],
       ['not an object', /invalid request/],
       [[target], /invalid request/],
@@ -676,7 +672,7 @@ describe('isolated tool runtime (GitLab REST; scoped Atlassian REST)', () => {
     expect(gitlab.seen).toEqual([]);
   });
 
-  it('binds host and token to the instance, sends bodies as JSON, and redacts', async () => {
+  it('binds host and token to the instance and redacts', async () => {
     const gitlab = fakeGitlab((seen) =>
       jsonAnswer({ echo: `token ${seen.headers['private-token']} glpat-abcdef123456` }),
     );
@@ -708,24 +704,6 @@ describe('isolated tool runtime (GitLab REST; scoped Atlassian REST)', () => {
     expect(gitlab.seen[1]).toMatchObject({
       url: 'https://gitlab.second.invalid/api/v4/projects/g%2Fp',
       headers: { 'private-token': 'bravo-secret-two' },
-    });
-    const write = await handleGitlab(
-      call('create_merge_request_note', {
-        project: 42,
-        merge_request_iid: 7,
-        body: 'Reviewed. --method DELETE',
-      }),
-    );
-    expect(write.status).toBe('completed');
-    expect(gitlab.seen[2]).toEqual({
-      url: `https://${GITLAB_HOST}/api/v4/projects/42/merge_requests/7/notes`,
-      method: 'POST',
-      headers: {
-        accept: 'application/json',
-        'private-token': 'alpha-secret-one',
-        'content-type': 'application/json',
-      },
-      body: '{"body":"Reviewed. --method DELETE"}',
     });
   });
 
@@ -762,13 +740,6 @@ describe('isolated tool runtime (GitLab REST; scoped Atlassian REST)', () => {
       // The token never left for another target.
       expect(urls).toEqual([`https://${GITLAB_HOST}/api/v4/projects/g%2Fold`]);
     }
-    // A write is never replayed at another target.
-    const write = await run('/api/v4/projects/77', 'create_issue_note', {
-      issue_iid: 1,
-      body: 'x',
-    });
-    expect(write.result).toMatchObject({ status: 'failed', httpStatus: 302 });
-    expect(write.urls).toHaveLength(1);
     // A loop ends.
     const loop = await run('/api/v4/projects/g%2Fold');
     expect(loop.result.status).toBe('failed');

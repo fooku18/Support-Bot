@@ -17,10 +17,7 @@
  * Names are the agent's GitLab tool names. They are
  * inspired by GitLab's MCP catalog but this contract is application-owned.
  *
- * Writes (notes, issues, merge requests, job retries, pipelines) are part of
- * the contract; the broker admits them like reads (live GitLab assignment,
- * call budget) and marks them for reconciliation. Merging, branch/tag
- * deletion, CI variables, and project settings are not part of this contract.
+ * Reads only: no GitLab write is part of this contract.
  */
 
 export const GITLAB_CONTRACT_VERSION = 6;
@@ -51,35 +48,21 @@ export const GITLAB_READ_OPERATIONS = [
   'list_deployments',
 ] as const;
 
-export const GITLAB_WRITE_OPERATIONS = [
-  'create_merge_request_note',
-  'create_issue_note',
-  'create_issue',
-  'update_merge_request',
-  'create_merge_request',
-  'retry_job',
-  'create_pipeline',
-] as const;
-
-export const GITLAB_OPERATIONS = [...GITLAB_READ_OPERATIONS, ...GITLAB_WRITE_OPERATIONS] as const;
-
 /**
- * Controller-only reads: trusted code (publication) calls them through the
- * tool runtime, but they are never model tools. `get_current_user` is the
- * token's own user, whose identity authors published commits.
+ * Controller-only reads: the tool runtime's readiness probe calls them, but
+ * they are never model tools. `get_current_user` is the token's own user.
  */
 export const GITLAB_CONTROLLER_OPERATIONS = ['get_current_user'] as const;
 
 export type GitlabReadOperationName = (typeof GITLAB_READ_OPERATIONS)[number];
-export type GitlabWriteOperationName = (typeof GITLAB_WRITE_OPERATIONS)[number];
-export type GitlabOperationName = GitlabReadOperationName | GitlabWriteOperationName;
+export type GitlabOperationName = GitlabReadOperationName;
 export type GitlabControllerOperationName = (typeof GITLAB_CONTROLLER_OPERATIONS)[number];
 /** Every operation the tool runtime serves: the model's plus the controller's. */
 export type GitlabTransportOperationName = GitlabOperationName | GitlabControllerOperationName;
 
 /** Model-callable operations only (MCP tools, guard, broker admission). */
 export function isGitlabOperationName(value: unknown): value is GitlabOperationName {
-  return typeof value === 'string' && (GITLAB_OPERATIONS as readonly string[]).includes(value);
+  return typeof value === 'string' && (GITLAB_READ_OPERATIONS as readonly string[]).includes(value);
 }
 
 /** Operations the tool runtime accepts from trusted runner code. */
@@ -90,12 +73,6 @@ export function isGitlabTransportOperationName(
     isGitlabOperationName(value) ||
     (typeof value === 'string' &&
       (GITLAB_CONTROLLER_OPERATIONS as readonly string[]).includes(value))
-  );
-}
-
-export function isGitlabWriteOperation(value: unknown): value is GitlabWriteOperationName {
-  return (
-    typeof value === 'string' && (GITLAB_WRITE_OPERATIONS as readonly string[]).includes(value)
   );
 }
 
@@ -112,11 +89,8 @@ const MAX_SEARCH_LENGTH = 512;
 const MAX_PATH_LENGTH = 1024;
 const MAX_REF_LENGTH = 256;
 const MAX_PROJECT_PATH_LENGTH = 255;
-export const MAX_TITLE_LENGTH = 255;
-export const MAX_BODY_LENGTH = 60_000;
 const MAX_LABELS = 20;
 const MAX_LABEL_LENGTH = 100;
-const MAX_USER_IDS = 20;
 const MAX_MILESTONE_LENGTH = 255;
 const MAX_ENVIRONMENT_LENGTH = 255;
 
@@ -315,28 +289,6 @@ function parsePath(
   return value;
 }
 
-function parseText(
-  value: unknown,
-  operation: string,
-  field: string,
-  max: number,
-  required: boolean,
-): string | undefined {
-  if (value === undefined) {
-    if (required) throw new GitlabOperationError(`${operation}: ${field} is required`);
-    return undefined;
-  }
-  if (typeof value !== 'string' || value.trim().length === 0 || value.length > max) {
-    throw new GitlabOperationError(
-      `${operation}: ${field} must be a non-empty string up to ${max} characters`,
-    );
-  }
-  if (/\0/.test(value)) {
-    throw new GitlabOperationError(`${operation}: ${field} contains unsupported characters`);
-  }
-  return value;
-}
-
 function parseLabels(value: unknown, operation: string): string[] | undefined {
   if (value === undefined) return undefined;
   if (
@@ -356,20 +308,6 @@ function parseLabels(value: unknown, operation: string): string[] | undefined {
     );
   }
   return [...(value as string[])];
-}
-
-function parseUserIds(value: unknown, operation: string, field: string): number[] | undefined {
-  if (value === undefined) return undefined;
-  if (
-    !Array.isArray(value) ||
-    value.length > MAX_USER_IDS ||
-    !value.every((entry) => isPositiveSafeInt(entry))
-  ) {
-    throw new GitlabOperationError(
-      `${operation}: ${field} must be up to ${MAX_USER_IDS} positive user IDs`,
-    );
-  }
-  return [...(value as number[])];
 }
 
 function parseUsername(value: unknown, operation: string, field: string): string | undefined {
@@ -705,41 +643,7 @@ export type ValidatedGitlabArgs =
       updated_before?: string;
       page: number;
       per_page: number;
-    }
-  | { kind: 'create_merge_request_note'; project: string; merge_request_iid: number; body: string }
-  | { kind: 'create_issue_note'; project: string; issue_iid: number; body: string }
-  | {
-      kind: 'create_issue';
-      project: string;
-      title: string;
-      description?: string;
-      labels?: string[];
-      assignee_ids?: number[];
-      /** Visible only to project members at Reporter and above. */
-      confidential?: boolean;
-    }
-  | {
-      kind: 'update_merge_request';
-      project: string;
-      merge_request_iid: number;
-      title?: string;
-      description?: string;
-      labels?: string[];
-      assignee_ids?: number[];
-      reviewer_ids?: number[];
-      state_event?: 'close' | 'reopen';
-    }
-  | {
-      kind: 'create_merge_request';
-      project: string;
-      source_branch: string;
-      target_branch: string;
-      title: string;
-      description?: string;
-      labels?: string[];
-    }
-  | { kind: 'retry_job'; project: string; job_id: number }
-  | { kind: 'create_pipeline'; project: string; ref: string };
+    };
 
 export const PIPELINE_STATUSES = [
   'created',
@@ -1122,172 +1026,6 @@ export function validateGitlabOperation(operation: string, args: unknown): Valid
         ...parsePagination(input, operation, LIST_DEPLOYMENTS_MAX_PER_PAGE),
       };
     }
-    case 'create_merge_request_note': {
-      assertNoUnknownKeys(input, ['project', 'merge_request_iid', 'body'], operation);
-      return {
-        kind: 'create_merge_request_note',
-        project: project(),
-        merge_request_iid: requireIid(input, 'merge_request_iid', operation),
-        body: parseText(input.body, operation, 'body', MAX_BODY_LENGTH, true) as string,
-      };
-    }
-    case 'create_issue_note': {
-      assertNoUnknownKeys(input, ['project', 'issue_iid', 'body'], operation);
-      return {
-        kind: 'create_issue_note',
-        project: project(),
-        issue_iid: requireIid(input, 'issue_iid', operation),
-        body: parseText(input.body, operation, 'body', MAX_BODY_LENGTH, true) as string,
-      };
-    }
-    case 'create_issue': {
-      assertNoUnknownKeys(
-        input,
-        ['project', 'title', 'description', 'labels', 'assignee_ids', 'confidential'],
-        operation,
-      );
-      if (input.confidential !== undefined && typeof input.confidential !== 'boolean')
-        throw new GitlabOperationError('create_issue: confidential must be a boolean');
-      const description = parseText(
-        input.description,
-        operation,
-        'description',
-        MAX_BODY_LENGTH,
-        false,
-      );
-      const labels = parseLabels(input.labels, operation);
-      const assignees = parseUserIds(input.assignee_ids, operation, 'assignee_ids');
-      return {
-        kind: 'create_issue',
-        project: project(),
-        title: parseText(input.title, operation, 'title', MAX_TITLE_LENGTH, true) as string,
-        ...(description !== undefined ? { description } : {}),
-        ...(labels !== undefined ? { labels } : {}),
-        ...(assignees !== undefined ? { assignee_ids: assignees } : {}),
-        ...(input.confidential !== undefined
-          ? { confidential: input.confidential as boolean }
-          : {}),
-      };
-    }
-    case 'update_merge_request': {
-      assertNoUnknownKeys(
-        input,
-        [
-          'project',
-          'merge_request_iid',
-          'title',
-          'description',
-          'labels',
-          'assignee_ids',
-          'reviewer_ids',
-          'state_event',
-        ],
-        operation,
-      );
-      const title = parseText(input.title, operation, 'title', MAX_TITLE_LENGTH, false);
-      const description = parseText(
-        input.description,
-        operation,
-        'description',
-        MAX_BODY_LENGTH,
-        false,
-      );
-      const labels = parseLabels(input.labels, operation);
-      const assignees = parseUserIds(input.assignee_ids, operation, 'assignee_ids');
-      const reviewers = parseUserIds(input.reviewer_ids, operation, 'reviewer_ids');
-      let stateEvent: 'close' | 'reopen' | undefined;
-      if (input.state_event !== undefined) {
-        if (input.state_event !== 'close' && input.state_event !== 'reopen') {
-          throw new GitlabOperationError(
-            'update_merge_request: state_event must be close or reopen',
-          );
-        }
-        stateEvent = input.state_event;
-      }
-      if (
-        title === undefined &&
-        description === undefined &&
-        labels === undefined &&
-        assignees === undefined &&
-        reviewers === undefined &&
-        stateEvent === undefined
-      ) {
-        throw new GitlabOperationError('update_merge_request: nothing to update');
-      }
-      return {
-        kind: 'update_merge_request',
-        project: project(),
-        merge_request_iid: requireIid(input, 'merge_request_iid', operation),
-        ...(title !== undefined ? { title } : {}),
-        ...(description !== undefined ? { description } : {}),
-        ...(labels !== undefined ? { labels } : {}),
-        ...(assignees !== undefined ? { assignee_ids: assignees } : {}),
-        ...(reviewers !== undefined ? { reviewer_ids: reviewers } : {}),
-        ...(stateEvent !== undefined ? { state_event: stateEvent } : {}),
-      };
-    }
-    case 'create_merge_request': {
-      assertNoUnknownKeys(
-        input,
-        ['project', 'source_branch', 'target_branch', 'title', 'description', 'labels'],
-        operation,
-      );
-      const sourceBranch = parseRef(
-        input.source_branch,
-        operation,
-        true,
-        'source_branch',
-      ) as string;
-      const targetBranch = parseRef(
-        input.target_branch,
-        operation,
-        true,
-        'target_branch',
-      ) as string;
-      if (sourceBranch === targetBranch) {
-        throw new GitlabOperationError(
-          'create_merge_request: source_branch and target_branch must differ',
-        );
-      }
-      if (targetBranch.startsWith('support-agent/')) {
-        throw new GitlabOperationError(
-          'create_merge_request: support-agent/ branches are never merge targets',
-        );
-      }
-      const description = parseText(
-        input.description,
-        operation,
-        'description',
-        MAX_BODY_LENGTH,
-        false,
-      );
-      const labels = parseLabels(input.labels, operation);
-      return {
-        kind: 'create_merge_request',
-        project: project(),
-        source_branch: sourceBranch,
-        target_branch: targetBranch,
-        title: parseText(input.title, operation, 'title', MAX_TITLE_LENGTH, true) as string,
-        ...(description !== undefined ? { description } : {}),
-        ...(labels !== undefined ? { labels } : {}),
-      };
-    }
-    case 'retry_job': {
-      assertNoUnknownKeys(input, ['project', 'job_id'], operation);
-      return {
-        kind: 'retry_job',
-        project: project(),
-        job_id: requireIid(input, 'job_id', operation),
-      };
-    }
-    case 'create_pipeline': {
-      assertNoUnknownKeys(input, ['project', 'ref'], operation);
-      return {
-        kind: 'create_pipeline',
-        project: project(),
-        ref: parseRef(input.ref, operation, true) as string,
-      };
-    }
     default:
       throw new GitlabOperationError(
         `unknown GitLab operation "${String(operation).slice(0, 64)}"`,
@@ -1347,7 +1085,6 @@ export interface GitlabOperationMeta {
 
 const PROJECT_NOTE =
   'project is a group/name path or numeric project ID on the configured GitLab host.';
-const WRITE_NOTE = 'This is a GitLab write: use it only when the user asked for it. Never merge.';
 const LIST_SCOPE_NOTE = (filters: string) =>
   `Scope: project, or group (a group/subgroup path or numeric group ID; subgroups included), or neither for the whole instance (then give at least one of ${filters}). People are GitLab usernames (without @).`;
 const DATE_NOTE =
@@ -1446,33 +1183,5 @@ export const GITLAB_OPERATION_METADATA: GitlabOperationMeta[] = [
   {
     name: 'list_deployments',
     description: `List a project's deployments, most recently updated first, optionally for one environment (its name, e.g. prod; every row names its environment, so list without it to see which exist) and within updated_after/updated_before (RFC 3339). At most 20 per page. Rows: status, ref, SHA, environment, who deployed, the deploy job (for get_job_trace) and pipeline. updated_at selects the window; only a success row means its SHA went live, at deployable.finished_at. A merged change is live only once a successful deployment carries it. ${PROJECT_NOTE}`,
-  },
-  {
-    name: 'create_merge_request_note',
-    description: `Comment on a merge request. ${WRITE_NOTE} ${PROJECT_NOTE}`,
-  },
-  {
-    name: 'create_issue_note',
-    description: `Comment on an issue. ${WRITE_NOTE} ${PROJECT_NOTE}`,
-  },
-  {
-    name: 'create_issue',
-    description: `Create an issue (confidential: true limits it to project members at Reporter and above). ${WRITE_NOTE} ${PROJECT_NOTE}`,
-  },
-  {
-    name: 'update_merge_request',
-    description: `Update a merge request's title, description, labels, assignees, reviewers, or close/reopen it. ${WRITE_NOTE} ${PROJECT_NOTE}`,
-  },
-  {
-    name: 'create_merge_request',
-    description: `Create a merge request for an existing source branch. For your own code changes use publish instead. ${WRITE_NOTE} ${PROJECT_NOTE}`,
-  },
-  {
-    name: 'retry_job',
-    description: `Retry one CI job. Never retried automatically after an unknown outcome. ${WRITE_NOTE} ${PROJECT_NOTE}`,
-  },
-  {
-    name: 'create_pipeline',
-    description: `Run a new pipeline for a branch or tag. Never retried automatically after an unknown outcome. ${WRITE_NOTE} ${PROJECT_NOTE}`,
   },
 ];

@@ -12,7 +12,7 @@ them before starting the test stack.
 
 | Service              | Purpose                                                                   |
 | -------------------- | ------------------------------------------------------------------------- |
-| `native-answer`      | The shared Mastra agent with its isolated coding workspace                |
+| `native-answer`      | The shared Mastra agent                                                   |
 | `adapter`            | The Slack Socket Mode connection                                          |
 | `native-cli-runtime` | Holds tool credentials and runs GitLab, Jira and other service calls      |
 | `native-postgres`    | Conversation and execution state                                          |
@@ -52,17 +52,15 @@ A stub run qualifies intake, delivery, context assembly, policy, channel
 settings, the Slack route through the egress proxy and the cost ledger. Tool
 reads through the CLI runtime and the egress proxy are T3
 ([the `tools` suite](testing.md#native-integration-suites-t3)) and, with the
-real services, T5. A stub run never counts as live acceptance of model,
-coding or publication behavior (see [live-test-rules.md](live-test-rules.md)).
+real services, T5. A stub run never counts as live acceptance of model or
+tool behavior (see [live-test-rules.md](live-test-rules.md)).
 Stub scenarios live in `tests/live/scenarios/stub/` and steer the stub with
 directives such as `STUB_REPLY` and `STUB_RECALL` (see
 [the model stub](../apps/model-stub/README.md)).
 
 ## 1. What you need
 
-- A Linux Docker host with Docker Compose 2.24 or newer. The coding sandbox
-  needs the host capabilities described in
-  [native-answer.md](native-answer.md#native-deployment-with-a-coding-workspace).
+- A Linux Docker host with Docker Compose 2.24 or newer.
 - Node 26 and npm, with `npm ci` run once in the checkout.
 - A Slack workspace where you may create two apps and a test channel.
 - For gateway mode, the operator supplies the designated direct test
@@ -153,7 +151,7 @@ with these bot token scopes:
 | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | `chat:write`                                              | Posting scenario prompts; editing and deleting the sender's own messages (stub `message-lifecycle.json`) |
 | `channels:history` (public) or `groups:history` (private) | Reading the thread with `conversations.replies`                                                          |
-| `files:write`, `files:read`                               | Uploading inputs and downloading exports (`coding-files`) and `answer.md` (`long-reply`)                 |
+| `files:write`, `files:read`                               | Uploading inputs (`files`) and downloading `answer.md` (`long-reply`)                                    |
 
 Install it to the workspace and keep its bot token (`xoxb-…`) for `.env.e2e`
 only. Create a test channel and invite both bots to it.
@@ -179,7 +177,7 @@ Build every image with the same tag, one at a time. Check free disk space first:
 
 ```sh
 TAG=$(git rev-parse --short=12 HEAD) # build from a clean checkout
-for target in native-coding adapter cli-runtime admin egress model-stub; do
+for target in native-answer adapter cli-runtime admin egress model-stub; do
   docker build -f deploy/Dockerfile --target "$target" -t "support-agent/$target:$TAG" .
 done
 docker pull postgres@sha256:f3bd19c606e442c3d7bdfa8002e03fe260a1023351e0ea4598032022b68dd6e3
@@ -190,8 +188,8 @@ docker pull postgres@sha256:f3bd19c606e442c3d7bdfa8002e03fe260a1023351e0ea459803
 
 ## 5. Secrets and the settings store
 
-The agent runs as UID 0 without `DAC_OVERRIDE`, so its secret files must be
-owned by root. The settings image runs as UID 1000.
+The agent and settings images run as UID 1000. The secret files are owned by
+root with group 1000, so both can read them.
 
 ```sh
 umask 077
@@ -424,13 +422,12 @@ The answer scenarios (every stub scenario) need a channel without tools, the
 gateway tool scenarios a channel with them. With `E2E_ADMIN_TOKEN` the driver
 sets this per scenario. Without it, a suite blocks the scenarios whose
 assignments do not match; run the matching gateway group with `--tools`.
-Coding scenarios leave an unmerged merge request in the test project. Keep it
-as evidence. Never merge it or delete messages other than the stub suite's own-message
-steps (see [live-test-rules.md](live-test-rules.md)).
+Never delete messages other than the stub suite's own-message steps (see
+[live-test-rules.md](live-test-rules.md)).
 
 ## 11. The GitLab test project
 
-For the gateway suite only. The coding scenarios name the project through
+For the gateway suite only. The GitLab scenarios name the project through
 placeholders:
 `{{gitlab.host}}`, `{{gitlab.project}}`, `{{gitlab.projectId}}` and
 `{{gitlab.targetBranch}}`. The driver fills them from `.env.e2e`:
@@ -450,9 +447,7 @@ only in its first and one only in its last 48000 bytes
 missing is BLOCKED (`missing_E2E_GITLAB_*`). The host must be in `GITLAB_HOSTS` and match the
 channel's GitLab instance. The project ID is on the project's overview page.
 
-The discovery scenario expects the target branch to be the project’s default branch. Each fixture marker line must begin with `trace-marker`. Protect the target branch against direct pushes. Its
-verification must run without network access and without installing
-dependencies (see [gitlab.md](gitlab.md#publication)).
+The discovery scenario expects the target branch to be the project’s default branch. Each fixture marker line must begin with `trace-marker`.
 
 ## The egress proxy
 
@@ -481,7 +476,7 @@ list, recreate the stack with `test:stack:down` and `test:stack:up`.
 | `model_mode_switch_failed`                                                       | `test:stack:down` or `up` failed during `--switch-mode`; the summary's `modelModeSwitch.error` names it. The driver still tried to restore the mode                                   |
 | `MODEL MODE NOT RESTORED`                                                        | The switch back failed; the instance is in `modelModeSwitch.leftIn`. Wait until it is idle and run the printed `restoreByHand` commands                                               |
 | `native_test_work_not_idle`                                                      | Earlier work did not settle within 120 s; the report's `before` shows what is active. Check `test:stack:ps`, wait or inspect the run                                                  |
-| `native_inspection_message_identity_missing`                                     | The agent's inspection has no `messageTs`; rebuild the `native-coding` image used by the `native-answer` service from the current checkout                                            |
+| `native_inspection_message_identity_missing`                                     | The agent's inspection has no `messageTs`; rebuild the `native-answer` image from the current checkout                                                                                |
 | `native_answer_timeout_no_retry`                                                 | The step's own run did not deliver in time; `inspectionRefused` on the attempt names a refusal code if inspection was refused                                                         |
 | `interrupted`                                                                    | Ctrl-C or SIGTERM; the driver restored tools, settings and mode (check the report)                                                                                                    |
 | `model_mode_unknown_start_with_test_stack_up`                                    | No mode is recorded yet; start the stack with `test:stack:up`                                                                                                                         |
@@ -494,7 +489,7 @@ list, recreate the stack with `test:stack:down` and `test:stack:up`.
 | `native_request_not_successful`                                                  | Inspect the retained attempt, tool invocation and delivery receipt to find the last completed step. A failure before dispatch gives no evidence that the upstream token was rejected. |
 | `selected_model_hosted_search_unavailable`                                       | Enable hosted search on the selected test model and use a supported route for the web-search scenario.                                                                                |
 | `ready_<kind>_instance_required`                                                 | Gateway suite: no ready instance of that kind (GitLab: on `E2E_GITLAB_HOST`) exists; create one with test credentials and wait for `ready`                                            |
-| `stub_scenario_needs_no_tools`                                                   | A stub scenario names a tool (`requires`, `webSearch`, `webFetch` or a publication); tool reads belong in T3 `tools` or a gateway scenario                                            |
+| `stub_scenario_needs_no_tools`                                                   | A stub scenario names a tool (`requires`, `webSearch` or `webFetch`); tool reads belong in T3 `tools` or a gateway scenario                                                           |
 | `ambiguous_<kind>_instance`                                                      | Several ready instances of that kind; assign the one to use to the test channel                                                                                                       |
 | `channel_tool_assignment_unconfirmed`                                            | The settings service did not show the assignment the driver set; the driver restored the original                                                                                     |
 | `channel_tools_unreadable` / `tool_instances_unreadable`                         | The settings service API returned an unexpected view; check the driver and admin API versions together. Use the current driver and rebuild the test images from the same revision     |
@@ -516,7 +511,7 @@ list, recreate the stack with `test:stack:down` and `test:stack:up`.
 | `designated_channel_not_trusted`                                                 | The test sender's channel in the settings service differs from `E2E_SLACK_CHANNEL_ID`                                                                                                 |
 | `sender_identity_not_designated`                                                 | `auth.test` team, bot or user ID differs from the registered sender, or the token is the app's own                                                                                    |
 | `answer_fixture_requires_channel_without_tools`                                  | Without `E2E_ADMIN_TOKEN`: unassign all tools from the test channel, or add the token                                                                                                 |
-| `coding_fixture_requires_publication_verification`                               | Without `E2E_ADMIN_TOKEN`: assign exactly one ready GitLab instance whose host matches the scenario                                                                                   |
+| `coding_fixture_requires_publication_verification`                               | Without `E2E_ADMIN_TOKEN`: assign at least one ready tool instance to the test channel                                                                                                |
 | `ready_search_assignment_required` / `ready_fetch_assignment_required`           | Without `E2E_ADMIN_TOKEN`: assign a ready `webSearch` / `webFetch` instance                                                                                                           |
 | `direct_fetch_transport_required`                                                | Provide the isolated fetch service and all three transport settings in step 6                                                                                                         |
 | `invalid_native_scenario`                                                        | A malformed scenario, or a prompt containing `<operator:`, `<@` or `<!`                                                                                                               |

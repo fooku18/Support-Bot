@@ -1,7 +1,6 @@
 import { testModel, testSelection } from '../model-fixture.js';
 import { describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
-import { nativeCoding } from '../../src/application/bindings/coding.js';
 import type { NativeAgentOptions } from '../../src/application/agent-options.js';
 import { compileDocument } from '../../../admin/src/compile.js';
 import { deriveCoordinatorConfig } from '../../src/application/configuration/config.js';
@@ -64,14 +63,6 @@ describe('fixed test Studio ingress', () => {
           bindModel: (selection: ReturnType<typeof testSelection>) =>
             testModel('http://127.0.0.1:1', 'synthetic', selection),
           services: async () => ({ enabled: new Set(), catalog: {}, services: {} }),
-          coding: nativeCoding({
-            storageDir: '/synthetic/studio',
-            configuration: async () => config,
-            adminUrl: 'http://127.0.0.1:1',
-            adminToken: 'synthetic',
-            url: 'http://127.0.0.1:1',
-            token: 'synthetic',
-          }),
           limits: { contextTokens: 2000, outputTokens: 64, maxSteps: 3, timeoutMs: 1000 },
         } as unknown as NativeAgentOptions,
       });
@@ -91,15 +82,14 @@ describe('fixed test Studio ingress', () => {
         });
         expect(Object.keys(studio.mastra.listAgents())).toEqual(['coding']);
         expect(factory).toHaveBeenCalledOnce();
-        expect(factory.mock.calls[0]![0].coding).toBeUndefined();
         const beforeDispatch = factory.mock.calls[0]![0].beforeDispatch as (
           ...args: unknown[]
         ) => Promise<void>;
         await expect(
-          beforeDispatch({ toolName: 'workspace_write_file', toolCallId: 'synthetic' }),
+          beforeDispatch({ toolName: 'gitlab_get_project', toolCallId: 'synthetic' }),
         ).resolves.toBeUndefined();
         authority.mockRejectedValueOnce(new Error('membership revoked'));
-        await expect(beforeDispatch({ toolName: 'workspace_write_file' })).rejects.toThrow(
+        await expect(beforeDispatch({ toolName: 'gitlab_get_project' })).rejects.toThrow(
           'membership revoked',
         );
       } finally {
@@ -112,7 +102,7 @@ describe('fixed test Studio ingress', () => {
     ['assigned with a read tool', true, true, true],
     ['unassigned', false, true, false],
     ['assigned without any read tool', true, false, false],
-  ])('binds Code Mode without a workspace: %s', async (_name, assigned, gitlab, expected) => {
+  ])('binds Code Mode: %s', async (_name, assigned, gitlab, expected) => {
     const require = createRequire(new URL('../../package.json', import.meta.url));
     const { InMemoryStore } = require('@mastra/core/storage') as {
       InMemoryStore: new () => Parameters<typeof runtime.createNativeAgent>[0]['storage'];
@@ -186,7 +176,6 @@ describe('fixed test Studio ingress', () => {
     });
     try {
       const options = factory.mock.calls[0]![0];
-      expect(options.coding).toBeUndefined();
       expect(Object.keys(options.codeMode ?? {})).toEqual(expected ? ['execute_typescript'] : []);
       if (!expected) return;
       const tool = (

@@ -5,8 +5,6 @@ import {
   withTelemetryStore,
 } from '../infrastructure/storage/telemetry-store.js';
 import { nativeInstructions } from '../application/instructions.js';
-import fs from 'node:fs';
-import path from 'node:path';
 import { Pool, type PoolClient } from 'pg';
 import { startNativeApplication } from '../application/server.js';
 import { nativeConfiguration } from '../application/configuration/native-configuration.js';
@@ -19,8 +17,6 @@ import {
 } from '../integrations/slack/channel-memory.js';
 import { createNativeInputClient } from '../integrations/slack/input-client.js';
 import { createNativeMessageClient } from '../integrations/slack/message-client.js';
-import { nativeCoding } from '../application/bindings/coding.js';
-import { checkNativeCodingSandbox } from '../mastra/tools/coding.js';
 import { assertCodeModeRuntime } from '../mastra/tools/code-mode.js';
 import { loadModelProviders } from '../integrations/providers/access.js';
 import { CostLedger } from '../integrations/providers/ledger.js';
@@ -74,18 +70,9 @@ export async function startNativeAnswerProcess(
     options: Parameters<typeof startNativeApplication>[0],
   ) => Promise<{ server: { close(): Promise<void> } }> = startNativeApplication,
 ) {
-  // The deployed stack mounts this store. Isolated read-only fixtures omit it.
-  const storageDir = env.NATIVE_CODING_STORE;
-  if (storageDir !== undefined && !storageDir.trim())
-    throw new Error('retained coding store unavailable');
-  if (storageDir && (!path.isAbsolute(storageDir) || !fs.lstatSync(storageDir).isDirectory()))
-    throw new Error('retained coding store unavailable');
-  if (
-    Boolean(env.CLI_RUNTIME_URL?.trim()) !== Boolean(env.CLI_RUNTIME_TOKEN?.trim()) ||
-    (storageDir && !env.CLI_RUNTIME_URL?.trim())
-  )
+  if (Boolean(env.CLI_RUNTIME_URL?.trim()) !== Boolean(env.CLI_RUNTIME_TOKEN?.trim()))
     throw new RuntimeConfigurationError(
-      'CLI_RUNTIME_URL and CLI_RUNTIME_TOKEN must be configured together and are required for coding',
+      'CLI_RUNTIME_URL and CLI_RUNTIME_TOKEN must be configured together',
     );
   const cli = env.CLI_RUNTIME_URL?.trim()
     ? {
@@ -93,9 +80,7 @@ export async function startNativeAnswerProcess(
         token: required(env, 'CLI_RUNTIME_TOKEN'),
       }
     : undefined;
-  // Any channel can be assigned Code Mode, with or without a coding store.
   assertCodeModeRuntime();
-  if (storageDir) await checkNativeCodingSandbox(storageDir);
   const token = required(env, 'SERVICE_TOKEN');
   const adminUrl = serviceUrl(required(env, 'ADMIN_URL'));
   const adminToken = required(env, 'ADMIN_INTERNAL_TOKEN');
@@ -216,11 +201,7 @@ export async function startNativeAnswerProcess(
       stage = 'readiness-adapter';
       await adapter('/native-authority/ready');
     };
-    const limits = {
-      outputTokens: 6000,
-      maxSteps: storageDir ? 40 : 25,
-      timeoutMs: storageDir ? 600000 : 300000,
-    };
+    const limits = { outputTokens: 6000, maxSteps: 25, timeoutMs: 300000 };
     const messages = createNativeMessageClient({ baseUrl: adapterUrl, token });
     stage = 'dependency-readiness';
     application = await serve({
@@ -248,22 +229,11 @@ export async function startNativeAnswerProcess(
                 runSeq: attribution.runSeq,
                 attempt: 1,
                 model,
-                mode: attribution.studio ? 'studio' : storageDir ? 'coding' : 'answer',
+                mode: attribution.studio ? 'studio' : 'answer',
               },
             },
           ),
         instructions: nativeInstructions(limits),
-        ...(storageDir && cli
-          ? {
-              coding: nativeCoding({
-                configuration,
-                storageDir,
-                adminUrl,
-                adminToken,
-                ...cli,
-              }),
-            }
-          : {}),
         inputs: createNativeInputClient({ baseUrl: adapterUrl, token }),
         messages,
         status: (value) => adapter('/native-status', value),

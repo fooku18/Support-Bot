@@ -70,15 +70,6 @@ export function startNativeAgentServer(options: {
         case '/agents/delivery-authority':
           result = await options.agents.deliveryAuthority(b.runId, b.actor, b.owner, b.operationId);
           break;
-        case '/agents/export-receipt':
-          result = await options.agents.exportReceipt(
-            b.runId,
-            b.actor,
-            b.owner,
-            b.operationId,
-            b.receipt,
-          );
-          break;
         case '/agents/model':
           result = await options.agents.selectedModel(b.teamId, b.channelId);
           break;

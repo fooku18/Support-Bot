@@ -154,7 +154,7 @@ wrong, expired or revoked.
    within seconds.
 
 A token change or an upstream catalog change starts fresh agent sessions in
-existing threads; history and workspace are kept.
+existing threads; history is kept.
 
 ## Troubleshooting
 

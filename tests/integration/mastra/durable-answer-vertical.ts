@@ -101,9 +101,7 @@ if (provisioning) {
       );
       await pool.query(statement.rows[0].sql);
     }
-    if (phase === 'discovery-provision')
-      await pool.query('REVOKE INSERT,UPDATE ON native_agents.publications FROM fixture_answer');
-    return { framework: 'PostgresStore', applicationTables: 6 };
+    return { framework: 'PostgresStore', applicationTables: 4 };
   });
   await pool.end();
   process.exit(0);
@@ -1302,7 +1300,7 @@ try {
           `${table.schemaname}.${table.tablename} persisted credential or URL`,
         );
       }
-      assert.equal(tables.filter((t: any) => t.schemaname === 'native_agents').length, 6);
+      assert.equal(tables.filter((t: any) => t.schemaname === 'native_agents').length, 4);
       assert.equal(
         (await pool.query('SELECT rolsuper FROM pg_roles WHERE rolname=current_user')).rows[0]
           .rolsuper,

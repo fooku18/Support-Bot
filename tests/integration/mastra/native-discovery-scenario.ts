@@ -122,7 +122,7 @@ export async function discoveryScenario(c: any) {
   const names = (r: any) => r.tools.map((t: any) => t.name);
   const finish = (r: any) => adapter.deliver({ runId: r.runId, owner: r.owner, actor: 'UOWNER' });
   if (phase === 'discovery') {
-    await check('restricted-role-and-no-publication-grants', async () => {
+    await check('restricted-role-without-ddl', async () => {
       assert.equal(
         (await pool.query('SELECT current_user AS name')).rows[0].name,
         'fixture_answer',
@@ -131,14 +131,6 @@ export async function discoveryScenario(c: any) {
       assert.equal(
         (await pool.query('SELECT rolsuper FROM pg_roles WHERE rolname=current_user')).rows[0]
           .rolsuper,
-        false,
-      );
-      assert.equal(
-        (
-          await pool.query(
-            "SELECT has_table_privilege(current_user,'native_agents.publications','INSERT') AS allowed",
-          )
-        ).rows[0].allowed,
         false,
       );
       return { role: 'fixture_answer', ddl: 'denied' };

@@ -12,7 +12,6 @@ import {
   NativeAgentRefusal,
 } from './native-agents.js';
 import { nativeInputHandler } from './native-inputs.js';
-import { sendNativeExports } from './native-exports.js';
 import { sendAnswerFile } from './long-answer.js';
 import { createRunStatuses, RUN_STATUS_CHARS } from './run-status.js';
 import { SLACK_MARKDOWN_CHARS } from './generated/long-answer.js';
@@ -341,21 +340,12 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
         const check = async () => {
           await authority({ ...identity, userId: body.requesterUserId });
           if (!body.authority || body.authority.actor !== body.requesterUserId)
-            throw new Error('export authority missing');
+            throw new Error('delivery authority missing');
           await transport('/agents/delivery-authority', {
             ...body.authority,
             operationId: body.operationId,
           });
         };
-        const files = body.files?.length
-          ? await sendNativeExports(installation.slack, body, check, undefined, async (receipt) => {
-              await transport('/agents/export-receipt', {
-                ...body.authority,
-                operationId: body.operationId,
-                receipt,
-              });
-            })
-          : [];
         // A long answer: the full answer file first, then the preview message,
         // which says whether the file is attached. A failed upload still posts.
         const answerFile = body.answerFile
@@ -370,13 +360,12 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
               check,
             )
           : undefined;
-        if (files.length || answerFile) await check();
+        if (answerFile) await check();
         result = {
           ...(await nativeAgentSender(installation.slack)({
             ...body,
             answerFileReceipt: answerFile,
           })),
-          ...(files.length ? { files } : {}),
           ...(answerFile ? { answerFile } : {}),
         };
       } else {

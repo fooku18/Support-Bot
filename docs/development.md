@@ -30,13 +30,12 @@ probes remain source evidence and are not included as passing release gates.
 ## Agent boundaries
 
 `apps/agent/src/mastra/index.ts` is the Studio entrypoint. The `agents` directory
-contains the shared coding agent, its configuration and examples;
+contains the shared agent (`coding.ts`), its configuration and examples;
 `tools` and `runtime` use the same native Mastra primitives in deployment and
 Studio. Domain policy, external integrations, infrastructure and wire contracts
 remain separate from framework configuration.
 
-Coding tools run commands in Mastra's bubblewrap `LocalSandbox`
-(`tools/coding.ts`). Code Mode runs scripts in Mastra's in-process isolated-vm
+Code Mode runs scripts in Mastra's in-process isolated-vm
 transport (`tools/code-mode.ts`); it needs no sandbox or temporary files. Node
 must run with `NODE_OPTIONS=--no-node-snapshot`; the agent's tests set it
 themselves. See [Code Mode](code-mode.md).
@@ -49,15 +48,15 @@ The application boundary has three focused collaborators:
 - `infrastructure/storage/agent-storage.ts` provisions application receipt tables,
   reserves advisory-lock capacity and stores immutable admission/provenance and
   effect receipts. Framework execution state remains in Mastra's PostgreSQL store.
-- `application/agent-delivery.ts` owns notices, recipient checks, export receipts
-  and one-shot delivery. It records uncertainty before sending and rechecks
+- `application/agent-delivery.ts` owns notices, recipient checks and one-shot
+  delivery. It records uncertainty before sending and rechecks
   authority after acknowledgement.
 
 `application/agent-service.ts` keeps the admission transaction and owns the native
 execution handle. The same PostgreSQL connection holds the task advisory lock
 from admission through segment completion. Moving these boundaries must preserve
 that lifetime, duplicate-event atomicity and the refusal to replay an uncertain
-start, resume, publication or send. Service contracts are in `agent-options.ts`.
+start, resume or send. Service contracts are in `agent-options.ts`.
 
 ## Commands
 
@@ -78,8 +77,8 @@ The application suite adds current-source admission/lock, cancellation,
 revocation, uncertain delivery, shutdown and file-provenance scenarios to the
 real-PostgreSQL discovery and cold-process checks. It uses synthetic peers,
 creates a fresh bounded PG fixture and retains logs, reports and a logical dump.
-It makes no Slack, Gateway or tool-provider calls. The `coding`, `backup` and
-`telemetry` suites also need a local `native-coding` image (`--image-tag`). See
+It makes no Slack, Gateway or tool-provider calls. The `backup` and
+`telemetry` suites also need a local `native-answer` image (`--image-tag`). See
 [testing.md](testing.md) for all suites, live qualification and evidence rules.
 
 Generate canonical transport mirrors with `npm run generate:protocol`; edit
@@ -92,9 +91,9 @@ Build one affected image at a time, checking available disk space first:
 docker build -f deploy/Dockerfile --target native-answer -t support-agent/native-answer:<tag> .
 ```
 
-Other targets are `native-coding`, `adapter`, `cli-runtime`, `admin` and
-`egress`. Each image installs only its selected workspace from the same
-root lock. Runtime bundles keep their workspace dependency tree, for example
+Other targets are `adapter`, `cli-runtime`, `admin` and `egress`. Each
+image installs only its selected workspace from the same root lock. Runtime
+bundles keep their workspace dependency tree, for example
 `/app/apps/agent/dist/native/main.mjs`. Separate images, privileges, credentials
 and private networks remain separate security boundaries.
 

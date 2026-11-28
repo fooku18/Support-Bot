@@ -31,8 +31,6 @@ function atlassianTool(operations: string[]): EffectiveTool {
     label: 'Jira (test)',
     credentialVersion: 2,
     adapter: 'atlassian-rest-v1',
-    scope: 'global',
-    readOnly: false,
     contractVersion: 'atlassian-read-v4',
     operations,
   };
@@ -345,8 +343,6 @@ describe('tool runtime Datadog readiness', () => {
     label: 'Datadog (test)',
     credentialVersion: 4,
     adapter: 'datadog-mcp-v1',
-    scope: 'global',
-    readOnly: false,
     contractVersion: 'datadog-read-v1',
     denyTools: ['search_datadog_monitors'],
   };

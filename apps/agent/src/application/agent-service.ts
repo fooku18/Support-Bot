@@ -1,7 +1,4 @@
-import { registerNativeExport } from '../domain/delivery/register-export.js';
-import { publicationLine } from '../domain/delivery/long-answer.js';
 import { providerSearchEnabled } from '../mastra/tools/provider-search.js';
-import { createNativeCodingBinding } from '../mastra/tools/coding.js';
 import { nativeCodeModeTools } from '../mastra/tools/code-mode.js';
 import { channelToolGranted } from './tool-grant.js';
 import { createHash, randomUUID } from 'node:crypto';
@@ -47,7 +44,6 @@ export function createNativeAgentService(options: NativeAgentOptions) {
     recordThreadSeen,
     inputReceipts,
     sequence,
-    publicationReceipts,
     retain,
   } = receipts;
   const authority = createNativeAgentAuthority(options, receipts);
@@ -152,59 +148,10 @@ export function createNativeAgentService(options: NativeAgentOptions) {
       catalog: { ...binding.catalog, slackSearch: false },
       authorize: guard,
     });
-    const workspace = await options.coding?.prepare({
-      identity: r.accepted,
-      taskKey: r.task_key,
-      workspaceId: digest(r.task_key),
-      runId: r.run_id,
-      signal: signal.signal,
-      authorize: () => guard('gitlab'),
-    });
-    const coding = workspace
-      ? await createNativeCodingBinding(
-          {
-            ...workspace,
-            workspaceId: digest(r.task_key),
-            run: { runId: r.run_id, runSeq: await sequence(r), attempt: 1 },
-            signal: signal.signal,
-            authorize: () => guard('gitlab'),
-            exportFile: async (file) => {
-              await guard();
-              return registerNativeExport(options.pool, r.run_id, file);
-            },
-            publication: async (project, send) => {
-              await guard('gitlab');
-              const unresolved = await options.pool.query(
-                "SELECT 1 FROM native_agents.publications WHERE task_key=$1 AND outcome='uncertain'",
-                [r.task_key],
-              );
-              if (unresolved.rowCount) fail('publication_uncertain_do_not_replay');
-              const evidence = await send(async () => {
-                await guard('gitlab');
-                const inserted = await options.pool.query(
-                  "INSERT INTO native_agents.publications(task_key,run_id,project,outcome) VALUES($1,$2,$3,'uncertain') ON CONFLICT DO NOTHING RETURNING run_id",
-                  [r.task_key, r.run_id, project],
-                );
-                if (!inserted.rowCount) fail('publication_already_admitted');
-              });
-              await guard('gitlab');
-              const confirmed = await options.pool.query(
-                "UPDATE native_agents.publications SET outcome='confirmed',evidence=$3 WHERE run_id=$1 AND project=$2 AND outcome='uncertain' AND EXISTS(SELECT 1 FROM native_agents.tasks WHERE task_key=$4 AND owner=$5) AND NOT EXISTS(SELECT 1 FROM native_agents.actions WHERE run_id=$1 AND action='cancel') RETURNING run_id",
-                [r.run_id, project, JSON.stringify(evidence), r.task_key, r.owner],
-              );
-              if (!confirmed.rowCount) fail('publication_confirmation_uncertain');
-              return evidence;
-            },
-          },
-          reads,
-        )
-      : undefined;
-    // The workspace brings Code Mode along. Without one, it is the channel's assignment.
     const codeMode =
-      coding?.codeMode ??
-      (Object.keys(reads).length > 0 && channelToolGranted(cfg, r.accepted, 'codeMode')
+      Object.keys(reads).length > 0 && channelToolGranted(cfg, r.accepted, 'codeMode')
         ? nativeCodeModeTools(reads, () => guard('codeMode'))
-        : undefined);
+        : undefined;
     const modelBinding = options.bindModel(model, r.accepted, {
       runId: r.run_id,
       runSeq: await sequence(r),
@@ -232,7 +179,6 @@ export function createNativeAgentService(options: NativeAgentOptions) {
       instructions,
       tools: reads,
       unavailableTools: binding.unavailable.map((u) => u.tool),
-      coding,
       codeMode,
       nativeInputs: !!options.inputs,
       ...options.limits,
@@ -245,13 +191,7 @@ export function createNativeAgentService(options: NativeAgentOptions) {
       const conversation = await recordModel(r, model);
       await guard();
       const memory = {
-        thread: digest(
-          JSON.stringify([
-            options.coding ? `coding@${options.coding.version}` : NATIVE_INPUT_VERSION,
-            r.task_key,
-            conversation.epoch,
-          ]),
-        ),
+        thread: digest(JSON.stringify([NATIVE_INPUT_VERSION, r.task_key, conversation.epoch])),
         resource: digest(JSON.stringify([r.accepted.teamId, r.accepted.installationId])),
       };
 
@@ -323,15 +263,6 @@ export function createNativeAgentService(options: NativeAgentOptions) {
         );
         if (!recorded.rowCount) fail('input_receipt_unconfirmed');
         await guard();
-        if (coding) {
-          const files = await coding.stageInputs(acquired);
-          prompt = nativeInputMessage(
-            `${request}\n\nUntrusted attachment working copies in the native Workspace: ${JSON.stringify(files)}. Original bytes/provenance remain retained independently.`,
-            acquired,
-            model.route,
-          );
-          await guard();
-        }
       }
       const opts = {
         instructions,
@@ -401,7 +332,6 @@ export function createNativeAgentService(options: NativeAgentOptions) {
             'INSERT INTO native_agents.actions(run_id,action,actor) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',
             [r.run_id, `web-citation:${id}`, r.accepted.userId],
           );
-      const publications = await publicationReceipts(r);
       for (const fetch of result.webFetch) {
         await options.pool.query(
           'INSERT INTO native_agents.actions(run_id,action,actor) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',
@@ -412,27 +342,14 @@ export function createNativeAgentService(options: NativeAgentOptions) {
           ],
         );
       }
-      let text = [result.text, ...publications.map(publicationLine)].filter(Boolean).join('\n\n');
+      let text = result.text ?? '';
       const withConversationNotice = (answer: string) =>
         conversation.changed
           ? `The selected model changed. This reply starts a fresh model conversation in this thread.\n\n${answer}`
           : answer;
-      if (!result.suspended && !result.uncertain) {
-        if (text.trim()) {
-          text = withConversationNotice(text);
-          await retain(r, text);
-        } else if (
-          coding &&
-          (
-            await options.pool.query(
-              'SELECT 1 FROM native_agents.exports WHERE run_id=$1 LIMIT 1',
-              [r.run_id],
-            )
-          ).rowCount
-        ) {
-          text = withConversationNotice('Files ready.');
-          await retain(r, text);
-        }
+      if (!result.suspended && !result.uncertain && text.trim()) {
+        text = withConversationNotice(text);
+        await retain(r, text);
       }
       logger.info('native.segment.ended', {
         runId: r.run_id,
@@ -444,7 +361,7 @@ export function createNativeAgentService(options: NativeAgentOptions) {
           ? { outputTokens: result.usage.outputTokens }
           : {}),
       });
-      return { ...result, text, publications, owner: r.owner };
+      return { ...result, text, owner: r.owner };
     } catch (error) {
       logger.warn('native.segment.failed', {
         runId: r.run_id,
@@ -472,13 +389,9 @@ export function createNativeAgentService(options: NativeAgentOptions) {
     } finally {
       clearTimeout(timer);
       signal.abort();
-      try {
-        // Flush the official exporter after the segment has settled, including
-        // failure/cancellation. Shutdown never resumes retained execution.
-        await runtime.mastra.shutdown({ drainTimeout: 30000 });
-      } finally {
-        await coding?.close();
-      }
+      // Flush the official exporter after the segment has settled, including
+      // failure/cancellation. Shutdown never resumes retained execution.
+      await runtime.mastra.shutdown({ drainTimeout: 30000 });
     }
   }
   /** Executes an admitted run. An execution that ends without a result is
@@ -771,13 +684,6 @@ export function createNativeAgentService(options: NativeAgentOptions) {
             : [];
         })[0] ?? null,
       active: active.has(runId),
-      publications: await publicationReceipts(r),
-      exports: (
-        await options.pool.query(
-          'SELECT id,name,sha256,octet_length(content) AS bytes,receipt FROM native_agents.exports WHERE run_id=$1 ORDER BY id',
-          [runId],
-        )
-      ).rows,
       receipt: actions.some((a) => a.action === 'cancel')
         ? 'Cancellation recorded. Unconfirmed work will not restart or deliver.'
         : !delivery && !active.has(runId) && status !== 'suspended'

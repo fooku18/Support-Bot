@@ -3,12 +3,9 @@ import {
   GITLAB_CONTRACT_VERSION,
   GITLAB_CONTROLLER_OPERATIONS,
   GITLAB_OPERATION_METADATA,
-  GITLAB_OPERATIONS,
   GITLAB_READ_OPERATIONS,
-  GITLAB_WRITE_OPERATIONS,
   isGitlabOperationName,
   isGitlabTransportOperationName,
-  isGitlabWriteOperation,
   operationProject,
   operationScopeLabel,
   parseGroupRef,
@@ -39,26 +36,23 @@ import { createReadServiceTools } from '../../src/mastra/tools/read-services.js'
 const request = (operation: string, args: Record<string, unknown>) =>
   buildGitlabRequest(validateGitlabOperation(operation, args));
 
-describe('typed GitLab operations (contract v5)', () => {
-  it('exposes the read and write catalog under contract v5', () => {
+describe('typed GitLab operations (contract v6)', () => {
+  it('exposes the read catalog under contract v6', () => {
     expect(GITLAB_CONTRACT_VERSION).toBe(6);
     expect(GITLAB_READ_OPERATIONS).toHaveLength(23);
     expect(GITLAB_READ_OPERATIONS).toContain('get_job_trace');
-    expect(GITLAB_WRITE_OPERATIONS).toEqual([
-      'create_merge_request_note',
-      'create_issue_note',
-      'create_issue',
-      'update_merge_request',
+    for (const name of GITLAB_READ_OPERATIONS) expect(isGitlabOperationName(name)).toBe(true);
+    // Not part of the contract: any write, deleting, settings, raw access.
+    for (const name of [
       'create_merge_request',
+      'create_issue_note',
       'retry_job',
-      'create_pipeline',
-    ]);
-    expect(GITLAB_OPERATIONS).toHaveLength(30);
-    for (const name of GITLAB_OPERATIONS) expect(isGitlabOperationName(name)).toBe(true);
-    for (const name of GITLAB_WRITE_OPERATIONS) expect(isGitlabWriteOperation(name)).toBe(true);
-    expect(isGitlabWriteOperation('get_project')).toBe(false);
-    // Not part of the contract: merging, deleting, settings, raw access.
-    for (const name of ['merge_merge_request', 'delete_branch', 'glab', 'api', 'graphql'])
+      'merge_merge_request',
+      'delete_branch',
+      'glab',
+      'api',
+      'graphql',
+    ])
       expect(isGitlabOperationName(name)).toBe(false);
   });
 
@@ -69,9 +63,7 @@ describe('typed GitLab operations (contract v5)', () => {
     expect(isGitlabTransportOperationName('get_project')).toBe(true);
     expect(isGitlabTransportOperationName('api')).toBe(false);
     expect(request('get_current_user', {})).toMatchObject({
-      method: 'GET',
       endpoint: 'user',
-      body: null,
     });
     expect(() => validateGitlabOperation('get_current_user', { project: 'g/p' })).toThrow(
       /unknown argument "project"/,
@@ -197,161 +189,48 @@ describe('typed GitLab operations (contract v5)', () => {
     });
   });
 
-  it('validates write bodies, labels, users, and branch rules', () => {
-    expect(() =>
-      validateGitlabOperation('create_merge_request_note', {
-        project: 'g/p',
-        merge_request_iid: 1,
-        body: '   ',
-      }),
-    ).toThrow(/body/);
-    expect(() =>
-      validateGitlabOperation('create_issue_note', {
-        project: 'g/p',
-        issue_iid: 1,
-        body: 'x'.repeat(60_001),
-      }),
-    ).toThrow(/body/);
-    expect(() =>
-      validateGitlabOperation('create_issue', { project: 'g/p', title: 't', labels: ['a,b'] }),
-    ).toThrow(/labels/);
-    expect(() =>
-      validateGitlabOperation('create_issue', { project: 'g/p', title: 't', assignee_ids: [0] }),
-    ).toThrow(/assignee_ids/);
-    expect(() =>
-      validateGitlabOperation('update_merge_request', { project: 'g/p', merge_request_iid: 2 }),
-    ).toThrow(/nothing to update/);
-    expect(() =>
-      validateGitlabOperation('update_merge_request', {
-        project: 'g/p',
-        merge_request_iid: 2,
-        state_event: 'merge',
-      }),
-    ).toThrow(/state_event/);
-    expect(() =>
-      validateGitlabOperation('create_merge_request', {
-        project: 'g/p',
-        source_branch: 'feature',
-        target_branch: 'feature',
-        title: 't',
-      }),
-    ).toThrow(/must differ/);
-    expect(() =>
-      validateGitlabOperation('create_merge_request', {
-        project: 'g/p',
-        source_branch: 'feature',
-        target_branch: 'support-agent/0123456789abcdef',
-        title: 't',
-      }),
-    ).toThrow(/never merge targets/);
-    expect(() =>
-      validateGitlabOperation('create_pipeline', { project: 'g/p', ref: 'main\nX' }),
-    ).toThrow(/unsupported characters/);
-  });
-
-  it('builds exact methods, endpoints, and JSON bodies with literal URL encoding', () => {
-    const cases: Array<[string, Record<string, unknown>, string, string, unknown]> = [
-      ['get_project', { project: 'group/sub/app' }, 'GET', 'projects/group%2Fsub%2Fapp', null],
-      ['get_project', { project: 42 }, 'GET', 'projects/42', null],
+  it('builds exact GET endpoints with literal URL encoding', () => {
+    const cases: Array<[string, Record<string, unknown>, string]> = [
+      ['get_project', { project: 'group/sub/app' }, 'projects/group%2Fsub%2Fapp'],
+      ['get_project', { project: 42 }, 'projects/42'],
       [
         'list_projects',
         { search: 'a b' },
-        'GET',
         'projects?membership=true&simple=true&order_by=last_activity_at&sort=desc&search=a%20b&page=1&per_page=20',
-        null,
       ],
       [
         'search',
         { scope: 'blobs', search: '@x --field=y' },
-        'GET',
         `search?scope=blobs&search=${encodeURIComponent('@x --field=y')}&page=1&per_page=20`,
-        null,
       ],
       [
         'search',
         { project: 'g/p', scope: 'commits', search: 'fix' },
-        'GET',
         'projects/g%2Fp/search?scope=commits&search=fix&page=1&per_page=20',
-        null,
       ],
       [
         'list_branches',
         { project: 'g/p', search: 'feat' },
-        'GET',
         'projects/g%2Fp/repository/branches?search=feat&page=1&per_page=20',
-        null,
       ],
       [
         'list_merge_requests',
         { project: 'g/p', state: 'all', source_branch: 'support-agent/abc', target_branch: 'main' },
-        'GET',
         'projects/g%2Fp/merge_requests?source_branch=support-agent%2Fabc&target_branch=main&order_by=updated_at&sort=desc&page=1&per_page=20',
-        null,
       ],
       [
         'get_repository_file',
         { project: 'g/p', file_path: 'dir/file name.ts', ref: 'feature/x' },
-        'GET',
         'projects/g%2Fp/repository/files/dir%2Ffile%20name.ts?ref=feature%2Fx',
-        null,
       ],
       [
         'get_issue_notes',
         { project: 'g/p', issue_iid: 3 },
-        'GET',
         'projects/g%2Fp/issues/3/notes?page=1&per_page=20&sort=asc&order_by=created_at',
-        null,
-      ],
-      [
-        'create_merge_request_note',
-        { project: 'g/p', merge_request_iid: 12, body: 'Looks good' },
-        'POST',
-        'projects/g%2Fp/merge_requests/12/notes',
-        { body: 'Looks good' },
-      ],
-      [
-        'create_issue_note',
-        { project: 'g/p', issue_iid: 5, body: 'Noted' },
-        'POST',
-        'projects/g%2Fp/issues/5/notes',
-        { body: 'Noted' },
-      ],
-      [
-        'create_issue',
-        { project: 'g/p', title: 'Bug', description: 'd', labels: ['a', 'b'], assignee_ids: [7] },
-        'POST',
-        'projects/g%2Fp/issues',
-        { title: 'Bug', description: 'd', labels: 'a,b', assignee_ids: [7] },
-      ],
-      [
-        'update_merge_request',
-        { project: 'g/p', merge_request_iid: 12, title: 'T', state_event: 'close' },
-        'PUT',
-        'projects/g%2Fp/merge_requests/12',
-        { title: 'T', state_event: 'close' },
-      ],
-      [
-        'create_merge_request',
-        { project: 'g/p', source_branch: 'feat', target_branch: 'main', title: 'T' },
-        'POST',
-        'projects/g%2Fp/merge_requests',
-        { source_branch: 'feat', target_branch: 'main', title: 'T', remove_source_branch: false },
-      ],
-      ['retry_job', { project: 'g/p', job_id: 9 }, 'POST', 'projects/g%2Fp/jobs/9/retry', {}],
-      [
-        'create_pipeline',
-        { project: 'g/p', ref: 'release/1' },
-        'POST',
-        'projects/g%2Fp/pipeline?ref=release%2F1',
-        {},
       ],
     ];
-    for (const [operation, args, method, endpoint, body] of cases) {
-      const built = request(operation, args);
-      expect(built.method, operation).toBe(method);
-      expect(built.endpoint, operation).toBe(endpoint);
-      expect(built.body, operation).toEqual(body);
-    }
+    for (const [operation, args, endpoint] of cases)
+      expect(request(operation, args).endpoint, operation).toBe(endpoint);
   });
 
   it('pins the host and the API path; nothing can move a request elsewhere', () => {
@@ -376,7 +255,7 @@ describe('typed GitLab operations (contract v5)', () => {
       expect(() => gitlabUrl(host, 'user'), host).toThrow(/pinned API surface/);
   });
 
-  it('normalizes success and error envelopes, including conflicts and write results', () => {
+  it('normalizes success and error envelopes, including conflicts', () => {
     const ok = normalizeGitlabOutput({
       operation: 'get_project',
       project: 'group/project',
@@ -434,7 +313,7 @@ describe('typed GitLab operations (contract v5)', () => {
       [500, 'upstream', '{"message":"upstream said 404 not found, 401 unauthorized"}'],
     ] as const) {
       const failed = normalizeGitlabOutput({
-        operation: 'create_issue',
+        operation: 'get_issue',
         project: 'group/project',
         status: 'failed',
         httpStatus,
@@ -443,23 +322,17 @@ describe('typed GitLab operations (contract v5)', () => {
       expect(failed, String(httpStatus)).toMatchObject({ ok: false, errorCategory: category });
     }
     const note = normalizeGitlabOutput({
-      operation: 'create_merge_request_note',
+      operation: 'get_merge_request_notes',
       project: 'group/project',
       httpStatus: 200,
       status: 'completed',
-      output: JSON.stringify({
-        id: 77,
-        body: 'hi',
-        author: { id: 1, username: 'bot', email: 'x@y' },
-        system: false,
-      }),
+      output: JSON.stringify([
+        { id: 77, body: 'hi', author: { id: 1, username: 'bot', email: 'x@y' }, system: false },
+      ]),
     });
-    expect(note.data).toEqual({
-      id: 77,
-      body: 'hi',
-      author: { id: 1, username: 'bot' },
-      system: false,
-    });
+    expect(note.data).toEqual([
+      { id: 77, body: 'hi', author: { id: 1, username: 'bot' }, system: false },
+    ]);
     const timedOut = normalizeGitlabOutput({
       operation: 'get_project',
       project: 'group/project',
@@ -472,7 +345,7 @@ describe('typed GitLab operations (contract v5)', () => {
 
   it('keeps a bounded, scrubbed excerpt of a failure outside the model text', () => {
     const failed = normalizeGitlabOutput({
-      operation: 'create_merge_request',
+      operation: 'get_merge_request',
       project: 'company/handbook',
       status: 'failed',
       httpStatus: 500,
@@ -491,7 +364,7 @@ describe('typed GitLab operations (contract v5)', () => {
     expect(failed.detail).toContain('…');
     expect(renderGitlabResultText(failed)).not.toContain('could not decode');
     const unreached = normalizeGitlabOutput({
-      operation: 'create_merge_request',
+      operation: 'get_merge_request',
       project: 'company/handbook',
       status: 'failed',
       httpStatus: null,
@@ -608,17 +481,8 @@ describe('typed GitLab operations (contract v5)', () => {
   it('re-validates the runner-validated transport shape (matching kind) at the runtime boundary', () => {
     const project = validateGitlabOperation('get_project', { project: 'g/p' });
     expect(validateTransportGitlabArgs('get_project', project)).toEqual(project);
-    const note = validateGitlabOperation('create_issue_note', {
-      project: 7,
-      issue_iid: 2,
-      body: 'hello',
-    });
-    expect(validateTransportGitlabArgs('create_issue_note', note)).toEqual({
-      kind: 'create_issue_note',
-      project: '7',
-      issue_iid: 2,
-      body: 'hello',
-    });
+    const notes = validateGitlabOperation('get_issue_notes', { project: 7, issue_iid: 2 });
+    expect(validateTransportGitlabArgs('get_issue_notes', notes)).toEqual(notes);
     expect(() =>
       validateTransportGitlabArgs('get_project', { ...project, kind: 'get_issue' }),
     ).toThrow(/mismatch/);
@@ -892,9 +756,7 @@ describe('typed GitLab operations (contract v5)', () => {
       ];
       for (const [operation, args, endpoint, identity] of cases) {
         const built = request(operation, args);
-        expect(built.method, endpoint).toBe('GET');
         expect(built.endpoint).toBe(endpoint);
-        expect(built.body).toBeNull();
         expect(built.resourceIdentity).toBe(identity);
       }
       // state=all omits state; the instance form always sends scope=all.
@@ -1109,16 +971,13 @@ describe('get_job_trace', () => {
         head: true,
       }),
     ).toEqual({ kind: 'get_job_trace', project: 'g/p', job_id: 9, head: true });
-    expect(isGitlabWriteOperation('get_job_trace')).toBe(false);
   });
 
   it('maps to GET jobs/<id>/trace as a bounded text request', () => {
     const tail = request('get_job_trace', { project: 'group/sub/app', job_id: 77 });
     expect(tail).toEqual({
       operation: 'get_job_trace',
-      method: 'GET',
       endpoint: 'projects/group%2Fsub%2Fapp/jobs/77/trace',
-      body: null,
       resourceIdentity: 'job 77 trace@group/sub/app',
       responseKind: 'text',
       retain: { bytes: MAX_TRACE_BYTES, part: 'tail' },
@@ -1376,7 +1235,6 @@ describe('change detection (commits, merged merge requests, deployments in a win
   it('are model reads', () => {
     for (const name of ['list_commits', 'list_deployments']) {
       expect(GITLAB_READ_OPERATIONS).toContain(name);
-      expect(isGitlabWriteOperation(name)).toBe(false);
       expect(described(name)).not.toBe('');
     }
   });
@@ -1386,7 +1244,7 @@ describe('change detection (commits, merged merge requests, deployments in a win
     const names = createServiceToolDefinitions(broker as never, new Set(), { gitlab: true }).map(
       (definition) => definition.name,
     );
-    expect([...names].sort()).toEqual([...GITLAB_OPERATIONS].sort());
+    expect([...names].sort()).toEqual([...GITLAB_READ_OPERATIONS].sort());
   });
 
   it('refuses a misspelled filter at the model tool instead of dropping it', async () => {
@@ -1421,8 +1279,6 @@ describe('change detection (commits, merged merge requests, deployments in a win
         per_page: 50,
       });
       expect(built).toMatchObject({
-        method: 'GET',
-        body: null,
         resourceIdentity: 'commits@group/app',
       });
       expect(built.endpoint).toBe(
@@ -1600,8 +1456,6 @@ describe('change detection (commits, merged merge requests, deployments in a win
         updated_before: '2026-11-27T12:00:00Z',
       });
       expect(built).toMatchObject({
-        method: 'GET',
-        body: null,
         resourceIdentity: 'deployments@g/p',
       });
       expect(built.endpoint).toBe(

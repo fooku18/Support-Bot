@@ -20,8 +20,6 @@ export const TOOL_KINDS = [
   'webSearch',
   'webFetch',
   'codeMode',
-  'files',
-  'localExec',
 ] as const;
 export type ToolKind = (typeof TOOL_KINDS)[number];
 
@@ -35,8 +33,6 @@ export const TOOL_KIND_TITLES: Record<ToolKind, string> = {
   webSearch: 'Web search',
   webFetch: 'Web fetch',
   codeMode: 'Code Mode',
-  files: 'Task files',
-  localExec: 'Local commands',
 };
 
 /**
@@ -86,8 +82,6 @@ export const TOOL_KIND_CODES: Record<ToolKind, string> = {
   webSearch: 'ws',
   webFetch: 'wf',
   codeMode: 'cm',
-  files: 'fs',
-  localExec: 'ex',
 };
 
 /** Typed Atlassian read operations (contract atlassian-read-v4). */
@@ -152,9 +146,6 @@ export interface CloudflareSettings {
   /** Zone names the instance exposes (sorted); null = every zone the token can see. */
   zones: string[] | null;
 }
-export interface FilesSettings {
-  readOnly: boolean;
-}
 export type EmptySettings = Record<string, never>;
 
 export interface ToolSettingsByKind {
@@ -166,8 +157,6 @@ export interface ToolSettingsByKind {
   webSearch: EmptySettings;
   webFetch: EmptySettings;
   codeMode: EmptySettings;
-  files: FilesSettings;
-  localExec: EmptySettings;
 }
 export type ToolSettings = ToolSettingsByKind[ToolKind];
 
@@ -360,17 +349,9 @@ export function validateToolInstance(input: {
         throw new ToolKindError(`host must be ${SLACK_API_HOST} (or be omitted)`);
       return { kind, label, host: SLACK_API_HOST, settings: {} };
     }
-    case 'files': {
-      noUnknown(settings, ['readOnly'], 'settings');
-      const readOnly = settings.readOnly ?? false;
-      if (typeof readOnly !== 'boolean')
-        throw new ToolKindError('settings.readOnly must be a boolean');
-      return { kind, label, host: noHost(), settings: { readOnly } };
-    }
     case 'webSearch':
     case 'webFetch':
     case 'codeMode':
-    case 'localExec':
       noUnknown(settings, [], 'settings');
       return { kind, label, host: noHost(), settings: {} };
   }
@@ -454,8 +435,6 @@ export interface AssignedTool {
   accountId?: string | null;
   /** Cloudflare only: the zone names exposed (null: every zone the token sees). */
   zones?: string[] | null;
-  /** Task files only. */
-  readOnly?: boolean;
 }
 
 export interface ChannelToolAssignment {

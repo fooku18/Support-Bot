@@ -61,11 +61,9 @@ same rules, except where a rule says "stub suite only".
   scenarios use them: a stub scenario takes no tool
   (`stub_scenario_needs_no_tools`), and tool reads without a model are T3
   `tools`, against synthetic services.
-- **GitLab:** only through the test GitLab instance assigned to the test
-  channel. Its token is scoped (Developer role) to the test group. Create or
-  update branches, unmerged MRs, notes and issues only in the test projects
-  named in the scenario fixtures. Never merge, and never write outside those
-  projects.
+- **GitLab:** read-only through the test GitLab instance assigned to the test
+  channel. Its token is scoped to the test group. Assert only facts of the
+  test projects named in the scenario fixtures.
 - **Atlassian:** read-only through the test Atlassian instance (the test site,
   scoped Jira and Confluence read tokens) only. Never use an unscoped or MCP
   token, and never write to Jira or Confluence. Assert only the fixture facts
@@ -103,19 +101,11 @@ same rules, except where a rule says "stub suite only".
   they need a real model, cover nothing another gateway scenario covers
   (extend a thread before adding a scenario), stay cheap (fewest turns,
   deployment default or an operator-preselected model for route acceptance,
-  no coding, publication or web tools unless tested), assert
+  no web tools unless tested), assert
   service-dependent facts, and declare `covers` and `budget`. Do not rerun a
   scenario that passed unchanged; a suite skips it unless `--rerun` is given.
-- Coding and publication changes require a `"mode": "coding"` scenario with
-  published-file assertions. An answer-only or simulated result does not
-  verify coding or GitLab publication. Multi-repository changes assert
-  published files in every published project.
 - Tool scenarios assert facts that depend on the service or the search. A
   scenario that only asserts structural reply text is underspecified.
-- Discovery answers must not edit code, run repository tests, publish or
-  write to GitLab. GitLab writes and publication happen only when the
-  scenario asks for them; assert against the written resource (published
-  files, note or issue marker).
 - New CLI and web integrations need the binary and credential qualified
   before live enablement.
 - A value or fixture marked `<operator: ...>`, or a missing one, is BLOCKED:
@@ -129,9 +119,9 @@ same rules, except where a rule says "stub suite only".
 
 ## Evidence
 
-- Retain test messages, reports, task state and unmerged MRs as evidence. Do
-  not delete messages, reset volumes, merge MRs or clean remote artifacts as
-  an implicit part of testing. The only exception is the own-message step
+- Retain test messages, reports and task state as evidence. Do not delete
+  messages, reset volumes or clean remote artifacts as an implicit part of
+  testing. The only exception is the own-message step
   above, whose snapshot the report keeps.
 - Report the command, the model mode, the scenario or suite, the outcome and
   the report and Slack links. A missing prerequisite is BLOCKED, never a

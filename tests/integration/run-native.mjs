@@ -13,8 +13,8 @@ import { build } from 'esbuild';
 import { parseArgs } from 'node:util';
 import { credentialHits } from './native-tools-evidence.mjs';
 
-const suites = ['discovery', 'application', 'backup', 'coding', 'telemetry', 'tools'];
-const imageSuites = ['backup', 'coding', 'telemetry', 'tools'];
+const suites = ['discovery', 'application', 'backup', 'telemetry', 'tools'];
+const imageSuites = ['backup', 'telemetry', 'tools'];
 const { values } = parseArgs({
   options: {
     suite: { type: 'string', default: 'discovery' },
@@ -27,7 +27,7 @@ const tag = values['image-tag'];
 if (imageSuites.includes(suite) !== Boolean(tag))
   throw new Error(
     imageSuites.includes(suite)
-      ? `--suite ${suite} needs --image-tag <tag> of local ${suite === 'tools' ? 'cli-runtime and egress images' : 'native-coding image'}`
+      ? `--suite ${suite} needs --image-tag <tag> of local ${suite === 'tools' ? 'cli-runtime and egress images' : 'native-answer image'}`
       : `--suite ${suite} takes no --image-tag`,
   );
 if (tag && !/^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/.test(tag)) throw new Error('invalid image tag');
@@ -37,12 +37,12 @@ const { Pool } = createRequire(path.join(repo, 'apps/agent/package.json'))('pg')
 const id = randomBytes(4).toString('hex');
 const root = path.join(repo, 'artifacts', 'native', suite, id);
 fs.mkdirSync(root, { recursive: true, mode: 0o700 });
-// The coding container runs as root without DAC_OVERRIDE and writes here.
+// The image fixture runs as the image's unprivileged user and writes here.
 if (imageSuites.includes(suite) && suite !== 'tools') fs.chmodSync(root, 0o777);
 const prefix = `native-test-${suite}-${id}`;
 const label = `org.support-agent.native-test=${suite}`;
 const pgImage = 'postgres@sha256:f3bd19c606e442c3d7bdfa8002e03fe260a1023351e0ea4598032022b68dd6e3';
-const image = tag && suite !== 'tools' ? `support-agent/native-coding:${tag}` : undefined;
+const image = tag && suite !== 'tools' ? `support-agent/native-answer:${tag}` : undefined;
 const started = Date.now();
 const pgs = [],
   volumes = [],
@@ -320,7 +320,7 @@ async function inProcessSuite() {
   }
 }
 
-// --- backup and coding: real entrypoints inside the native-coding image ------
+// --- backup: real entrypoints inside the native-answer image -----------------
 
 const nodeModules = ['node_modules', 'apps/agent/node_modules', 'apps/slack/node_modules']
   .concat(
@@ -388,9 +388,9 @@ async function prepareImageRun() {
   );
 }
 
-/** One fixture phase in a network-none native-coding container, with the
+/** One fixture phase in a network-none native-answer container, with the
  * same user, capabilities and security options as the Compose service. */
-function imagePhase(phase, { socket, password, store }) {
+function imagePhase(phase, { socket, password }) {
   reserve();
   const args = [
     'run',
@@ -405,20 +405,10 @@ function imagePhase(phase, { socket, password, store }) {
     '--add-host',
     'model-stub:127.0.0.1',
     '--read-only',
-    '--user',
-    '0:0',
     '--cap-drop',
     'ALL',
-    '--cap-add',
-    'SYS_ADMIN',
-    '--cap-add',
-    'NET_ADMIN',
     '--security-opt',
     'no-new-privileges:true',
-    '--security-opt',
-    'seccomp=unconfined',
-    '--security-opt',
-    'apparmor=unconfined',
     '--memory',
     '768m',
     '--pids-limit',
@@ -431,8 +421,6 @@ function imagePhase(phase, { socket, password, store }) {
     `type=bind,src=${root}/native,dst=/app/apps/agent/dist/native,readonly`,
     '--mount',
     `type=bind,src=${root}/tls/cert.pem,dst=/etc/ssl/certs/ca-certificates.crt,readonly`,
-    '--mount',
-    `type=bind,src=${store},dst=/var/lib/native-coding`,
     ...nodeModules.flatMap((dir) => ['--mount', `type=bind,src=${dir},dst=${dir},readonly`]),
     '-e',
     `NATIVE_TEST_ROOT=${root}`,
@@ -503,66 +491,7 @@ async function snapshot(socket) {
   }
 }
 
-/** GNU tar in the image: sparse, PAX, ACLs, xattrs and numeric owners. */
-function workspaceTar(mount, member, file, name) {
-  const dir = path.dirname(file);
-  run(
-    'docker',
-    [
-      'run',
-      '--rm',
-      '--pull=never',
-      '--name',
-      `${prefix}-${name}`,
-      '--label',
-      label,
-      '--network',
-      'none',
-      '--mount',
-      `type=bind,src=${mount},dst=/source,readonly`,
-      '--mount',
-      `type=bind,src=${dir},dst=/out`,
-      '--entrypoint',
-      'tar',
-      image,
-      '--create',
-      '--sparse',
-      '--sort=name',
-      '--format=pax',
-      '--pax-option=delete=atime,delete=ctime',
-      '--acls',
-      '--xattrs',
-      '--numeric-owner',
-      '--file',
-      `/out/${path.basename(file)}`,
-      '--directory',
-      '/source',
-      member,
-    ],
-    { log: `${name}.log` },
-  );
-  return sha256(file);
-}
-
-async function codingSuite() {
-  await prepareImageRun();
-  const socket = socketDir('pg-source');
-  await startPg(`${prefix}-pg`, { socket, hba: path.join(root, 'pg_hba.conf') });
-  const store = mkdir(path.join(root, 'source/native-coding'));
-  const target = { socket, password: path.join(root, 'runtime-secret'), store };
-  for (const phase of [
-    'provision',
-    'answer-only',
-    'coding-compose',
-    'coding-files',
-    'coding-files-cold',
-    'coding-files-unknown',
-  ])
-    imagePhase(phase, target);
-  imageCodeMode();
-}
-
-/** The phases above load the host's node_modules. This one uses only the
+/** The fixture phases load the host's node_modules. This check uses only the
  * image's own production install: it must ship the isolated-vm addon for the
  * image's Node and architecture, and set NODE_OPTIONS=--no-node-snapshot. */
 function imageCodeMode() {
@@ -620,12 +549,11 @@ async function backupSuite() {
   const source = {
     socket: socketDir('pg-source'),
     password: path.join(root, 'runtime-secret'),
-    store: mkdir(path.join(root, 'source/native-coding')),
   };
   const sourcePg = `${prefix}-source-pg`;
   await startPg(sourcePg, { socket: source.socket, hba });
-  for (const phase of ['provision', 'backup-source', 'coding-files', 'coding-backup-source'])
-    imagePhase(phase, source);
+  for (const phase of ['provision', 'answer-only', 'backup-source']) imagePhase(phase, source);
+  imageCodeMode();
 
   // Every writer has stopped with its fixture container. Snapshot, dump, recheck.
   const out = mkdir(path.join(root, 'backup'));
@@ -659,27 +587,12 @@ async function backupSuite() {
     }),
   );
   assert.deepEqual(await snapshot(source.socket), before, 'source changed while dumping');
-  const workspace = path.join(out, 'coding-workspace.tar');
-  const workspaceSha = workspaceTar(
-    path.join(root, 'source'),
-    'native-coding',
-    workspace,
-    'tar-source',
-  );
-  const recheck = workspaceTar(
-    path.join(root, 'source'),
-    'native-coding',
-    path.join(out, 'coding-workspace-recheck.tar'),
-    'tar-recheck',
-  );
-  assert.equal(recheck, workspaceSha, 'source workspace changed while archiving');
   docker('stop', sourcePg);
 
   // Fresh destination: new cluster, a new runtime login with a fresh secret, then restore.
   const restore = {
     socket: socketDir('pg-restore'),
     password: path.join(root, 'restore-runtime-secret'),
-    store: path.join(root, 'restore/native-coding'),
   };
   const restorePg = `${prefix}-restore-pg`;
   await startPg(restorePg, { socket: restore.socket, hba });
@@ -738,54 +651,12 @@ async function backupSuite() {
     );
   assert(!/CREATE ROLE|ALTER ROLE|PASSWORD/.test(script), 'archive holds roles or passwords');
 
-  mkdir(path.join(root, 'restore'));
-  run(
-    'docker',
-    [
-      'run',
-      '--rm',
-      '--pull=never',
-      '--name',
-      `${prefix}-untar`,
-      '--label',
-      label,
-      '--network',
-      'none',
-      '--mount',
-      `type=bind,src=${out},dst=/backup,readonly`,
-      '--mount',
-      `type=bind,src=${root}/restore,dst=/restore`,
-      '--entrypoint',
-      'tar',
-      image,
-      '--extract',
-      '--acls',
-      '--xattrs',
-      '--same-owner',
-      '--numeric-owner',
-      '--file',
-      `/backup/${path.basename(workspace)}`,
-      '--directory',
-      '/restore',
-    ],
-    { log: 'untar.log' },
-  );
-  const restoredSha = workspaceTar(
-    path.join(root, 'restore'),
-    'native-coding',
-    path.join(out, 'coding-workspace-restored.tar'),
-    'tar-restored',
-  );
-  assert.equal(restoredSha, workspaceSha, 'restored workspace differs');
-
-  for (const phase of ['backup-restore', 'coding-backup-restore']) imagePhase(phase, restore);
+  imagePhase('backup-restore', restore);
   summary.backup = {
     archiveSha256: sha256(archive),
-    workspaceSha256: workspaceSha,
     tables: Object.keys(before.rows).length,
     rows: Object.values(before.rows).reduce((n, r) => n + r.count, 0),
     rowsAndCatalogEqual: true,
-    workspaceEqual: true,
   };
 }
 
@@ -1200,7 +1071,6 @@ async function toolsSuite() {
 try {
   reserve();
   if (suite === 'discovery' || suite === 'application') await inProcessSuite();
-  else if (suite === 'coding') await codingSuite();
   else if (suite === 'backup') await backupSuite();
   else if (suite === 'tools') await toolsSuite();
   else await telemetrySuite();

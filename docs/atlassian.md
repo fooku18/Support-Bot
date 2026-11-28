@@ -138,7 +138,7 @@ about the release checklist".
    <https://id.atlassian.com/manage-profile/security/api-tokens>.
 
 A token change starts fresh agent sessions in existing threads; the thread
-history and workspace are kept.
+history is kept.
 
 ## Troubleshooting
 

@@ -44,9 +44,6 @@ export async function provisionNativeApplication(pool: Pool) {
     GRANT INSERT,UPDATE(input_receipts) ON native_agents.requests TO native_answer;
     GRANT INSERT ON native_agents.actions TO native_answer;
     GRANT INSERT,UPDATE(outcome,slack_ts) ON native_agents.deliveries TO native_answer;
-    GRANT INSERT,UPDATE(outcome,evidence)
-      ON native_agents.publications TO native_answer;
-    GRANT INSERT,UPDATE(receipt) ON native_agents.exports TO native_answer;
   `);
 }
 
@@ -78,14 +75,6 @@ export async function checkNativeStorage(pool: Pool) {
     throw new Error('native storage identity, grants or seal refused');
   await pool.query('SELECT run_id,input_receipts FROM native_agents.requests LIMIT 0');
   await pool.query('SELECT operation_id,outcome FROM native_agents.deliveries LIMIT 0');
-  const grants = (
-    await pool.query(`SELECT
-        has_table_privilege(current_user,'native_agents.publications','INSERT') AS insert,
-        has_column_privilege(current_user,'native_agents.publications','outcome','UPDATE') AS outcome,
-        has_column_privilege(current_user,'native_agents.publications','evidence','UPDATE') AS evidence`)
-  ).rows[0];
-  if (!grants.insert || !grants.outcome || !grants.evidence)
-    throw new Error('native publication receipts unavailable');
   const storage = nativeStore(pool);
   const workflows = await storage.getStore('workflows');
   if (!workflows) throw new Error('native framework storage unavailable');

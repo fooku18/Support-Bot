@@ -215,8 +215,8 @@ export function nativeReadServices(options: {
             const response = await gitlabViaRuntime(
               {
                 ...ref(gitlab.instanceId),
-                // The capture bound of the coding path; the shared
-                // normalization bounds what reaches the model.
+                // The capture bound; the shared normalization bounds what
+                // reaches the model.
                 maxOutputBytes: 200000,
                 operation: validated.kind,
                 operationArgs: validated,
@@ -228,8 +228,8 @@ export function nativeReadServices(options: {
             );
             if (response.status === 'not_run')
               return { refused: (response.refused ?? response.output).slice(0, 300) };
-            // The same normalization as the coding path: bounded fields and
-            // collections, the trace report, the decoded repository file.
+            // Bounded fields and collections, the trace report, the decoded
+            // repository file.
             return normalizeGitlabOutput({
               operation: validated.kind,
               project: operationScopeLabel(validated),

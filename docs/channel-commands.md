@@ -17,7 +17,7 @@ cancel or continue agent work.
 
 The native adapter routes these commands directly to the admin command service,
 including private configuration interactions and durable receipts. They never
-start an answer or coding run. Keep a space after the mention so Slack sends its
+start an answer run. Keep a space after the mention so Slack sends its
 mention event. An unmentioned thread reply starting with `!` stays silent;
 mention the bot directly to invoke a command or receive usage.
 
@@ -80,10 +80,8 @@ their revision and page and split long pages into bounded receipt parts.
 
 A real inference run pins an authoritative snapshot at its first claim.
 Retries and repairs keep that snapshot. Later newly pinned runs see new
-notes; a changed content hash rotates a coding session while preserving its
-workspace, branches and merge requests. Notes are reference material below
-fixed rules and effective channel instructions. They grant no tool or
-publication authority. Direct command messages and command receipts are
+notes. Notes are reference material below fixed rules and effective channel
+instructions. They grant no tool authority. Direct command messages and command receipts are
 excluded from operational conversation history.
 
 If memory cannot be read, the run stays queued and the runner continues

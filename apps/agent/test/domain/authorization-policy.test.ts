@@ -161,7 +161,7 @@ describe('authorization policy', () => {
                 {
                   actions: ['skill.use'],
                   resourceType: 'tool',
-                  resources: ['files'],
+                  resources: ['gitlab'],
                 },
               ],
             },

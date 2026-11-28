@@ -88,7 +88,6 @@ export function createNativeAgentAuthority(
           instructions,
           tools: current.tools,
           limits: options.limits,
-          coding: options.coding?.version ?? null,
           inputs: options.inputs ? NATIVE_INPUT_VERSION : null,
           agent: NATIVE_AGENT_VERSION,
         }),

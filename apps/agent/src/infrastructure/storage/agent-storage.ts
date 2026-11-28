@@ -5,7 +5,7 @@ import type { IdentityRow } from '../../application/agent-options.js';
 import { digest, fail } from '../../application/agent-support.js';
 import type { NativeInputReceipt } from '../../domain/files/native-inputs.js';
 
-/** Explicit fresh-store provisioning. Only identity/input provenance, admission, publication and delivery effects
+/** Explicit fresh-store provisioning. Only identity/input provenance, admission and delivery effects
  * belong to this application schema. No execution snapshots or transcript tables. */
 export async function provisionNativeAgents(pool: Pool) {
   await pool.query(`CREATE SCHEMA native_agents;
@@ -22,16 +22,7 @@ export async function provisionNativeAgents(pool: Pool) {
     CREATE TABLE native_agents.deliveries (
       run_id uuid PRIMARY KEY REFERENCES native_agents.requests,
       operation_id uuid NOT NULL UNIQUE, text text NOT NULL, sha256 text NOT NULL,
-      bytes integer NOT NULL, outcome text NOT NULL, slack_ts text);
-    CREATE TABLE native_agents.publications (
-      task_key text NOT NULL, run_id uuid NOT NULL REFERENCES native_agents.requests,
-      project text NOT NULL, outcome text NOT NULL, evidence jsonb,
-      PRIMARY KEY(run_id,project));
-    CREATE TABLE native_agents.exports (
-      id text PRIMARY KEY, run_id uuid NOT NULL REFERENCES native_agents.requests,
-      path text NOT NULL, name text NOT NULL, sha256 text NOT NULL,
-      content bytea NOT NULL CHECK(octet_length(content) BETWEEN 1 AND 2097152),
-      receipt jsonb, UNIQUE(run_id,path));`);
+      bytes integer NOT NULL, outcome text NOT NULL, slack_ts text);`);
 }
 
 const ignoreHeldConnectionError = () => undefined;
@@ -175,8 +166,7 @@ export function createNativeAgentStorage(pool: Pool) {
     return found.rows[0]?.action.slice('model:'.length);
   }
   async function inputReceipts(r: IdentityRow): Promise<NativeInputReceipt[]> {
-    // Delivery can still expose legacy answers, and the coding Workspace keeps
-    // original files across model conversations. Effect authorization checks
+    // Delivery can still expose legacy answers. Effect authorization checks
     // every retained source. Admission keeps the original task-wide bound.
     const rows = await pool.query<{ input_receipts: NativeInputReceipt[] }>(
       "SELECT input_receipts FROM native_agents.requests WHERE task_key=$1 AND input_receipts <> '[]'::jsonb",
@@ -202,14 +192,6 @@ export function createNativeAgentStorage(pool: Pool) {
     );
     return result.rows[0].n as number;
   }
-  async function publicationReceipts(r: IdentityRow) {
-    return (
-      await pool.query(
-        "SELECT run_id,project,outcome,evidence FROM native_agents.publications WHERE task_key=$1 AND (run_id=$2 OR outcome='uncertain') ORDER BY run_id,project",
-        [r.task_key, r.run_id],
-      )
-    ).rows;
-  }
   async function retain(r: IdentityRow, text: string) {
     await pool.query(
       `INSERT INTO native_agents.deliveries VALUES($1,$2,$3,$4,$5,'retained',NULL)
@@ -229,7 +211,6 @@ export function createNativeAgentStorage(pool: Pool) {
     runModel,
     inputReceipts,
     sequence,
-    publicationReceipts,
     retain,
   };
 }

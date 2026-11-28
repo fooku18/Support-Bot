@@ -11,7 +11,7 @@ execution, metrics, traces and logs.
 | Assign tools to a channel                                           | Application settings                                              |
 | Set a channel's model, additional instructions or automatic replies | Application settings, or `@Support Agent !config` where permitted |
 | Inspect configuration changes and Gateway accounting                | Application settings                                              |
-| Try the agent, inspect Workspace files, answer an agent question    | Mastra Studio                                                     |
+| Try the agent, answer an agent question                             | Mastra Studio                                                     |
 | Inspect execution timing, token usage, traces and safe logs         | Mastra Studio                                                     |
 
 The settings service remains the source of channel authorization and service

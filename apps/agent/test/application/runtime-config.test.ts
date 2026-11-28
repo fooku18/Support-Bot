@@ -60,15 +60,14 @@ it('keeps socket maintenance distinct from authenticated TCP', () => {
   expect(() => maintenanceConnection({ NATIVE_PG_HOST: 'pg' })).toThrow('NATIVE_PG_ADMIN_PASSWORD');
 });
 
-it.each([
-  { CLI_RUNTIME_URL: 'http://cli' },
-  { CLI_RUNTIME_TOKEN: 'fixture' },
-  { NATIVE_CODING_STORE: tmpdir() },
-])('refuses incomplete CLI configuration before connecting', async (env) => {
-  await expect(startNativeAnswerProcess(env)).rejects.toThrow(
-    'CLI_RUNTIME_URL and CLI_RUNTIME_TOKEN',
-  );
-});
+it.each([{ CLI_RUNTIME_URL: 'http://cli' }, { CLI_RUNTIME_TOKEN: 'fixture' }])(
+  'refuses incomplete CLI configuration before connecting',
+  async (env) => {
+    await expect(startNativeAnswerProcess(env)).rejects.toThrow(
+      'CLI_RUNTIME_URL and CLI_RUNTIME_TOKEN',
+    );
+  },
+);
 
 it('defaults blank TCP settings and validates the port and TLS policy', () => {
   const env = {

@@ -141,7 +141,7 @@ try {
     };
     const adapter = service('adapter'),
       cli = service('native-cli-runtime');
-    const image = `support-agent/native-coding:${d.env.NATIVE_IMAGE_TAG}`;
+    const image = `support-agent/native-answer:${d.env.NATIVE_IMAGE_TAG}`;
     docker(['image', 'inspect', '--format', '{{.Id}}', image]);
     // Preserve npm's root/app hierarchy: CLI transitives may be hoisted,
     // while conflicting application and nested CLI versions must stay local.
@@ -151,7 +151,6 @@ try {
     // group, not DAC_OVERRIDE.
     for (const dir of [app, path.join(app, 'src'), path.join(app, 'src/mastra')])
       fs.chmodSync(dir, 0o770);
-    fs.mkdirSync(path.join(root, 'workspaces'), { recursive: true });
     // Native runtime factory imports are bundled from THIS checkout; packages
     // resolve from the exact workspace lock, including the pinned Mastra CLI.
     await build({
@@ -394,7 +393,6 @@ try {
       ...(publicOrigin ? { STUDIO_PUBLIC_ORIGIN: new URL(publicOrigin).origin } : {}),
       STUDIO_TEAM_ID: harness.E2E_SLACK_TEAM_ID,
       STUDIO_CHANNEL_ID: harness.E2E_SLACK_CHANNEL_ID,
-      NATIVE_CODING_STORE: '/var/lib/native-coding',
       NATIVE_PG_HOST: 'studio-postgres',
       NATIVE_PG_PASSWORD_FILE: '/run/secrets/native_runtime_password',
       NATIVE_ADAPTER_URL: `http://${adapter}:9881`,
@@ -441,7 +439,6 @@ try {
       { mode: 0o600 },
     );
     fs.chmodSync(path.join(root, 'password'), 0o640);
-    fs.chmodSync(path.join(root, 'workspaces'), 0o770);
     if (
       !state.uiNetwork ||
       !docker(['network', 'ls', '-q', '--filter', `name=^${state.uiNetwork}$`]).trim()
@@ -471,16 +468,8 @@ try {
       '256',
       '--cap-drop',
       'ALL',
-      '--cap-add',
-      'SYS_ADMIN',
-      '--cap-add',
-      'NET_ADMIN',
       '--security-opt',
       'no-new-privileges:true',
-      '--security-opt',
-      'seccomp=unconfined',
-      '--security-opt',
-      'apparmor=unconfined',
       '--network',
       state.uiNetwork,
       '-p',
@@ -513,8 +502,6 @@ try {
       ...providerMounts.flatMap(({ env, target }) => ['-v', `${d.env[env]}:${target}:ro`]),
       '-v',
       `${root}:/studio`,
-      '-v',
-      `${root}/workspaces:/var/lib/native-coding`,
       '-v',
       `${repo}/node_modules:/studio/node_modules:ro`,
       '-v',

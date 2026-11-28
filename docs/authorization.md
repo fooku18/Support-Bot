@@ -24,8 +24,8 @@ trusted sender restriction described in [testing](testing.md).
 The application and adapter synchronize the compiled settings document.
 The application requires validated configuration before admission.
 An unavailable settings service can delay policy updates. Current
-membership, source and policy checks guard provider dispatch, service calls,
-publication and delivery. Changes to authority do not erase existing
+membership, source and policy checks guard provider dispatch, service calls
+and delivery. Changes to authority do not erase existing
 messages or confirmed effects.
 
 The original requester owns the [current thread's controls](agent-progress.md).
@@ -55,19 +55,18 @@ agent's authenticated operations endpoints to the public internet.
 
 Create instances in the workspace's **Tools** page, check readiness and
 assign them per channel. The settings and CLI runtime hold credentials
-outside model context and coding workspaces.
+outside model context.
 
-| Integration                         | Channel configuration                                                         |
-| ----------------------------------- | ----------------------------------------------------------------------------- |
-| [GitLab](gitlab.md)                 | Scope the token to the projects the channel may use; there is no allowlist.   |
-| [Jira and Confluence](atlassian.md) | Set the site and cloud ID and use scoped read-only credentials.               |
-| [Datadog](datadog.md)               | Use a PAT or SAT with `mcp_read` and required read scopes.                    |
-| [Cloudflare](cloudflare.md)         | Use an account or zone-scoped Read token.                                     |
-| [Slack](slack-tool.md)              | Reuse the installed workspace bot token for linked messages and lookup.       |
-| Web search                          | Assign the provider search tool. Requests use the selected model connection.  |
-| Web fetch                           | Assign the read tool and enable the isolated web runtime or the page reader.  |
-| Code Mode                           | Assign it next to read tools. With a coding workspace it is always available. |
-| Coding and files                    | Use the isolated workspace and explicit export or publication tools.          |
+| Integration                         | Channel configuration                                                        |
+| ----------------------------------- | ---------------------------------------------------------------------------- |
+| [GitLab](gitlab.md)                 | Scope the token to the projects the channel may use; there is no allowlist.  |
+| [Jira and Confluence](atlassian.md) | Set the site and cloud ID and use scoped read-only credentials.              |
+| [Datadog](datadog.md)               | Use a PAT or SAT with `mcp_read` and required read scopes.                   |
+| [Cloudflare](cloudflare.md)         | Use an account or zone-scoped Read token.                                    |
+| [Slack](slack-tool.md)              | Reuse the installed workspace bot token for linked messages and lookup.      |
+| Web search                          | Assign the provider search tool. Requests use the selected model connection. |
+| Web fetch                           | Assign the read tool and enable the isolated web runtime or the page reader. |
+| Code Mode                           | Assign it next to read tools.                                                |
 
 Service endpoints and allowed names are bounded by the deployment
 configuration. A ready tool in another workspace or channel does not grant
@@ -81,16 +80,7 @@ Channel settings can choose an available model and standing instructions.
 Channel values take precedence over workspace defaults, with the deployment
 default as the final model fallback. Use the settings UI or the authorized
 [channel commands](channel-commands.md). Model instructions do not alter
-the compiled permissions or the isolated workspace boundary.
-
-## GitLab publication
-
-The assigned GitLab instance and the current authorization bound the clone
-and publication targets. Scope its credential to the projects the bot should
-work on and protect their default branches. Publication requires an explicitly
-requested, verified tree and targets the task's branch and review request.
-The bot does not merge. Unknown external effects are retained for operator
-inspection and are not automatically replayed.
+the compiled permissions.
 
 Check changes to these boundaries using the
 [designated test configuration](testing.md). Preserve the audit trail and

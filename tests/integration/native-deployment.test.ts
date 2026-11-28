@@ -228,9 +228,7 @@ describe('native deployment conversion', () => {
     expect(stub.ports).toBeUndefined();
     expect(stub.secrets).toBeUndefined();
     expect(JSON.stringify(stub.healthcheck.test)).toContain('/healthz');
-    expect(c.services['native-answer'].environment.NATIVE_CODING_STORE).toBe(
-      '/var/lib/native-coding',
-    );
+    expect(c.services['native-answer'].environment).not.toHaveProperty('NATIVE_CODING_STORE');
     expect(c.services['native-answer'].environment).not.toHaveProperty('NATIVE_TEMPLATE');
     expect(c.networks.nativedb.internal).toBe(true);
     expect(c.networks.frontend.internal).toBe(true);
@@ -271,7 +269,7 @@ describe('native deployment conversion', () => {
     expect(f.calls()).toEqual([]);
     expect(fs.existsSync(f.marker)).toBe(false);
   });
-  it('selects coding on the same receiver with retained storage and explicit sandbox isolation', () => {
+  it('runs the agent from the unprivileged native-answer image without a workspace', () => {
     const f = fixture();
     const r = f.run('deploy-preflight.mjs', ['--env-file', path.join(f.dir, '.env.testing')]);
     expect(r.status, r.stderr).toBe(0);
@@ -281,15 +279,15 @@ describe('native deployment conversion', () => {
       true,
     );
     const c = parse(fs.readFileSync('deploy/compose.yaml', 'utf8'));
-    expect(c.services['native-answer'].build.target).toBe('native-coding');
-    expect(c.services['native-answer'].environment.CLI_RUNTIME_URL).toBe(
-      'http://native-cli-runtime:9877',
-    );
-    expect(c.services['native-answer'].cap_add).toEqual(['SYS_ADMIN', 'NET_ADMIN']);
-    expect(c.services['native-answer'].privileged).toBeUndefined();
-    expect(c.services['native-answer'].volumes).toContain(
-      'native-coding-data:/var/lib/native-coding',
-    );
+    const agent = c.services['native-answer'];
+    expect(agent.build.target).toBe('native-answer');
+    expect(agent.environment.CLI_RUNTIME_URL).toBe('http://native-cli-runtime:9877');
+    expect(agent.cap_drop).toEqual(['ALL']);
+    expect(agent.cap_add).toBeUndefined();
+    expect(agent.user).toBeUndefined();
+    expect(agent.privileged).toBeUndefined();
+    expect(agent.security_opt).toEqual(['no-new-privileges:true']);
+    expect(agent.volumes).toBeUndefined();
   });
   it('writes a native drain marker only for authenticated idle status', () => {
     const f = fixture(),
