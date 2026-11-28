@@ -210,7 +210,7 @@ describe('native deployment conversion', () => {
       ['on', ''],
       ['off', 'synthetic-slack'],
       ['disabled', 'synthetic-slack'],
-    ]) {
+    ] as Array<[string, string]>) {
       const f = fixture();
       f.env.SLACK_SOCKET_MODE = mode;
       f.env.SLACK_APP_TOKEN = token;
