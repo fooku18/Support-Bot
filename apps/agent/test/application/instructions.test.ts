@@ -39,8 +39,24 @@ describe('support playbook', () => {
     expect(supportPlaybook).toMatch(/no earlier report was found/i);
   });
 
+  it('starts from leads already in the thread', () => {
+    expect(supportPlaybook).toMatch(/leads already in the thread/i);
+  });
+
+  it('puts a possibly broken monitor first', () => {
+    expect(supportPlaybook).toMatch(/monitoring itself is broken.*first sentence/i);
+  });
+
+  it('counts listed items before stating a number', () => {
+    expect(supportPlaybook).toMatch(/count the items you list/i);
+  });
+
+  it('does not repeat personal data from the thread', () => {
+    expect(supportPlaybook).toMatch(/do not repeat customer names, email or IP addresses/i);
+  });
+
   it('stays compact because it is sent on every step', () => {
-    expect(supportPlaybook.length).toBeLessThanOrEqual(2400);
+    expect(supportPlaybook.length).toBeLessThanOrEqual(2800);
   });
 });
 
