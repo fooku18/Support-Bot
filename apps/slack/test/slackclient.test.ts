@@ -10,6 +10,7 @@ import {
   replyBlocks,
   MAX_FOOTER_CHARS,
   QUESTION_ACTION,
+  FEEDBACK_ACTION,
   SLACK_TEXT_CHARS,
   SlackPostError,
 } from '../src/slackclient.js';
@@ -177,6 +178,45 @@ describe('answer footer', () => {
       },
     ]);
     expect(flattenOwnAnswer({ text: args.text, blocks: args.blocks })).toBe('Which market?');
+  });
+
+  it('puts the feedback buttons under a final answer, outside text and context', async () => {
+    const post = vi.fn(async () => ({ ok: true, message: { ts: '1.000005' } }));
+    const webClient = { chat: { postMessage: post } } as unknown as WebClient;
+    await postMessage(
+      { webClient, botUserId: 'UBOT' },
+      {
+        channel: 'CTEST',
+        thread_ts: '1.000005',
+        text: 'The answer.',
+        footer: 'Done',
+        feedbackRunId: 'run-1',
+        delivery: { operationId: 'out-1-feedback', revision: 1, answer: true },
+      },
+    );
+    const args = (post.mock.calls[0] as unknown as [{ text: string; blocks: unknown[] }])[0];
+    expect(args.blocks.slice(1)).toEqual([
+      { type: 'context', elements: [{ type: 'mrkdwn', text: 'Done' }] },
+      {
+        type: 'actions',
+        block_id: FEEDBACK_ACTION,
+        elements: [
+          {
+            type: 'button',
+            action_id: `${FEEDBACK_ACTION}:up`,
+            text: { type: 'plain_text', text: 'Helpful' },
+            value: 'run-1',
+          },
+          {
+            type: 'button',
+            action_id: `${FEEDBACK_ACTION}:down`,
+            text: { type: 'plain_text', text: 'Not helpful' },
+            value: 'run-1',
+          },
+        ],
+      },
+    ]);
+    expect(flattenOwnAnswer({ text: args.text, blocks: args.blocks })).toBe('The answer.');
   });
 
   it('omits an empty footer and bounds a long one', () => {

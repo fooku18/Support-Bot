@@ -51,6 +51,7 @@ import {
   StoreError,
   type AdminStore,
   type AdminUser,
+  type AnswerVote,
   type Installation,
   type ToolInstance,
   type ToolStatusReport,
@@ -93,6 +94,7 @@ const DAY_MS = 86_400_000;
 const TEAM_ID = /^T[A-Z0-9]{1,31}$/;
 const CHANNEL_ID = /^[CG][A-Z0-9]{1,31}$/;
 const USER_ID = /^[UW][A-Z0-9]{1,31}$/;
+const SLACK_TS = /^\d{1,12}\.\d{1,9}$/;
 const USER_ID_ERROR = 'use an exact Slack user ID starting with U or W';
 const BOT_ID = /^B[A-Z0-9]{1,31}$/;
 /**
@@ -565,6 +567,21 @@ export function createApp(deps: AppDeps): AdminApp {
             Math.min(Number(b.deadline), Date.now() + 1800),
           );
           break;
+        case 'feedback': {
+          if (
+            !TEAM_ID.test(String(b.teamId)) ||
+            !CHANNEL_ID.test(String(b.channelId)) ||
+            !USER_ID.test(String(b.userId)) ||
+            !RUN_ID.test(String(b.runId)) ||
+            !SLACK_TS.test(String(b.rootTs)) ||
+            !SLACK_TS.test(String(b.answerTs)) ||
+            (b.vote !== 'up' && b.vote !== 'down')
+          )
+            throw new HttpError(400, 'invalid feedback');
+          await store.recordFeedback(b as unknown as AnswerVote);
+          result = { ok: true };
+          break;
+        }
         case 'snapshot':
           result = await commands.snapshot(String(b.teamId), String(b.channelId));
           break;
@@ -1539,7 +1556,12 @@ export function createApp(deps: AppDeps): AdminApp {
       const live = liveRegion(['costs']);
       htmlPage(
         res,
-        costsPage(await pageContext(session), await costsView(req.query, 'channel'), live),
+        costsPage(
+          await pageContext(session),
+          await costsView(req.query, 'channel'),
+          live,
+          await store.answerFeedback(),
+        ),
       );
       return;
     }

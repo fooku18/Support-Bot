@@ -718,10 +718,19 @@ async function inputAnswer(a: Awaited<ReturnType<typeof attach>>, expected: stri
   assert.equal(delivered.outcome, 'delivered');
   const wire = new URLSearchParams(slackBytes.at(-1));
   assert.equal(wire.get('text'), expected);
-  assert.deepEqual(JSON.parse(wire.get('blocks')!).at(-1), {
+  assert.deepEqual(JSON.parse(wire.get('blocks')!).at(-2), {
     type: 'context',
     elements: [{ type: 'mrkdwn', text: '✅ Done · Model: *test*' }],
   });
+  assert.deepEqual(
+    JSON.parse(wire.get('blocks')!)
+      .at(-1)
+      .elements.map((e: any) => [e.action_id, e.value]),
+    [
+      ['answer_feedback:up', a.handle.runId],
+      ['answer_feedback:down', a.handle.runId],
+    ],
+  );
   return { result, delivered, receipt };
 }
 try {
@@ -1555,7 +1564,7 @@ try {
         assert.equal(request.model, 'synthetic-alt');
         assert.match(JSON.stringify(request.system), /CHANNEL_PROMPT_MARKER_115/);
         assert.equal(((await adapter.deliver(wireArgs(a))) as any).outcome, 'delivered');
-        assert.deepEqual(JSON.parse(new URLSearchParams(slackBytes.at(-1)).get('blocks')!).at(-1), {
+        assert.deepEqual(JSON.parse(new URLSearchParams(slackBytes.at(-1)).get('blocks')!).at(-2), {
           type: 'context',
           elements: [{ type: 'mrkdwn', text: '✅ Done · Model: *alt*' }],
         });
@@ -1570,7 +1579,7 @@ try {
         channelModel = null;
         channelPrompt = null;
         assert.equal(((await adapter.deliver(wireArgs(held))) as any).outcome, 'delivered');
-        assert.deepEqual(JSON.parse(new URLSearchParams(slackBytes.at(-1)).get('blocks')!).at(-1), {
+        assert.deepEqual(JSON.parse(new URLSearchParams(slackBytes.at(-1)).get('blocks')!).at(-2), {
           type: 'context',
           elements: [{ type: 'mrkdwn', text: '✅ Done · Model: *alt*' }],
         });
@@ -1755,7 +1764,7 @@ try {
         assert.equal(slackBytes.length, posts + 1);
         const wire = new URLSearchParams(slackBytes.at(-1));
         assert.match(wire.get('text')!, /Native answer/);
-        assert.deepEqual(JSON.parse(wire.get('blocks')!).at(-1), {
+        assert.deepEqual(JSON.parse(wire.get('blocks')!).at(-2), {
           type: 'context',
           elements: [{ type: 'mrkdwn', text: '✅ Done · Model: *alt*' }],
         });

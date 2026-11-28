@@ -86,7 +86,11 @@ describe('delivery after a settings change or an authorization change', () => {
     });
     expect(f.delivery.outcome).toBe('delivered');
     expect(send).toHaveBeenCalledOnce();
-    expect(send.mock.calls[0]![0]).toMatchObject({ text, footer: '✅ Done · Model: *alt*' });
+    expect(send.mock.calls[0]![0]).toMatchObject({
+      text,
+      footer: '✅ Done · Model: *alt*',
+      feedbackRunId: runId,
+    });
     expect(f.log.info.mock.calls).toEqual([
       [`native delivery policy_changed_delivered run_id=${runId}`],
     ]);

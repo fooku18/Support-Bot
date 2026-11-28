@@ -79,6 +79,26 @@ export interface ToolInstance extends ToolInstanceRow {
 }
 
 export type ToolStatus = ToolStatusRow;
+
+export interface AnswerVote {
+  runId: string;
+  userId: string;
+  teamId: string;
+  channelId: string;
+  rootTs: string;
+  answerTs: string;
+  vote: 'up' | 'down';
+}
+
+export interface AnswerFeedback {
+  channelId: string;
+  rootTs: string;
+  answerTs: string;
+  runId: string;
+  up: number;
+  down: number;
+  lastAt: number;
+}
 export type ChannelTool = ChannelToolRow;
 
 /** One readiness report from a runtime. */
@@ -1542,6 +1562,43 @@ export class AdminStore {
       }
       return { requests, runs };
     });
+  }
+
+  async recordFeedback(vote: AnswerVote): Promise<void> {
+    await this.run(
+      `INSERT INTO answer_feedback (run_id, user_id, team_id, channel_id, root_ts, answer_ts, vote, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (run_id, user_id) DO UPDATE SET vote = excluded.vote, updated_at = excluded.updated_at`,
+      vote.runId,
+      vote.userId,
+      vote.teamId,
+      vote.channelId,
+      vote.rootTs,
+      vote.answerTs,
+      vote.vote,
+      Date.now(),
+    );
+  }
+
+  async answerFeedback(limit = 50): Promise<AnswerFeedback[]> {
+    const rows = await this.all(
+      `SELECT channel_id, root_ts, answer_ts, run_id,
+         SUM(CASE WHEN vote = 'up' THEN 1 ELSE 0 END) AS up,
+         SUM(CASE WHEN vote = 'down' THEN 1 ELSE 0 END) AS down,
+         MAX(updated_at) AS last
+       FROM answer_feedback GROUP BY channel_id, root_ts, answer_ts, run_id
+       ORDER BY last DESC LIMIT ?`,
+      limit,
+    );
+    return rows.map((row) => ({
+      channelId: String(row.channel_id),
+      rootTs: String(row.root_ts),
+      answerTs: String(row.answer_ts),
+      runId: String(row.run_id),
+      up: Number(row.up),
+      down: Number(row.down),
+      lastAt: Number(row.last),
+    }));
   }
 
   /** Upstream attempts grouped by the route and connection that executed each one. */

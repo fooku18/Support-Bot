@@ -3,7 +3,7 @@ import type { ReceiverDeps } from '../src/receiver.js';
 import { handleEnvelope } from '../src/receiver.js';
 import { testInstallation } from './helpers/installations.js';
 import { CONFIGURE_ACTION, CONFIGURE_CALLBACK } from '../src/channel-commands.js';
-import { QUESTION_ACTION } from '../src/slackclient.js';
+import { FEEDBACK_ACTION, QUESTION_ACTION } from '../src/slackclient.js';
 import { classifyChannelCommand } from '../src/generated/channel-commands.js';
 import type { MentionEvent } from '../src/intake.js';
 
@@ -454,6 +454,61 @@ describe('native startup command routing at the Socket Mode call site', () => {
     await reply('CZ');
     expect(resumes()).toHaveLength(2);
     expect(postEphemeral).toHaveBeenCalledOnce();
+  });
+
+  it('stores a feedback click through admin and confirms it privately', async () => {
+    const { interact, calls, responses, postEphemeral } = await setup();
+    const run = '0b6f4c1e-8d2a-4c39-9b8e-2f7d1a5c3e90';
+    const click = (vote: string, value = run, ack = vi.fn()) =>
+      interact(
+        {
+          type: 'block_actions',
+          team: { id: 'T1' },
+          user: { id: 'U2' },
+          channel: { id: 'C1' },
+          container: {
+            type: 'message',
+            message_ts: '1792940000.000002',
+            thread_ts: '1792940000.000001',
+          },
+          actions: [{ type: 'button', action_id: `${FEEDBACK_ACTION}:${vote}`, value }],
+        },
+        ack,
+      );
+    const ack = vi.fn();
+    await click('up', run, ack);
+    expect(ack).toHaveBeenCalledOnce();
+    expect(calls.filter((c) => c.path.endsWith('/feedback')).map((c) => c.body)).toEqual([
+      {
+        teamId: 'T1',
+        channelId: 'C1',
+        rootTs: '1792940000.000001',
+        answerTs: '1792940000.000002',
+        runId: run,
+        userId: 'U2',
+        vote: 'up',
+      },
+    ]);
+    expect(calls.find((c) => c.path.endsWith('/feedback'))?.path).toBe(
+      '/internal/channel-commands/feedback',
+    );
+    expect(postEphemeral).toHaveBeenCalledExactlyOnceWith({
+      channel: 'C1',
+      user: 'U2',
+      thread_ts: '1792940000.000001',
+      text: 'Thanks, your vote was saved: Helpful.',
+    });
+    await click('sideways');
+    await click('down', 'not-a-run');
+    expect(calls.filter((c) => c.path.endsWith('/feedback'))).toHaveLength(1);
+    responses.set('/internal/channel-commands/feedback', () =>
+      Response.json({ error: 'You do not currently belong to this channel.' }, { status: 403 }),
+    );
+    await click('down');
+    expect(postEphemeral).toHaveBeenLastCalledWith(
+      expect.objectContaining({ text: 'Your vote could not be saved.' }),
+    );
+    expect(calls.some((c) => c.path.startsWith('/agents/'))).toBe(false);
   });
 
   it("answers a suspended question with the requester's button click only", async () => {

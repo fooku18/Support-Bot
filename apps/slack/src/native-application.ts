@@ -25,6 +25,9 @@ import {
   addReaction,
   markQuestionAnswered,
   QUESTION_ACTION,
+  FEEDBACK_ACTION,
+  FEEDBACK_VOTES,
+  type FeedbackVote,
 } from './slackclient.js';
 import { buildTaskKey, parseTaskKey, type TaskIdentity } from './taskkey.js';
 import { ChannelCommandHandler, CommandClient } from './channel-commands.js';
@@ -40,6 +43,8 @@ function controlText(request: { text: string; canonicalText: string }) {
     request.text ? flattenMessageContent({ text: request.text }) : request.canonicalText,
   );
 }
+
+const RUN_ID = /^[a-f0-9-]{36}$/;
 
 type ThreadState = {
   runId: string;
@@ -92,14 +97,11 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
     agent,
     log,
   });
-  const commands = new ChannelCommandHandler(
-    new CommandClient(
-      privateUrl(required(env, 'ADMIN_URL')),
-      required(env, 'ADMIN_INTERNAL_TOKEN'),
-    ),
-    installations,
-    (message) => log.warn(message),
+  const admin = new CommandClient(
+    privateUrl(required(env, 'ADMIN_URL')),
+    required(env, 'ADMIN_INTERNAL_TOKEN'),
   );
+  const commands = new ChannelCommandHandler(admin, installations, (message) => log.warn(message));
   const pending = new Set<Promise<unknown>>();
   const presentations = new Map<string, Promise<unknown>>();
   const answering = new Set<string>();
@@ -331,7 +333,8 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
           Buffer.byteLength(body.text) > 48000 ||
           // Slack refuses a longer markdown block; long answers come as preview and file.
           (body.answerFile === undefined && body.text.length > SLACK_MARKDOWN_CHARS) ||
-          (body.footer !== undefined && typeof body.footer !== 'string')
+          (body.footer !== undefined && typeof body.footer !== 'string') ||
+          (body.feedbackRunId !== undefined && !RUN_ID.test(String(body.feedbackRunId)))
         )
           throw new Error('delivery identity refused');
         const installation = await authority({ ...identity, userId: body.requesterUserId });
@@ -431,6 +434,7 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
         track(
           (async () => {
             if (await commands.interaction(envelope, installation)) return;
+            if (await feedbackClick(envelope, installation)) return;
             if (!(await questionClick(envelope, installation))) await envelope.ack();
           })(),
         ),
@@ -577,6 +581,57 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
     }
     log.info(`question answered run_id=${current.runId} message_ts=${event.ts}`);
     void present(current, who.actor, { event, installation });
+    return true;
+  }
+
+  async function feedbackClick(envelope: EnvelopeArgs, installation: Installation) {
+    const b = envelope.body as {
+      team?: { id?: string };
+      user?: { id?: string };
+      channel?: { id?: string };
+      container?: { message_ts?: string; thread_ts?: string };
+      message?: { thread_ts?: string };
+      actions?: Array<{ action_id?: string; value?: string }>;
+    };
+    const action = b.actions?.find((a) => a.action_id?.startsWith(`${FEEDBACK_ACTION}:`));
+    if (!action) return false;
+    await envelope.ack();
+    const vote = action.action_id!.slice(FEEDBACK_ACTION.length + 1);
+    const channel = b.channel?.id;
+    const answerTs = b.container?.message_ts;
+    const rootTs = b.container?.thread_ts ?? b.message?.thread_ts;
+    const user = b.user?.id;
+    if (
+      b.team?.id !== installation.identity.teamId ||
+      !(vote in FEEDBACK_VOTES) ||
+      !channel ||
+      !answerTs ||
+      !rootTs ||
+      !user ||
+      !RUN_ID.test(action.value ?? '')
+    )
+      return true;
+    let text = `Thanks, your vote was saved: ${FEEDBACK_VOTES[vote as FeedbackVote]}.`;
+    try {
+      await admin.request('feedback', {
+        teamId: installation.identity.teamId,
+        channelId: channel,
+        rootTs,
+        answerTs,
+        runId: action.value,
+        userId: user,
+        vote,
+      });
+      log.info(`answer feedback saved vote=${vote} run_id=${action.value}`);
+    } catch (error) {
+      log.warn(
+        `answer feedback refused reason=${error instanceof Error ? error.message : 'unknown'} run_id=${action.value}`,
+      );
+      text = 'Your vote could not be saved.';
+    }
+    await postEphemeral(installation.slack, { channel, user, thread_ts: rootTs, text }).catch(() =>
+      log.warn('answer feedback notice unconfirmed'),
+    );
     return true;
   }
 

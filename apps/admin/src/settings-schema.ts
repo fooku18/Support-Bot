@@ -157,6 +157,17 @@ CREATE TABLE IF NOT EXISTS provider_requests (
 );
 CREATE INDEX IF NOT EXISTS provider_requests_by_day ON provider_requests (day, team_id, channel_id);
 CREATE INDEX IF NOT EXISTS provider_requests_by_run ON provider_requests (run_id, attempt);
+CREATE TABLE IF NOT EXISTS answer_feedback (
+  run_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  team_id TEXT NOT NULL,
+  channel_id TEXT NOT NULL,
+  root_ts TEXT NOT NULL,
+  answer_ts TEXT NOT NULL,
+  vote TEXT NOT NULL CHECK (vote IN ('up', 'down')),
+  updated_at ${integer} NOT NULL,
+  PRIMARY KEY (run_id, user_id)
+);
 CREATE TABLE IF NOT EXISTS cost_runs (
   run_id TEXT NOT NULL,
   attempt ${integer} NOT NULL,

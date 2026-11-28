@@ -191,6 +191,12 @@ suspension from framework inspection, including after restart, and resumes only
 once. Controls with files or an empty answer refuse without consuming the resume.
 Busy or uncertain requests require an explicit control or a new mention.
 
+Every final answer ends with **Helpful** and **Not helpful** buttons. Any channel
+member may vote; the adapter stores the click through the admin
+(`/internal/channel-commands/feedback`, table `answer_feedback`, one vote per
+user and run, a later click replaces it) and confirms it privately. The admin
+**Costs** page lists the latest 50 voted answers with their counts.
+
 The adapter calls result/inspection and one-shot presentation for each admitted
 request. It runs no redispatch/recovery poller. Confirmed answers use the existing
 delivery receipt. Question/failure/cancel notices use admission and acknowledgement
