@@ -1,6 +1,6 @@
 /** Typed clients for the credential-owning service. No tool loop or action journal. */
 import type { ToolFailureClass } from '../../contracts/protocol.js';
-import { isGitlabWriteOperation, type ValidatedGitlabArgs } from '../gitlab/gitlab-operations.js';
+import type { ValidatedGitlabArgs } from '../gitlab/gitlab-operations.js';
 import type { GitlabTextMeta } from '../gitlab/gitlab-rest-adapter.js';
 import type { AtlassianResult } from '../atlassian/atlassian-rest-adapter.js';
 import type {
@@ -287,7 +287,6 @@ export async function gitlabViaRuntime(
     if (err instanceof BrokerError) throw err;
     const first = failure(err);
     if (
-      isGitlabWriteOperation(request.operation) ||
       ![
         'ECONNRESET',
         'ECONNREFUSED',

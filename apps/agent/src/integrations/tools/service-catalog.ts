@@ -136,9 +136,7 @@ export function createServiceToolDefinitions(
       );
     };
     const iid = (what: string) => z.number().int().positive().describe(`Project-local ${what} IID`);
-    const body = z.string().min(1).max(59_000);
     const labels = z.array(z.string().min(1).max(100)).max(20).optional();
-    const userIds = z.array(z.number().int().positive()).max(20).optional();
     const listProject = projectArg
       .optional()
       .describe('Project scope (omit for group or instance)');
@@ -338,46 +336,6 @@ export function createServiceToolDefinitions(
         .max(LIST_DEPLOYMENTS_MAX_PER_PAGE)
         .optional()
         .describe(`Results per page (default 20, max ${LIST_DEPLOYMENTS_MAX_PER_PAGE})`),
-    });
-    registerGitlab('create_merge_request_note', {
-      project: projectArg,
-      merge_request_iid: iid('merge request'),
-      body,
-    });
-    registerGitlab('create_issue_note', { project: projectArg, issue_iid: iid('issue'), body });
-    registerGitlab('create_issue', {
-      project: projectArg,
-      title: z.string().min(1).max(255),
-      description: body.optional(),
-      labels,
-      assignee_ids: userIds,
-      confidential: z.boolean().optional(),
-    });
-    registerGitlab('update_merge_request', {
-      project: projectArg,
-      merge_request_iid: iid('merge request'),
-      title: z.string().min(1).max(255).optional(),
-      description: body.optional(),
-      labels,
-      assignee_ids: userIds,
-      reviewer_ids: userIds,
-      state_event: z.enum(['close', 'reopen']).optional(),
-    });
-    registerGitlab('create_merge_request', {
-      project: projectArg,
-      source_branch: z.string().min(1).max(256),
-      target_branch: z.string().min(1).max(256),
-      title: z.string().min(1).max(255),
-      description: body.optional(),
-      labels,
-    });
-    registerGitlab('retry_job', {
-      project: projectArg,
-      job_id: z.number().int().positive().describe('Job ID'),
-    });
-    registerGitlab('create_pipeline', {
-      project: projectArg,
-      ref: z.string().min(1).max(256).describe('Branch or tag'),
     });
   }
   if (enabled.has('atlassian')) {
