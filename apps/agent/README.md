@@ -6,7 +6,7 @@ live in `src/bootstrap`.
 
 `mastra/agents` defines the agent and its bounded configuration. `application`
 composes authority, configuration, HTTP and Studio flows. `integrations` contains
-service and Gateway adapters; `domain` owns authorization, publication, files and
+service and Gateway adapters; `domain` owns authorization, file inputs and
 delivery. `infrastructure` contains storage and process helpers. `contracts` is
 the canonical source for generated admin and Slack transport clients.
 

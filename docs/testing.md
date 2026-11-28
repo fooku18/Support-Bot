@@ -6,14 +6,14 @@ is cheaper to find.
 
 ## The test ladder
 
-| Tier                      | Command                                                                                                | Where it runs                                                    | What is real                                                                                                                                                                                           | Duration               | Cost                                   | When to run                                                                                                                    |
-| ------------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| **T0** Static checks      | `npm run typecheck:all`, `npm run lint`, `npm run knip`, `npm run format:check`                        | Any machine                                                      | Source, types, generated protocol clients and dead code                                                                                                                                                | about 18 s             | Free                                   | Before every commit                                                                                                            |
-| **T1** Package tests      | `npm run test:packages`                                                                                | A Linux host                                                     | Units of every workspace; Slack, model providers and services are synthetic                                                                                                                            | about 46 s             | Free                                   | Before every commit                                                                                                            |
-| **T2** Root tests         | `npm test`                                                                                             | A Linux host                                                     | Compose files, env checks, agent hooks, stack and driver logic with a fake `docker`                                                                                                                    | about 5 s              | Free                                   | Before every commit                                                                                                            |
-| **T3** Native integration | `npm run test:native:integration -- --suite <suite>` (see [the suites](#native-integration-suites-t3)) | A Linux Docker host                                              | PostgreSQL, the Mastra agent and durable runs; for some suites the `native-coding` image; for `tools` the `cli-runtime` and `egress` images. Slack, providers, Git and the tool services are synthetic | 10 s to 40 s per suite | Free                                   | Before a commit that changes the agent, storage, policy, Slack intake or delivery, a tool, the egress proxy or the CLI runtime |
-| **T4** Stub stack         | `npm run test:native:live -- --instance-dir D --suite stub --run --switch-mode`                        | A test instance; the driver switches it to stub mode             | The whole Compose stack from the built images, the Slack test app and the settings service; no tool instances; the model is scripted                                                                   | a few minutes          | No model cost; real Slack calls        | After a change to Slack, delivery, settings or images, before you ask for review                                               |
-| **T5** Gateway live       | `npm run test:native:live -- --instance-dir D --suite gateway --run --gateway-ready`                   | A test instance in gateway mode with direct test provider access | Everything, including the model                                                                                                                                                                        | minutes per scenario   | Model tokens; bounded by each `budget` | Before release of a change to intake, delivery, orchestration, context, inference, coding or publication                       |
+| Tier                      | Command                                                                                                | Where it runs                                                    | What is real                                                                                                                                                                                      | Duration               | Cost                                   | When to run                                                                                                                    |
+| ------------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| **T0** Static checks      | `npm run typecheck:all`, `npm run lint`, `npm run knip`, `npm run format:check`                        | Any machine                                                      | Source, types, generated protocol clients and dead code                                                                                                                                           | about 18 s             | Free                                   | Before every commit                                                                                                            |
+| **T1** Package tests      | `npm run test:packages`                                                                                | A Linux host                                                     | Units of every workspace; Slack, model providers and services are synthetic                                                                                                                       | about 46 s             | Free                                   | Before every commit                                                                                                            |
+| **T2** Root tests         | `npm test`                                                                                             | A Linux host                                                     | Compose files, env checks, agent hooks, stack and driver logic with a fake `docker`                                                                                                               | about 5 s              | Free                                   | Before every commit                                                                                                            |
+| **T3** Native integration | `npm run test:native:integration -- --suite <suite>` (see [the suites](#native-integration-suites-t3)) | A Linux Docker host                                              | PostgreSQL, the Mastra agent and durable runs; for some suites the `native-answer` image; for `tools` the `cli-runtime` and `egress` images. Slack, providers and the tool services are synthetic | 10 s to 40 s per suite | Free                                   | Before a commit that changes the agent, storage, policy, Slack intake or delivery, a tool, the egress proxy or the CLI runtime |
+| **T4** Stub stack         | `npm run test:native:live -- --instance-dir D --suite stub --run --switch-mode`                        | A test instance; the driver switches it to stub mode             | The whole Compose stack from the built images, the Slack test app and the settings service; no tool instances; the model is scripted                                                              | a few minutes          | No model cost; real Slack calls        | After a change to Slack, delivery, settings or images, before you ask for review                                               |
+| **T5** Gateway live       | `npm run test:native:live -- --instance-dir D --suite gateway --run --gateway-ready`                   | A test instance in gateway mode with direct test provider access | Everything, including the model                                                                                                                                                                   | minutes per scenario   | Model tokens; bounded by each `budget` | Before release of a change to intake, delivery, orchestration, context, inference or tools                                     |
 
 The [runtime image workflow](../.github/workflows/publish-runtime-image.yml) builds, smoke-tests and publishes the unified image. Run the required tiers locally before each commit. The pre-commit hook only runs ESLint and Prettier on staged files.
 
@@ -21,16 +21,13 @@ The [runtime image workflow](../.github/workflows/publish-runtime-image.yml) bui
 
 - Every commit: T0, T1 and T2 must pass on your machine.
 - A change to the agent, storage, authorization, Slack intake or delivery: T3
-  as well, at least the `application` suite. Add `coding` for coding,
-  publication, exports or the Workspace, `backup` for the store schema or the
-  Workspace layout, and `telemetry` for observability.
+  as well, at least the `application` suite. Add `backup` for the store
+  schema or the image, and `telemetry` for observability.
 - A change to a tool, the egress proxy or the CLI runtime: T3 `tools`.
 - A change to the stack, images or settings service: T4 on a test instance
   before review.
 - A change to Slack intake or delivery, task orchestration, context,
-  inference, coding or publication: T5 before release (see
-  [AGENTS.md](../AGENTS.md)). Coding and publication changes need a coding
-  scenario with published-file assertions.
+  inference or a tool: T5 before release (see [AGENTS.md](../AGENTS.md)).
 
 T4 results are deterministic qualification, not live acceptance. Only T5
 gives live acceptance. Keep live acceptance BLOCKED until a T5 run passes.
@@ -41,10 +38,9 @@ gives live acceptance. Keep live acceptance BLOCKED until a T5 run passes.
 
 - Node 26 and npm.
 - `npm ci` in the checkout.
-- For T1 and T2, a Linux host with `sh` and `bash`. The agent
-  Workspace tests need POSIX symlinks and directory `fsync`, and the
-  deployment script tests run the Linux host scripts. Elsewhere, run them in
-  a Linux container.
+- For T1 and T2, a Linux host with `sh` and `bash`. Some tests need POSIX
+  symlinks, and the deployment script tests run the Linux host scripts.
+  Elsewhere, run them in a Linux container.
 
 ### T3
 
@@ -60,10 +56,10 @@ gives live acceptance. Keep live acceptance BLOCKED until a T5 run passes.
 - The pinned PostgreSQL image in the local cache:
   `docker pull postgres@sha256:f3bd19c606e442c3d7bdfa8002e03fe260a1023351e0ea4598032022b68dd6e3`.
 - 2 GiB of free disk space.
-- For `coding`, `backup` and `telemetry`: a local `native-coding` image built
-  from your checkout, and `openssl`. Use your own tag, not the tag of a
-  running instance:
-  `docker build -f deploy/Dockerfile --target native-coding -t support-agent/native-coding:<tag> .`
+- For `backup` and `telemetry`: a local `native-answer` image built from your
+  checkout, and `openssl`. Use your own tag, not the tag of a running
+  instance:
+  `docker build -f deploy/Dockerfile --target native-answer -t support-agent/native-answer:<tag> .`
 - For `tools`: local `cli-runtime` and `egress` images with one tag, built the
   same way (`--target cli-runtime`, `--target egress`), and `openssl`. No tool
   account, credential or network access is needed.
@@ -105,7 +101,7 @@ with different model IDs in `.env.testing`.
 - Everything for T4, with the stack started in gateway mode.
 - One operator-approved direct test connection used by `MODEL_CATALOG`
   ([steps 5 and 6](live-test-setup.md#6-fill-envtesting)).
-- For the tool and coding scenarios: test tool instances with their test
+- For the tool scenarios: test tool instances with their test
   credentials, the GitLab test project and the service fixtures; see
   [scenario prerequisites](#scenario-prerequisites).
 
@@ -153,9 +149,9 @@ ready instance per kind (GitLab: one per host), or assign the one to use to
 the test channel.
 
 **3. Fixtures (gateway suite only).** GitLab project and trace values live in
-`.env.e2e`. Use the designated test group or project token with Developer
-access, `api` for REST and `write_repository` for Git over HTTPS. Verify the
-project ID, default branch and finished trace job. [GitLab setup](live-test-setup.md#11-the-gitlab-test-project)
+`.env.e2e`. Use the designated test group or project token with Reporter
+access and `read_api`. Verify the project ID, default branch and finished
+trace job. [GitLab setup](live-test-setup.md#11-the-gitlab-test-project)
 
 #### Service-tools prerequisites
 
@@ -178,9 +174,9 @@ running the test. Keep the IDs out of the discovery prompts.
 #### Tools per scenario
 
 Answer scenarios need a channel without tools, so that a real model must
-answer from the conversation alone; tool and coding scenarios need theirs.
-A scenario needs the kinds in its `requires`, `webSearch` or `webFetch` when
-a step uses it, and `gitlab` when a step publishes. Only gateway scenarios
+answer from the conversation alone; tool scenarios need theirs.
+A scenario needs the kinds in its `requires`, and `webSearch` or `webFetch`
+when a step uses it. Only gateway scenarios
 need tools: the driver refuses a stub scenario that needs one
 (`stub_scenario_needs_no_tools`), so in the stub suite it only clears the
 channel's tools and restores them.
@@ -195,9 +191,9 @@ channel's tools and restores them.
    BLOCKED (`ambiguous_<kind>_instance`), unless the channel already has one
    of them assigned; then it uses that one. It never guesses.
 3. It sets the channel's assignment to exactly that: nothing for an answer
-   scenario, the picked instances for a tool or coding scenario.
+   scenario, the picked instances for a tool scenario.
 4. At the end of the scenario, also after a failure or an interrupt, it
-   restores the original assignment, including `codeMode`, `files` and `localExec` when present. The report's `toolAssignment` keeps
+   restores the original assignment, including `codeMode` when present. The report's `toolAssignment` keeps
    `original`, `target`, `applied` and `restoredState`. If the restore
    cannot be confirmed, the scenario fails with
    `channel_tool_restore_unconfirmed`, and `toolAssignment.restoreByHand`
@@ -265,19 +261,16 @@ tool is gone at the next run and back once assigned again is T3
 
 Gateway suite (T5), `tests/live/scenarios/`:
 
-| Scenario                 | Tools                                         | Also needs                                                                               | What it shows, besides the stub suite                                              |
-| ------------------------ | --------------------------------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `answer-continuity.json` | None                                          |                                                                                          | The model applies a correction and keeps another thread out                        |
-| `thread-followup.json`   | `gitlab`                                      | `E2E_GITLAB_*`, write access to the test project                                         | Coding, publication, an unmentioned follow-up, a question and its answer on one MR |
-| `coding-files.json`      | `gitlab`                                      | `E2E_GITLAB_*`; sender with `files:read` and `files:write`                               | Attachments into a published change and exported files                             |
-| `gitlab-discovery.json`  | `gitlab`                                      | `E2E_GITLAB_*` including the trace job                                                   | Typed GitLab reads and the head and tail of a long job trace                       |
-| `service-tools.json`     | `atlassian`, `datadog`, `cloudflare`, `slack` | [Service-tools prerequisites](#service-tools-prerequisites)                              | The model picks each read-only service tool                                        |
-| `web-search.json`        | `webSearch`                                   | Selected model route supports hosted search and its catalog entry sets `webSearch: true` | Hosted search within the selected provider                                         |
-| `web-fetch.json`         | `webFetch`                                    | Reachable isolated fetch runtime, its token and external network (setup step 6)          | Direct page fetch                                                                  |
+| Scenario                 | Tools                                         | Also needs                                                                               | What it shows, besides the stub suite                        |
+| ------------------------ | --------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `answer-continuity.json` | None                                          |                                                                                          | The model applies a correction and keeps another thread out  |
+| `gitlab-discovery.json`  | `gitlab`                                      | `E2E_GITLAB_*` including the trace job                                                   | Typed GitLab reads and the head and tail of a long job trace |
+| `service-tools.json`     | `atlassian`, `datadog`, `cloudflare`, `slack` | [Service-tools prerequisites](#service-tools-prerequisites)                              | The model picks each read-only service tool                  |
+| `web-search.json`        | `webSearch`                                   | Selected model route supports hosted search and its catalog entry sets `webSearch: true` | Hosted search within the selected provider                   |
+| `web-fetch.json`         | `webFetch`                                    | Reachable isolated fetch runtime, its token and external network (setup step 6)          | Direct page fetch                                            |
 
-Coding scenarios leave an unmerged merge request in the test project; keep
-it as evidence. The [troubleshooting table](live-test-setup.md#troubleshooting)
-maps every BLOCKED code to its fix.
+The [troubleshooting table](live-test-setup.md#troubleshooting) maps every
+BLOCKED code to its fix.
 
 ## Local checks (T0 to T3)
 
@@ -290,7 +283,6 @@ SUPPORT_AGENT_TEST_RETAIN_EVIDENCE=1 npm run test:packages
 SUPPORT_AGENT_TEST_RETAIN_EVIDENCE=1 npm test
 npm run test:native:integration
 npm run test:native:integration -- --suite application
-npm run test:native:integration -- --suite coding --image-tag <tag>
 npm run test:native:integration -- --suite backup --image-tag <tag>
 npm run test:native:integration -- --suite telemetry --image-tag <tag>
 npm run test:native:integration -- --suite tools --image-tag <tag>
@@ -322,14 +314,13 @@ fresh PostgreSQL 17 containers. `discovery` is the default. For suites that use
 Unix sockets, use a checkout with a short absolute path if the driver reports
 that the PostgreSQL socket path is too long.
 
-| Suite         | What runs                                                                                                                                                                                                                                                                                                                        | Needs                                              | Duration | Records |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- | -------- | ------: |
-| `discovery`   | Discovery and a cold restart, from source on the host                                                                                                                                                                                                                                                                            | PostgreSQL image                                   | 8 s      |      13 |
-| `application` | `discovery`, plus admission, cancellation, policy, shutdown, file inputs, memory, a process killed during a model call and a question resumed in a new process                                                                                                                                                                   | PostgreSQL image                                   | 30 s     |      80 |
-| `coding`      | The real provision, application and adapter entrypoints in the `native-coding` image: answers, a read, Code Mode and its limits while another run completes, a start refused without `--no-node-snapshot`, coding and publication to the same MR over HTTPS Git, file inputs and exports; Code Mode from the image's own install | `--image-tag`, `openssl`                           | 35 s     |      22 |
-| `backup`      | Answers, questions, an uncertain delivery and coding exports in the image; dump, Workspace archive, restore into a fresh cluster and directory, then inspection and continuation                                                                                                                                                 | `--image-tag`, `openssl`                           | 24 s     |      22 |
-| `telemetry`   | The image's telemetry maintenance entrypoint, then the restricted telemetry role, private rows, Studio reads and repeat provisioning                                                                                                                                                                                             | `--image-tag`                                      | 9 s      |       8 |
-| `tools`       | The `cli-runtime` and `egress` images against a fake HTTPS upstream: one read per tool kind and five GitLab reads, the egress refusal, credential routing and redaction, foreign, revoked and unassigned instances, read-only refusals                                                                                           | `--image-tag` (`cli-runtime`, `egress`), `openssl` | 20 s     |      19 |
+| Suite         | What runs                                                                                                                                                                                                                                                                                                                                                                          | Needs                                              | Duration | Records |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- | -------- | ------: |
+| `discovery`   | Discovery and a cold restart, from source on the host                                                                                                                                                                                                                                                                                                                              | PostgreSQL image                                   | 8 s      |      13 |
+| `application` | `discovery`, plus admission, cancellation, policy, shutdown, file inputs, memory, a process killed during a model call and a question resumed in a new process                                                                                                                                                                                                                     | PostgreSQL image                                   | 30 s     |      80 |
+| `backup`      | The real provision, application and adapter entrypoints in the `native-answer` image: an answer without the CLI runtime, a start refused without `--no-node-snapshot` and a second start refused by the execution lock; Code Mode from the image's own install; answers, questions and an uncertain delivery; dump, restore into a fresh cluster, then inspection and continuation | `--image-tag`, `openssl`                           | 24 s     |      22 |
+| `telemetry`   | The image's telemetry maintenance entrypoint, then the restricted telemetry role, private rows, Studio reads and repeat provisioning                                                                                                                                                                                                                                               | `--image-tag`                                      | 9 s      |       8 |
+| `tools`       | The `cli-runtime` and `egress` images against a fake HTTPS upstream: one read per tool kind and five GitLab reads, the egress refusal, credential routing and redaction, foreign, revoked and unassigned instances, read-only refusals                                                                                                                                             | `--image-tag` (`cli-runtime`, `egress`), `openssl` | 20 s     |      19 |
 
 `discovery` and `application` bundle
 [`durable-answer-vertical.ts`](../tests/integration/mastra/durable-answer-vertical.ts)
@@ -348,26 +339,25 @@ and run each phase in a new Node process. `application` adds:
 - a process killed during a model call (never restarted) and a question
   suspended before a kill and resumed in a new process.
 
-`coding` and `backup` bundle the current entrypoints and
+`backup` bundles the current entrypoints and
 [`native-image-vertical.ts`](../tests/integration/mastra/native-image-vertical.ts).
 Each phase runs in a new container of the image, with network `none` and the
 same user, capabilities and security options as the Compose service. The
 bundles replace the image's own application files, so the image supplies the
-OS, Git, bubblewrap and the locked dependencies. PostgreSQL is reached through
-a Unix socket in the run folder.
+OS and the locked dependencies. PostgreSQL is reached through a Unix socket in
+the run folder. A separate container runs a Code Mode script with only the
+image's own install.
 
 `backup` follows the
 [restore recipe](native-answer.md#quiesced-logical-backup-and-fresh-restore):
 
-1. Fill the source: answers, two questions, an uncertain delivery, coding
-   exports and a coding question.
-2. Compare rows and catalog before and after `pg_dump`. Archive the Workspace
-   twice with GNU tar and compare.
+1. Provision the source and run the `answer-only` phase. Then fill the
+   source: answers, two questions and an uncertain delivery.
+2. Compare rows and catalog before and after `pg_dump`.
 3. Stop the source. Create a fresh cluster with a new `native_answer` login
    and a fresh secret, then `pg_restore --create`.
 4. Compare rows and catalog with the source. Check that the archive holds no
-   roles, passwords or credentials. Extract the Workspace into a fresh
-   directory and compare its archive with the source archive.
+   roles, passwords or credentials.
 5. Start the application on the restored store: no inference or send on
    start, current revocation applies, uncertain outcomes stay uncertain, and
    only the owner's explicit action continues a question, once.
@@ -573,21 +563,20 @@ the instance in stub mode.
 
 Scenario fields beyond prompts and expected text:
 
-| Field                 | Meaning                                                                                                                                                                      |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `requires`            | Gateway only: tool kinds the scenario needs besides those its steps imply (`webSearch`, `webFetch`, GitLab for a publication); see [tools per scenario](#tools-per-scenario) |
-| `covers`, `budget`    | The gate fields of a gateway scenario (see below)                                                                                                                            |
-| `question` / `resume` | The run asks with `ask_user`; the next step answers with `continue <answer>` and the same run resumes                                                                        |
-| `wait: false`         | The step's run is not awaited; the next step must be `cancel`                                                                                                                |
-| `cancel`              | Posts the `cancel` control; the held run must stop, post the Stopped notice and never deliver                                                                                |
-| `channelSettings`     | Stub only: `enabled: false`, `blocked: true`, `model: "alternate"`, a `prompt` text, or `"restore"` each                                                                     |
-| `refused`             | Stub only: the request must start no run and get no answer within `settleSeconds` (default 20)                                                                               |
-| `edit`, `delete`      | Stub only: a step that edits or deletes an earlier step's message, then watches for `settleSeconds`                                                                          |
-| `longAnswer`          | The answer arrives as a preview and `answer.md`; `previewContains` and `previewExcludes` check the preview                                                                   |
-| `messageAttachments`  | Slack message attachments (fields, blocks) posted with the mention                                                                                                           |
-| `attachments`         | Files uploaded with the mention                                                                                                                                              |
-| `discovery`           | A gateway coding step without publication; like every step without `publication`, it must publish nothing                                                                    |
-| `publication`         | Files the published commit must contain, read back from the test GitLab project                                                                                              |
+| Field                 | Meaning                                                                                                                                            |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `requires`            | Gateway only: tool kinds the scenario needs besides those its steps imply (`webSearch`, `webFetch`); see [tools per scenario](#tools-per-scenario) |
+| `covers`, `budget`    | The gate fields of a gateway scenario (see below)                                                                                                  |
+| `question` / `resume` | The run asks with `ask_user`; the next step answers with `continue <answer>` and the same run resumes                                              |
+| `wait: false`         | The step's run is not awaited; the next step must be `cancel`                                                                                      |
+| `cancel`              | Posts the `cancel` control; the held run must stop, post the Stopped notice and never deliver                                                      |
+| `channelSettings`     | Stub only: `enabled: false`, `blocked: true`, `model: "alternate"`, a `prompt` text, or `"restore"` each                                           |
+| `refused`             | Stub only: the request must start no run and get no answer within `settleSeconds` (default 20)                                                     |
+| `edit`, `delete`      | Stub only: a step that edits or deletes an earlier step's message, then watches for `settleSeconds`                                                |
+| `longAnswer`          | The answer arrives as a preview and `answer.md`; `previewContains` and `previewExcludes` check the preview                                         |
+| `messageAttachments`  | Slack message attachments (fields, blocks) posted with the mention                                                                                 |
+| `attachments`         | Files uploaded with the mention                                                                                                                    |
+| `discovery`           | A gateway step of a scenario with tools (`"mode": "coding"`) that only reads                                                                       |
 
 `channelSettings` uses the settings service API with `E2E_ADMIN_TOKEN`. It reads the exact prior settings first and
 restores them at the end, also after a failure; an unconfirmed restore fails
@@ -625,7 +614,7 @@ only when all of these hold:
    adding a new scenario.
 3. **It is cheap by design.** Use the fewest turns, short prompts and the
    deployment default or an operator-preselected route for acceptance. Use
-   coding, publication or web tools only when the scenario tests them.
+   web tools only when the scenario tests them.
 4. **It has strong assertions.** Assert facts that depend on the model
    reading a real service or source. A reply-format check alone is not
    enough.
@@ -640,11 +629,10 @@ that passed unchanged.
 
 ## Boundaries
 
-Synthetic tests do not establish actual Slack or provider quality,
-coding, publication or production cutover. Live tests use only the designated
-test instance, app and channel and approved test tool instances. The sender
-credential stays in `.env.e2e`. Keep all Slack messages, merge requests,
-reports, workspaces and stores. Never start a second Socket Mode adapter for
+Synthetic tests do not establish actual Slack or provider quality or
+production cutover. Live tests use only the designated test instance, app and
+channel and approved test tool instances. The sender credential stays in
+`.env.e2e`. Keep all Slack messages, reports and stores. Never start a second Socket Mode adapter for
 the same app. Never substitute missing operator fixtures or print
 credentials. See [live-test-rules.md](live-test-rules.md) for the complete authorization
 boundaries.

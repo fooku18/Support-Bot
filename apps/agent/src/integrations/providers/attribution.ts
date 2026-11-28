@@ -1,6 +1,6 @@
 import type { ResolvedModel } from '../../contracts/model-catalog.js';
 
-export type CostMode = 'answer' | 'coding' | 'studio';
+export type CostMode = 'answer' | 'studio';
 
 export interface RunAttribution {
   instance: string;

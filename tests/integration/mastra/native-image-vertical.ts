@@ -173,6 +173,7 @@ const sources: any[] =
 const posts: any[] = [],
   ephemeral: any[] = [],
   reactions: any[] = [],
+  statuses: any[] = [],
   gatewayRequests: any[] = [],
   unexpected: string[] = [];
 const acks = new Set<string>();
@@ -307,6 +308,15 @@ const server = http.createServer(async (req, res) => {
   if (path === '/api/chat.postEphemeral') {
     ephemeral.push(Object.fromEntries(api));
     json({ ok: true, message_ts: `1794700000.${String(ephemeral.length).padStart(6, '0')}` });
+    return;
+  }
+  if (path === '/api/chat.postMessage' && !api.get('metadata')) {
+    statuses.push(Object.fromEntries(api));
+    json({ ok: true, ts: `1794700002.${String(statuses.length).padStart(6, '0')}` });
+    return;
+  }
+  if (path === '/api/chat.update' || path === '/api/chat.delete') {
+    json({ ok: true, ts: api.get('ts') });
     return;
   }
   if (path === '/api/chat.postMessage') {
@@ -602,6 +612,6 @@ try {
   await pool.end();
   await fs.writeFile(
     `${root}/${phase}-${caseId}-peers.json`,
-    JSON.stringify({ posts, ephemeral, reactions, gatewayRequests, unexpected }, null, 2),
+    JSON.stringify({ posts, statuses, ephemeral, reactions, gatewayRequests, unexpected }, null, 2),
   );
 }

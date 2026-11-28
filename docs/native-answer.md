@@ -2,8 +2,7 @@
 
 The default deployment in `deploy/compose.yaml` runs the shared Mastra agent,
 the native Slack adapter, PostgreSQL and the credential-owning CLI runtime.
-Slack and Studio share one agent for answers, on-demand read-tool discovery and
-coding.
+Slack and Studio share one agent for answers and on-demand read-tool discovery.
 
 ## Runtime ownership
 
@@ -16,8 +15,8 @@ The agent package is `apps/agent`. Its source has explicit owners:
   HTTP endpoints and Studio. `bootstrap/` contains executable entrypoints.
 - `integrations/` owns GitLab, Slack, Atlassian, Datadog, Cloudflare, model providers
   and credential-service adapters. `infrastructure/` owns storage and process helpers.
-- `domain/authorization`, `domain/publication`, `domain/files` and
-  `domain/delivery` own current policy, verified publication and exact file receipts.
+- `domain/authorization`, `domain/files` and `domain/delivery` own current
+  policy, exact file receipts and delivery.
 - `contracts/` owns canonical wire vocabulary. The generator produces standalone
   admin/Slack clients so those process images retain their own dependencies.
 
@@ -27,7 +26,7 @@ runs in `apps/tool-runtime`. Studio and Slack use the same agent definition.
 Native diagnostics use Mastra's `ConsoleLogger` with bounded segment IDs,
 durations and token counts. Studio persists bounded traces, metrics and logs. Slack persists these signals
 when the [shared telemetry store](#shared-telemetry) is enabled. Exporters
-omit prompts, answers, tool payloads and arbitrary metadata. Application publication and
+omit prompts, answers, tool payloads and arbitrary metadata. Application
 delivery receipts remain authoritative.
 
 One small version-specific suspension decoder remains in `mastra/runtime/inspection.ts`:
@@ -36,7 +35,7 @@ replay cache is empty. Keep the cold-inspection regression when upgrading Mastra
 
 Mastra's pinned Agent/createDurableAgent, Memory/PostgresStore, top-level
 `ask_user`, native resume/abort, processors and workflow inspection own execution.
-Automatic durable/workflow recovery stays off. The six `native_agents` tables
+Automatic durable/workflow recovery stays off. The four `native_agents` tables
 retain identity, admission/input provenance and external-effect receipts. Answer attachments use
 `nativeInputHandler` and `createNativeInputClient`, then native inline messages.
 No file sandbox or FileUploadProcessor is created.
@@ -56,8 +55,7 @@ channel-memory proxy/client runs on loopback, with admin as the source.
 Read tools reuse Mastra `createTool`, typed catalogs, validators, and the
 credential-owning CLI runtime clients. GitLab reads, Atlassian reads, Datadog
 reads, Cloudflare reads and Slack user lookups remain bound to current channel
-policy and the assigned instance. Code Mode, workspace commands, exports and
-verified publication are available for requests that need them.
+policy and the assigned instance. Code Mode is available when it is assigned.
 
 Provider web search is available in Slack and Studio when the
 channel has a ready assigned `webSearch` instance and the actor has `tool.use`
@@ -72,8 +70,7 @@ Actual provider-executed call/result pairs produce counts-only receipts in the
 existing native action records. Queries and result bodies are not copied there.
 The live `tests/live/scenarios/web-search.json` scenario requires a new confirmed
 search for each question, service-dependent facts and source URLs. It runs discovery
-through the shared agent without cloning, commands, edits, exports or
-publication. Search results do not prove direct page retrieval.
+through the shared agent. Search results do not prove direct page retrieval.
 
 Direct page fetching uses the Mastra `web_fetch` read tool through the existing
 isolated web runtime. Configure `NATIVE_WEB_RUNTIME_URL`, `WEB_RUNTIME_TOKEN`
@@ -103,13 +100,13 @@ The pinned Mastra built-in fetch tool cannot use this transport: it owns raw
 Node HTTP requests and DNS lookup with no proxy injection. Native fetch
 receipts retain hashed call/URL/content identities and byte counts, never page
 bodies. `tests/live/scenarios/web-fetch.json` requires fresh direct reads of the
-fixture URL on both questions and refuses search substitution or publication.
+fixture URL on both questions and refuses search substitution.
 Studio uses the same binding and optional private network.
 
 The shared agent uses Mastra's `ToolSearchProcessor`. Only the bound read tools
-enter its catalog, along with Code Mode when it is assigned or the coding workspace is available.
-Code Mode's generated signatures load with its tool. Clarification, provider
-search and workspace tools stay directly available when configured. Native keyword search auto-loads at most three matches for the next
+enter its catalog, along with Code Mode when it is assigned.
+Code Mode's generated signatures load with its tool. Clarification and provider
+search stay directly available when configured. Native keyword search auto-loads at most three matches for the next
 model turn. Full service schemas are withheld initially; there is no injected
 catalog or separate load turn. Loaded tools derive from framework conversation
 context (`storage: 'context'`), survive restart while the discovery result is
@@ -131,7 +128,6 @@ maintenance identity and `native-provision` entrypoint. It refuses an existing
 `native_answer` database/role or framework/app schema. Preserve retained databases and require a fresh destination for provisioning. The framework DDL runs only in
 maintenance. Runtime uses `disableInit`, a non-owner `native_answer` role, no
 schema/database creation rights, framework DML and narrow application grants.
-The runtime can insert publication receipts and update their outcome and evidence.
 The schema seal records the application store version. Runtime also holds one
 database advisory lock for the selected native execution authority, so a second
 runtime on the same database is refused. Current Slack source/root authority is
@@ -176,7 +172,7 @@ request under normal policy.
 Direct `@bot !config`, `!help` and `!memory` channel commands use the retained
 admin command service before agent admission. Configuration buttons and modals
 remain private; committed changes and usage use the durable command receipt
-worker. Commands make no inference or coding run. See
+worker. Commands make no inference run. See
 [channel-commands.md](channel-commands.md) for authorization, expiry, conflict and
 retry semantics. Unmentioned thread replies starting with `!` stay silent.
 
@@ -219,9 +215,9 @@ settings it was accepted with. Authorization changes apply immediately.
   request still returns its handle, presentation posts the failure notice, and
   the agent logs `native run refused run_id=… reason=execution_policy_changed_start_fresh`.
   The user retries and gets the new settings.
-- **During and after execution**, a change does not stop the run. Its answer,
-  export files, long-answer file (`answer.md`) and publication results are
-  delivered under the accepted settings. The agent logs
+- **During and after execution**, a change does not stop the run. Its answer
+  and long-answer file (`answer.md`) are delivered under the accepted
+  settings. The agent logs
   `native delivery policy_changed_delivered run_id=…` once. A tool unassigned
   or replaced during the run is refused at its next call, because its
   credentials are revoked; the run continues without it. Provider web search
@@ -284,16 +280,15 @@ integration suites use real PostgreSQL and synthetic service peers:
 ```sh
 npm run test:native:integration
 npm run test:native:integration -- --suite application
-npm run test:native:integration -- --suite coding --image-tag <tag>
 npm run test:native:integration -- --suite backup --image-tag <tag>
 npm run test:native:integration -- --suite telemetry --image-tag <tag>
 ```
 
 The default and `application` suites run the agent from source in one Node
-process per phase. `coding` and `backup` run the provision, application and
-adapter entrypoints, bundled from the current source, inside the
-`native-coding` image with the tag you give. `telemetry` runs the telemetry
-maintenance entrypoint in that image.
+process per phase. `backup` runs the provision, application and adapter
+entrypoints, bundled from the current source, inside the `native-answer`
+image with the tag you give. `telemetry` runs the telemetry maintenance
+entrypoint in that image.
 
 Qualify the designated Slack test instance and direct model connection separately. Record the tested
 revision and the evidence in the corresponding work plan.
@@ -301,8 +296,7 @@ revision and the evidence in the corresponding work plan.
 ## Quiesced logical backup and fresh restore
 
 Use the same application/framework locks and PostgreSQL 17, a quiesced source,
-and a fresh isolated destination. For coding, also retain the
-[Workspace archive](#coding-database-and-workspace-backup). Stop and
+and a fresh isolated destination. Stop and
 fence intake, execution **and delivery** writers before the snapshot; wait for
 joined shutdown and verify no runtime database sessions remain. Keep the source
 fenced throughout inspection and any explicit destination continuation. There
@@ -312,9 +306,10 @@ the archive. An arbitrary stale backup is not safe to replay external writes.
 
 Back up the whole dedicated `native_answer` database. Mastra owns `framework`,
 including messages, threads, durable snapshots and memory/run ownership fences.
-Keep all six `native_agents` tables: `tasks`, `requests` (including input
-provenance), `actions`, `deliveries`, `exports`, and `publications` (the last two
-are empty in ANSWER).
+Keep all `native_agents` tables: `tasks`, `requests` (including input
+provenance), `actions` and `deliveries`. A store provisioned by an earlier
+release also has `exports` and `publications`; the runtime no longer uses
+them, but the dump keeps them.
 Preserve schema comments, ownership, constraints and table/column/database ACLs.
 Do not select individual framework tables or reconstruct framework state.
 
@@ -365,113 +360,26 @@ after the dump and after the restore, refuses credentials in the archive, and
 checks cold inspection, current revocation and one explicit continuation.
 Check release-specific restore evidence before authorizing a cutover.
 
-## Native deployment with a coding workspace
-
-The base stack uses the `native-coding` image and the retained
-`native-coding-data` volume. For initial setup, provision a fresh Compose
-project and database. The application checks the `coding-application@2` store
-seal and retains existing coding stores.
-
-Mastra Agent, DurableAgent, Workspace and LocalSandbox own coding. The workspace
-and publication tools require a ready GitLab binding. Plain answers and other
-assigned read tools remain available when that binding is unavailable.
-Nested Code Mode exposes read-only tools; clarification and publication remain
-explicit top-level tools. Code Mode runs in an in-process V8 isolate
-(isolated-vm), not in the Workspace sandbox (see [Code Mode](code-mode.md)).
-The images set `NODE_OPTIONS=--no-node-snapshot` for it. Trusted clone/verification/publication operations pin
-the assigned GitLab host, instance and credential version. Credentials remain in
-application/domain closures and the tool runtime, outside model memory and the
-Workspace.
+## Tool service and egress
 
 The base stack starts the `native-cli-runtime` image for typed service
 operations. Configure the approved host allowlists. The egress proxy decides by
-source network: the coding application and tool service reach it as
+source network: the application and tool service reach it as
 `egress-tools`, an alias that exists only on the tools network, so their
 tunnels get the tools policy. The Slack adapter uses `egress` on the frontend
-network.
+network. Credentials remain in the tool runtime, outside model memory.
 
-On the qualified Linux Docker host, Mastra's native bubblewrap launcher needs a
-root controller with `SYS_ADMIN`/`NET_ADMIN`, unconfined seccomp/AppArmor and
-`no-new-privileges`. There is no privileged container, host namespace, Docker
-socket or host-filesystem mount. A three-line bwrap packaging wrapper adds
-`--cap-drop ALL`: the pinned framework otherwise retained these controller
-capabilities in commands. Mastra still owns all mounts and execution.
-The sandbox runs workspace commands and verification. Startup tests the actual sandbox for zero capabilities, a separate network
-namespace, a minimal environment and hidden application/secrets paths. A failure
-refuses startup. This documented framework exception is not a second sandbox
-engine. Mount the application secrets so they are readable by the root controller.
-
-Build the three selected targets with the same immutable tag (`native-coding`,
-`adapter`, `cli-runtime`). No CI builds or scans them yet. Fresh designated provisioning
-and live qualification use:
-
-```sh
-npm run test:stack:up -- --instance-dir /private/designated-coding --provision
-npm run test:native:live -- --instance-dir /private/designated-coding \
-  --scenario tests/live/scenarios/thread-followup.json --run --gateway-ready
-```
-
-The live fixture uses the previously approved test project. It retains an unmerged
-MR and verifies the receipt's project, commit, branches and MR identity using
-current assigned-instance reads. Every required file is fetched at the exact
-published commit and checked for bytes/hash and scenario facts. A second turn
-must publish a new commit to the same MR. Slack operation identity, unique send
-and confirmed delivery are checked independently. Failed/unknown writes are never
-retried by the driver. Reports and remote artifacts remain retained.
-
-## Coding attachments and explicit exports
+## Attachments
 
 The shared agent accepts bounded UTF-8 text/CSV/TSV/Markdown and
-PNG/JPEG/WebP inputs as ANSWER. PDF and leading-BOM text remain unsupported.
-Mastra Memory retains exact original bytes and provenance. Native Workspace
-receives editable copies under `.slack-inputs/<run>/<file>/<name>`; editing those
-copies does not change original receipts. Current source, requester, channel
-sharing and byte checks apply before provider/tool dispatch and delivery.
-
-A top-level native `export_file` tool designates a Workspace file for delivery.
-It snapshots exact bytes, name and SHA-256 into the restricted application store:
-up to four files, each at most 2 MiB. It does not publish a repository or expose
-arbitrary workspace files. Later edits do not change a registered snapshot.
-The adapter rechecks current authority around allocation, transfer and completion,
-then confirms the app-owned file in the exact thread and records its receipt
-before posting the summary. Unknown external outcomes remain uncertain without
-automatic resend. Read-only Slack authority calls honor a definite bounded
+PNG/JPEG/WebP inputs. PDF and leading-BOM text remain unsupported.
+Mastra Memory retains exact original bytes and provenance. Current source,
+requester, channel sharing and byte checks apply before provider/tool dispatch
+and delivery. Read-only Slack authority calls honor a definite bounded
 `Retry-After`; writes and unknown transport failures are never retried there.
-
-The live scenario includes original CSV/PNG inputs, verified GitLab files and
-exact downloaded export bytes:
-
-```sh
-npm run test:native:live -- --instance-dir /private/designated-coding \
-  --scenario tests/live/scenarios/coding-files.json --run --gateway-ready
-```
 
 Saved-artifact recovery remains disabled. The @2 application seals require fresh
 stores; no upgrade of retained @1 evidence is performed.
-
-## Coding database and Workspace backup
-
-Apply the same quiescence and current-authority requirements above to coding.
-Back up the **whole database and the whole coding Workspace together**, after
-joined shutdown of intake, execution and delivery. Keep the source fenced until
-the restore is retired or explicitly adopted. Include `.git`, original working
-copies, native Workspace metadata and retained domain receipts. Use GNU tar's
-sparse/PAX, ACL and xattr support; preserve ownership, permissions, links and
-mtimes. Restore into a fresh isolated directory with the same in-container mount
-path, `/var/lib/native-coding`. Never overlay another retained workspace.
-
-Use the standard logical PostgreSQL archive/restore commands above, retaining
-all six application tables including export bytes and receipts. Record and
-compare the entire source/destination row and catalog/ACL inventories and the
-complete Workspace archive hash. Keep runtime secrets and **current** admin
-policy separate; a backup must not restore old
-authority or turn uncertain effects into permission to replay.
-
-The `backup` suite (see above) archives the database and the Workspace
-together. It restores both into a fresh cluster and directory, compares the
-Workspace archive of source and destination, and checks retained export
-receipts and an authorized continuation. Review the retained result before
-using it to support a production rollout.
 
 ## Shared telemetry
 
@@ -481,10 +389,10 @@ separately generated database password (at least 24 characters). It must differ
 from the primary runtime password file. Omitted or `off` leaves native persisted
 telemetry disabled. Never place secrets in source control or command output.
 
-Compose bind mounts retain the secret's host ownership and permissions. Both
-images drop filesystem-bypass capabilities; coding runs as UID/GID 0 and answer
-as UID/GID 1000. A root-owned file with group 1000 and mode 0640 supports both
-templates and Studio without making it world-readable. Keep its host directory
+Compose bind mounts retain the secret's host ownership and permissions. The
+image drops filesystem-bypass capabilities and runs as UID/GID 1000. A
+root-owned file with group 1000 and mode 0640 supports Compose and Studio
+without making it world-readable. Keep its host directory
 private. The deployment preflight refuses a file unreadable by the selected
 image user before stopping services.
 

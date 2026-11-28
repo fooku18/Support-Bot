@@ -18,7 +18,7 @@ const MODEL_ID = /^[A-Za-z0-9][A-Za-z0-9._:/@[\]-]{0,127}$/;
 const COST_BASIS = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
-const MODES = ['answer', 'coding', 'studio'] as const;
+const MODES = ['answer', 'studio'] as const;
 const OUTCOMES = ['completed', 'failed', 'cancelled', 'parked', 'interrupted'] as const;
 /** Earliest plausible row time (2026-01-01) and the largest money/token values accepted. */
 const EARLIEST_MS = Date.UTC(2026, 0, 1);

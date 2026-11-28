@@ -127,7 +127,7 @@ cloud.example.com over the last 24 hours, and the firewall events by action".
    in the Cloudflare dashboard.
 
 A token, account or zone change starts fresh agent sessions in existing
-threads; history and workspace are kept.
+threads; history is kept.
 
 ## Troubleshooting
 

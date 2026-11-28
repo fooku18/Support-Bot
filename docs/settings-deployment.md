@@ -51,6 +51,9 @@ to the HTTPS origin for the settings UI. Register that origin's
 authorized workloads. Create and rotate per-tool credentials on the
 workspace's **Tools** page, then assign ready instances to the channels
 that need them. The settings database holds those encrypted credentials.
+On startup the service removes stored instances and channel assignments of
+tool kinds it no longer knows, such as the former `files` and `localExec`,
+in one audited change (`tool.kind.remove`).
 
 Keep `ADMIN_STORE_KEY` stable across pod replacements and database restores.
 Retain it separately from database backups. Replacing the key alone makes

@@ -166,8 +166,7 @@ export function createNativeAgentStorage(pool: Pool) {
     return found.rows[0]?.action.slice('model:'.length);
   }
   async function inputReceipts(r: IdentityRow): Promise<NativeInputReceipt[]> {
-    // Delivery can still expose legacy answers, and the coding Workspace keeps
-    // original files across model conversations. Effect authorization checks
+    // Delivery can still expose legacy answers. Effect authorization checks
     // every retained source. Admission keeps the original task-wide bound.
     const rows = await pool.query<{ input_receipts: NativeInputReceipt[] }>(
       "SELECT input_receipts FROM native_agents.requests WHERE task_key=$1 AND input_receipts <> '[]'::jsonb",

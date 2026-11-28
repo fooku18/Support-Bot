@@ -4,7 +4,7 @@ A scripted Messages API for the stub model mode
 (`npm run test:stack:up -- --model-mode stub`). It replaces the AI Gateway on
 a test instance, so the whole stack runs without Gateway access.
 Replies are deterministic and cost nothing. Stub results never count as live
-acceptance of model, coding or publication behavior.
+acceptance of model or tool behavior.
 
 - `src/directives.ts`: the reply for one request, from directives in the
   latest user message. Pure, no state.

@@ -5,7 +5,6 @@ export default defineConfig({
   test: {
     include: [
       'tests/integration/native-deployment.test.ts',
-      'tests/integration/native-coding-deployment.test.ts',
       'tests/integration/native-live.test.ts',
       'tests/integration/agent-config.test.ts',
       'tests/integration/slack-manifest.test.ts',

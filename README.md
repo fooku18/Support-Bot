@@ -1,15 +1,13 @@
 # Support Agent
 
-An AI assistant for Slack that helps teams find information, understand code,
-and turn requests into tested changes and GitLab merge requests. Conversations,
-questions and results stay in the Slack thread where the work began.
+An AI assistant for Slack that helps teams find information and understand
+code. Conversations, questions and results stay in the Slack thread where the
+work began.
 
-Slack and Studio run the same Mastra agent definition in separate runtimes. It can:
-
-- **Answer:** ask questions, explore repositories, and look up information through
-  connected services without changing code.
-- **Coding:** work in an isolated workspace, edit files, run project checks, and
-  publish verified changes to GitLab for review.
+Slack and Studio run the same Mastra agent definition in separate runtimes. It
+answers questions, explores repositories, and looks up information through
+connected services. It reads only: it does not change code or write to the
+connected services.
 
 Available tools and actions depend on the channel's configuration and your
 permissions. Connected services include GitLab, Jira, Confluence, Datadog,
@@ -21,18 +19,17 @@ Mention the bot in an enabled Slack channel with a specific request. For example
 
 > @Support Agent Explain how authentication works in this repository.
 >
-> @Support Agent Fix the date formatting bug, add a regression test, and open a merge request.
+> @Support Agent Which merge requests changed the date formatting last week?
 >
-> @Support Agent Summarize this CSV and return the results as a file.
+> @Support Agent Summarize this CSV.
 
 Continue the conversation in the same thread to retain context. When automatic
 thread replies are enabled, follow-up requests do not need another mention.
 The bot shows a working indication and may ask a question before continuing.
-You can [attach files or request an export](docs/slack-files.md).
+You can [attach files](docs/slack-files.md).
 
 Use `@Support Agent status` to inspect the current request, `@Support Agent cancel` to
 stop it, or `@Support Agent continue <your answer>` to answer an outstanding question.
-Code changes are delivered as merge requests for human review.
 
 ## Architecture
 
@@ -47,8 +44,7 @@ flowchart LR
     Admin --> Runtime
     Admin --> StudioRuntime
     Runtime <--> State[(Slack conversation and execution state)]
-    StudioRuntime <--> StudioState[(Studio conversations and workspace)]
-    Runtime <--> Workspace[Compose coding workspace]
+    StudioRuntime <--> StudioState[(Studio conversations)]
     Runtime --> Tools[Credential-owning tool runtime]
     StudioRuntime --> Tools
     Tools -->|Scoped API calls via egress proxy| Services[GitLab and connected services]
@@ -60,7 +56,7 @@ flowchart LR
 
 Mastra manages agent execution, tools and conversation memory. The application
 checks access to channels, repositories and files, keeps service credentials out
-of model context, and verifies publication and delivery outcomes. Network access
+of model context, and verifies delivery outcomes. Network access
 is restricted through configured egress controls.
 
 ## Further reading
