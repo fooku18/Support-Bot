@@ -1,6 +1,6 @@
 # Answer without an unready tool
 
-Status: In progress
+Status: Done
 
 ## Summary
 
@@ -80,11 +80,23 @@ needed it. No retries, no new settings.
 - Live: T5 BLOCKED (inference path; the designated test instance has no
   gateway key with budget). T4 not run: the shared test instance was locked
   by another session, and the change touches neither the stack nor settings.
+  Staging, #test-1234, 2026-11-27 23:59:57 UTC, image `6c8828b`: a top-level
+  question about merge requests merged today in the deployment project was
+  answered in 18 s from a GitLab read (it named !24), with no
+  `native tool left out` line in the agent log for the three runs after the
+  deploy. The unready case itself was not reproduced live: making a tool
+  unready on staging needs an admin write. It is covered by the binding
+  tests and T3 only.
 
 ## Rollout
 
 No stored data, policy hash or compiled document changes. Follow the
 deployment repository's rollout runbook with a drained deploy.
+
+Merged as `f4e200a` (#45). Deployed to staging together with #43 (`6c8828b`)
+through deployment MR !24 (merge `7bd5e5fd`, 2026-11-27 23:55 UTC, pods up
+23:57 UTC, image `ghcr.io/fooku18/support-bot:main@sha256:cca1e7dc…`). Rollback:
+pin the previous digest `sha256:17a7d175…` (upstream `4eca9d8`).
 
 Behaviour operators can see: a channel with a runtime tool answers while
 that tool, or the whole tool runtime, is unready, and says the tool is
