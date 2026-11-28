@@ -41,8 +41,7 @@ export const TOOL_HELP_EXAMPLES: Record<ToolKind, string> = {
   webSearch: 'Can you find the official docs for this error?',
   webFetch: 'Can you summarize this web page?',
   codeMode: 'Can you compare these tool results?',
-  files: 'What is in this task file?',
-  localExec: 'Can you run the project tests?',
+  optimizely: 'What experiments are running?',
 };
 
 /** @public */
