@@ -172,3 +172,59 @@ describe('Code Mode tool kind', () => {
     ).toThrow('unknown field settings.x');
   });
 });
+
+describe('Optimizely tool kind', () => {
+  it('is a credential-free kind without a runtime probe that lists datafiles', () => {
+    expect(CREDENTIAL_KINDS).not.toContain('optimizely');
+    expect(CLI_RUNTIME_KINDS).not.toContain('optimizely');
+    expect(MCP_KINDS).not.toContain('optimizely');
+    expect(kindNeedsProbe('optimizely')).toBe(false);
+    expect(TOOL_KIND_CODES.optimizely).toBe('op');
+    const datafiles = [
+      { name: ' Shop ', sdkKey: 'AbCdEf0123456789' },
+      { name: 'Native app', sdkKey: 'ZyXwVu9876543210' },
+    ];
+    expect(
+      validateToolInstance({ kind: 'optimizely', label: 'Optimizely', settings: { datafiles } }),
+    ).toEqual({
+      kind: 'optimizely',
+      label: 'Optimizely',
+      host: null,
+      settings: {
+        datafiles: [
+          { name: 'Shop', sdkKey: 'AbCdEf0123456789' },
+          { name: 'Native app', sdkKey: 'ZyXwVu9876543210' },
+        ],
+      },
+    });
+  });
+
+  it('refuses missing, malformed, duplicate and unknown datafile entries', () => {
+    const cases: Array<[unknown, RegExp]> = [
+      [undefined, /at least one datafile/],
+      [[], /at least one datafile/],
+      [[{ name: 'Shop', sdkKey: '../evil' }], /sdkKey must be an Optimizely SDK key/],
+      [[{ name: '', sdkKey: 'AbCdEf0123456789' }], /name must be 1 to 64/],
+      [
+        [
+          { name: 'A', sdkKey: 'AbCdEf0123456789' },
+          { name: 'B', sdkKey: 'AbCdEf0123456789' },
+        ],
+        /listed twice/,
+      ],
+      [[{ name: 'A', sdkKey: 'AbCdEf0123456789', url: 'x' }], /unknown field/],
+    ];
+    for (const [datafiles, error] of cases)
+      expect(() =>
+        validateToolInstance({ kind: 'optimizely', label: 'Optimizely', settings: { datafiles } }),
+      ).toThrow(error);
+    expect(() =>
+      validateToolInstance({
+        kind: 'optimizely',
+        label: 'Optimizely',
+        host: 'cdn.optimizely.com',
+        settings: { datafiles: [{ name: 'A', sdkKey: 'AbCdEf0123456789' }] },
+      }),
+    ).toThrow('a optimizely instance takes no host');
+  });
+});

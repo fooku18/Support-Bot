@@ -23,6 +23,7 @@ import {
   type ChannelToolAssignment,
   type CloudflareSettings,
   type DatadogSettings,
+  type OptimizelySettings,
   type ToolInstanceState,
   type ToolKind,
   type ToolSettings,
@@ -278,6 +279,9 @@ function assignedTool(instance: ToolInstanceRow, status: ToolStatusRow | undefin
       tool.zones = settings.zones === null ? null : [...settings.zones];
       break;
     }
+    case 'optimizely':
+      tool.datafiles = (instance.settings as OptimizelySettings).datafiles.map((d) => ({ ...d }));
+      break;
     default:
       break;
   }

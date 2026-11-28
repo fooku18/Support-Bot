@@ -31,6 +31,7 @@ import {
   type ChannelToolAssignment,
   type CloudflareSettings,
   type DatadogSettings,
+  type OptimizelySettings,
   type ToolKind,
 } from '../generated/tool-kinds.js';
 import {
@@ -631,6 +632,7 @@ const KIND_ICONS: Record<ToolKind, IconName> = {
   slack: 'logo',
   webSearch: 'search',
   webFetch: 'download',
+  optimizely: 'activity',
   codeMode: 'zap',
 };
 
@@ -730,6 +732,14 @@ function settingsFields(kind: ToolKind, instance: ToolInstance | null): Raw {
           <textarea name="zones" rows="4" placeholder="example.com">
 ${(settings?.zones ?? []).join('\n')}</textarea>
         </label>`;
+    }
+    case 'optimizely': {
+      const settings = instance?.settings as OptimizelySettings | undefined;
+      return html`<label class="field"
+        >Datafiles (one per line: project name, a space, then the SDK key of one environment)
+        <textarea name="datafiles" rows="5" placeholder="Shop AbCdEf0123456789" required>
+${(settings?.datafiles ?? []).map((d) => `${d.name} ${d.sdkKey}`).join('\n')}</textarea>
+      </label>`;
     }
     case 'webSearch':
       return html`<p class="muted small">

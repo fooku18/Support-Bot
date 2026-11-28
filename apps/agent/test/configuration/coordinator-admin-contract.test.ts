@@ -32,7 +32,9 @@ function fixture(version = 7, status: 'whitelisted' | 'disabled' = 'whitelisted'
           ? { denyTools: ['search_datadog_logs'], toolsets: 'logs' }
           : kind === 'cloudflare'
             ? { accountId: 'a'.repeat(32), zones: ['fixture.example.test'] }
-            : {},
+            : kind === 'optimizely'
+              ? { datafiles: [{ name: 'Shop', sdkKey: 'AbCdEf0123456789' }] }
+              : {},
     hasCredential: true,
     credentialVersion: 1,
     status: 'enabled',
@@ -68,7 +70,7 @@ function rehash(input: ReturnType<typeof fixture>) {
 
 it('accepts complete actual compiler output for every tool kind', () => {
   const source = fixture();
-  expect(source.toolAssignments[0]!.tools).toHaveLength(8);
+  expect(source.toolAssignments[0]!.tools).toHaveLength(9);
   expect(parseCoordinatorAdminDocument(source).document).toEqual(source);
 });
 
@@ -78,6 +80,7 @@ it.each([
   ['datadog', 'denyTools'],
   ['cloudflare', 'accountId'],
   ['cloudflare', 'zones'],
+  ['optimizely', 'datafiles'],
 ])('refuses omitted %s.%s even with a valid recomputed hash', (kind, field) => {
   const source = fixture();
   Reflect.deleteProperty(

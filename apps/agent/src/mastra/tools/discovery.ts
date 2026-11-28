@@ -10,5 +10,6 @@ export function nativeOperationCapability(name: string): EffectiveToolName | 'gi
   if (name.startsWith('cloudflare_')) return 'cloudflare';
   if (name.startsWith('slack_')) return 'slack';
   if (name === 'web_fetch') return 'webFetch';
+  if (name === 'optimizely_lookup') return 'optimizely';
   return null;
 }

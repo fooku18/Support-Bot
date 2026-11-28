@@ -49,6 +49,7 @@ export interface ChannelToolDto {
     | 'slack'
     | 'webSearch'
     | 'webFetch'
+    | 'optimizely'
     | 'codeMode';
   instanceId: string;
   label: string;
@@ -65,6 +66,7 @@ export interface ChannelToolDto {
   accountId?: string | null;
   /** Cloudflare only: the zone names exposed (null: every zone the token sees). */
   zones?: string[] | null;
+  datafiles?: Array<{ name: string; sdkKey: string }>;
 }
 
 /**
