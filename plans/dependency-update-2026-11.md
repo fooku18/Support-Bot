@@ -92,4 +92,5 @@ Socket Mode connection.
 ## Open items
 
 - [x] Deploy to staging with the bootstrap upgrade (deployment repo)
-- [ ] Live check in the test channel
+- [x] Live check in the test channel: on 2026-11-28 06:03 UTC, after the Slack
+      SDK 8 deploy, a merge-request question was answered correctly in 16 s
