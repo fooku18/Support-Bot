@@ -205,26 +205,26 @@ describe('native deployment conversion', () => {
     }
   });
   it('requires the Socket Mode app token unless Socket Mode is off, and refuses it when off', () => {
-    for (const [mode, token] of [
-      ['', ''],
-      ['on', ''],
-      ['off', 'synthetic-slack'],
-      ['disabled', 'synthetic-slack'],
-    ] as Array<[string, string]>) {
-      const f = fixture();
+    const f = fixture();
+    for (const [mode, token, error] of [
+      ['', '', 'SLACK_APP_TOKEN is required'],
+      ['on', '', 'SLACK_APP_TOKEN is required'],
+      ['off', 'synthetic-slack', 'SLACK_APP_TOKEN must be empty'],
+      ['disabled', 'synthetic-slack', 'SLACK_SOCKET_MODE is invalid'],
+    ] as Array<[string, string, string]>) {
       f.env.SLACK_SOCKET_MODE = mode;
       f.env.SLACK_APP_TOKEN = token;
       f.save();
-      const r = f.run('test-stack.mjs', ['up', '--instance-dir', f.dir]);
-      expect(r.status, `${mode}/${token}`).toBe(2);
-      expect(r.stderr, `${mode}/${token}`).toMatch(/SLACK_APP_TOKEN|SLACK_SOCKET_MODE/);
-      expect(f.calls()).toEqual([]);
+      expect(() => deployment(path.join(f.dir, '.env.testing')), mode).toThrow(error);
     }
-    const f = fixture();
+    const r = f.run('test-stack.mjs', ['up', '--instance-dir', f.dir]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain('SLACK_SOCKET_MODE');
+    expect(f.calls()).toEqual([]);
     f.env.SLACK_SOCKET_MODE = 'off';
     f.env.SLACK_APP_TOKEN = '';
     f.save();
-    expect(() => deployment(path.join(f.dir, '.env.testing'))).not.toThrow();
+    expect(deployment(path.join(f.dir, '.env.testing')).socketMode).toBe('off');
   });
 
   it('selects only native application services', () => {

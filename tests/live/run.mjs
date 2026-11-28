@@ -473,7 +473,7 @@ export function loadLive(root) {
   // `test:stack:up` records the mode; before the first start it is unknown.
   const mode = readModelMode(root) ?? fail('model_mode_unknown_start_with_test_stack_up');
   const d = deployment(path.join(root, '.env.testing'), { modelMode: mode });
-  if ((d.env.SLACK_SOCKET_MODE?.trim() || 'on') !== 'on') fail('slack_socket_mode_off');
+  if (d.socketMode !== 'on') fail('slack_socket_mode_off');
   const file = path.join(root, '.env.e2e');
   if (
     keepsPermissionBits(path.dirname(fs.realpathSync(file))) &&

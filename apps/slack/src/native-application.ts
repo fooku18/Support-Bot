@@ -410,7 +410,7 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
         resolve,
       );
     });
-    if (socketMode)
+    if (socketMode) {
       receiver = createSocketModeReceiver({
         appToken: required(env, 'SLACK_APP_TOKEN'),
         log,
@@ -500,6 +500,7 @@ export async function startNativeAdapter(env: NodeJS.ProcessEnv, shutdown?: Abor
             })(),
           ),
       });
+    }
     const deadline = Date.now() + 60000;
     for (;;) {
       shutdown?.throwIfAborted();
