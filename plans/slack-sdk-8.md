@@ -43,7 +43,11 @@ moves from an `https-proxy-agent` agent to an undici dispatcher.
 - T1 and T2 in the Linux container: all package tests and `npm test` pass.
 - T3, images `slack8-33fa5dd9b0e9`: discovery (13 records), application (82),
   backup (18), telemetry (8) and tools (19) pass.
-- T4 and T5: pending.
+- T4 stub suite, images built from this branch: 7 of 8. Only
+  `stub-cancel-control-stops-a-held-run` fails (`expected_answer_fact_missing`),
+  as on `main` since 2026-11-27.
+- T5 gateway `answer-continuity` passes through the egress proxy.
+- After the rebase onto `8a7a85d` (#52): T0, T1 and T2 rerun.
 
 ## Rollout
 
@@ -53,5 +57,4 @@ an answer in the test channel.
 
 ## Open items
 
-- [ ] T4 stub suite and one T5 gateway scenario
 - [ ] Deploy and live-check
