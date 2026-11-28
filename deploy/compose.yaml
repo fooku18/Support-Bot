@@ -116,7 +116,7 @@ services:
 
   native-upgrade:
     profiles: [maintenance]
-    image: support-agent/native-coding:${NATIVE_IMAGE_TAG:?explicit image tag required}
+    image: support-agent/native-answer:${NATIVE_IMAGE_TAG:?explicit image tag required}
     command: [upgrade]
     network_mode: none
     read_only: true

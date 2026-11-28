@@ -226,6 +226,7 @@ describe('native deployment conversion', () => {
       depends_on: { 'native-postgres': { condition: 'service_healthy' } },
     });
     expect(c.services['native-upgrade'].secrets).toBeUndefined();
+    expect(c.services['native-upgrade'].image).toBe(c.services['native-provision'].image);
     // The model stub: tools network only, no route out, no ports, no secrets.
     const stub = c.services['model-stub'];
     expect(stub.profiles).toEqual(['stub']);
