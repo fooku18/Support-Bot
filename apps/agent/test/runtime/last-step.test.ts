@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { InMemoryStore } from '@mastra/core/storage';
 import { createNativeRuntime } from '../../src/mastra/runtime/agent.js';
 import { runNativeSegment } from '../../src/mastra/runtime/segment.js';
+import { answerBefore } from '../../src/mastra/agents/shared.js';
 
 type Request = {
   tools?: Array<{ name: string }>;
@@ -153,6 +154,46 @@ it('tells the model which assigned tools are unavailable in this run', async () 
     expect(JSON.stringify(requests[0]!.system)).toContain(
       'unavailable in this run: GitLab, Datadog',
     );
+  } finally {
+    await runtime.mastra.shutdown();
+  }
+});
+
+it('answers without tools once the run deadline has passed', async () => {
+  const requests: Request[] = [];
+  vi.stubGlobal('fetch', async (_url: unknown, init: RequestInit) => {
+    const request = JSON.parse(String(init.body)) as Request;
+    requests.push(request);
+    return request.tool_choice?.type === 'none'
+      ? stream({ type: 'text', text: 'Answer before the deadline.' })
+      : stream({ type: 'tool_use', query: `lookup ${requests.length}` });
+  });
+  const runtime = createNativeRuntime({
+    storage: new InMemoryStore({ id: randomUUID() }),
+    instructions: 'TRUSTED instructions',
+    model: testModel('http://127.0.0.1:9999', 'synthetic', testSelection('test', 'synthetic')),
+    tools: {},
+    beforeDispatch: async () => {},
+    contextTokens: 100_000,
+    outputTokens: 64,
+    maxSteps: 10,
+  });
+  try {
+    let deadline = Date.now() + 60_000;
+    const out = await runNativeSegment(
+      await runtime.agent.stream('Look this up', {
+        closeOnSuspend: true,
+        maxSteps: 10,
+        prepareStep: (args) => {
+          if (requests.length === 2) deadline = Date.now() - 1;
+          return answerBefore(deadline)(args);
+        },
+      }),
+    );
+    expect(requests.map((r) => r.tool_choice?.type ?? 'auto')).toEqual(['auto', 'auto', 'none']);
+    expect(JSON.stringify(requests[2]!.system)).toContain('last step of this run');
+    expect(out.text).toBe('Answer before the deadline.');
+    expect(out.uncertain).toBe(false);
   } finally {
     await runtime.mastra.shutdown();
   }

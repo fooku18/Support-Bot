@@ -6,6 +6,7 @@ import type { PoolClient } from 'pg';
 import { nativeAgentOperations, readNativeRun } from '../mastra/runtime/inspection.js';
 import { createNativeRuntime } from '../mastra/runtime/agent.js';
 import { runNativeSegment } from '../mastra/runtime/segment.js';
+import { answerBefore } from '../mastra/agents/shared.js';
 import { createReadServiceTools } from '../mastra/tools/read-services.js';
 import { buildTaskKey } from '../contracts/protocol.js';
 import {
@@ -26,6 +27,8 @@ import { createNativeAgentDelivery } from './agent-delivery.js';
 import { createRunStatus, RUN_STATUS_START, toolStatus } from '../domain/delivery/run-status.js';
 
 /** An admitted execution of this process, from admission until it settles. */
+const FINAL_ANSWER_MS = 90_000;
+
 type ActiveRun = { abort(): Promise<void>; completion?: Promise<unknown> };
 
 /** Thin single-process application boundary. Mastra owns execution and suspension.
@@ -272,6 +275,7 @@ export function createNativeAgentService(options: NativeAgentOptions) {
         autoResumeSuspendedTools: false,
         abortSignal: signal.signal,
         maxSteps: options.limits.maxSteps,
+        prepareStep: answerBefore(Date.now() + options.limits.timeoutMs - FINAL_ANSWER_MS),
         modelSettings: { maxOutputTokens: options.limits.outputTokens, maxRetries: 0 },
         toolCallConcurrency: 1,
         maxProcessorRetries: 0,
