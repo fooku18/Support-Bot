@@ -158,7 +158,7 @@ it('uses actual durable discovery and the isolated fetch transport, with content
   const runtime = createNativeRuntime({
     storage: new InMemoryStore(),
     model: gateway.request,
-    instructions: nativeInstructions,
+    instructions: nativeInstructions({ maxSteps: 5, timeoutMs: 120000 }),
     tools: f.tools,
     beforeDispatch: async () => {},
     contextTokens: 12000,
