@@ -18,4 +18,4 @@ T0–T3 passed with the change on `f4e200a`, including 135 root tests and 82 app
 
 ## Rollout
 
-Test instance restored to the gateway baseline. Deployment and production smoke checks pending.
+The initial deployment passed infrastructure checks. Both connector-posted smoke questions fell through to inference. The connector's thread reads show a final `*Sent using* <@app>` line. Match that suffix only when checking a capability question; leave other commands and ordinary requests untouched.

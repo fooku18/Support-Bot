@@ -73,6 +73,15 @@ async function setup(dbPath = ':memory:') {
   };
 }
 describe('channel command grammar', () => {
+  it('accepts only a trailing Slack app attribution on help questions', () => {
+    const suffix = '\n*Sent using* <@UAPP>';
+    for (const question of ['help', 'what can you do here?'])
+      expect(classifyChannelCommand(`<@UBOT> ${question}${suffix}`, 'UBOT')).toEqual({
+        kind: 'capabilities',
+      });
+    for (const text of [`help me${suffix}`, `help${suffix} please`, 'help\nSent using Claude'])
+      expect(classifyChannelCommand(`<@UBOT> ${text}`, 'UBOT')).toBeNull();
+  });
   it('answers both help questions from the current channel assignment', async () => {
     const { commands, source, store } = await setup();
     await commands.execute(source('help'));

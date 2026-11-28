@@ -15,7 +15,8 @@ export function classifyChannelCommand(text: string, botUserId: string): Channel
   const mention = /^\s*<@([A-Z0-9]+)>\s*([\s\S]*)$/.exec(text);
   if (!mention || mention[1] !== botUserId) return null;
   const input = mention[2]!;
-  if (/^(?:help|what can you do here)\??\s*$/i.test(input)) return { kind: 'capabilities' };
+  const helpText = input.replace(/\s+\*Sent using\* <@[UW][A-Z0-9]+(?:\|[^>\n]+)?>\s*$/, '');
+  if (/^(?:help|what can you do here)\??\s*$/i.test(helpText)) return { kind: 'capabilities' };
   if (!input.startsWith('!')) return null;
   if (/^!help\s*$/i.test(input)) return { kind: 'help' };
   if (/^!config\s*$/i.test(input)) return { kind: 'configure' };
