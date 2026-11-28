@@ -43,11 +43,15 @@ Slack and Atlassian reads, web search, web fetch, Code Mode, charts,
 - Compose runs the agent, provisioning and telemetry from the unprivileged
   `native-answer` image (no root, no added capabilities, no unconfined
   seccomp or AppArmor, no workspace volume). The agent limits are always
-  12 steps and 120 s.
+  the answer-only budget from #50 (25 steps, 300 s).
 - The `backup` T3 suite now also runs the `answer-only` phase (startup
   refusals included) and the in-image Code Mode check that the `coding`
   suite ran. Code Mode's sandbox probes stay covered in
   `apps/agent/test/runtime/code-mode.test.ts`.
+- Held back: `apps/agent/src/application/instructions.ts` still tells the
+  model how to use coding tools when they are available. They never are
+  now. Another session owns that file tonight; drop the sentence in its
+  next change.
 - Deferred: the live runner (`tests/live/run.mjs`) still accepts
   `"mode": "coding"`, which now only means a scenario on a channel with
   tools, and its publication and export fixtures. Renaming the mode and
