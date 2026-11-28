@@ -55,7 +55,7 @@ export function validateScenario(value) {
     Object.keys(v).every((k) => allowed.includes(k));
   if (
     !keys(value, ['name', 'mode', 'model', 'covers', 'budget', 'requires', 'steps', 'isolation']) ||
-    !['answer', 'coding'].includes(value.mode ?? 'answer') ||
+    !['answer', 'tools'].includes(value.mode ?? 'answer') ||
     !['stub', 'gateway'].includes(value.model ?? 'gateway') ||
     typeof value.name !== 'string' ||
     !value.name.trim() ||
@@ -65,7 +65,7 @@ export function validateScenario(value) {
     value.steps.length > 8
   )
     fail('invalid_native_scenario');
-  if (value.mode !== 'coding' && !value.isolation) fail('invalid_native_scenario');
+  if (value.mode !== 'tools' && !value.isolation) fail('invalid_native_scenario');
   // The live-scenario gate: a gateway scenario declares what it uniquely
   // covers and its size (posted turns, upper bound of model requests).
   if (
@@ -149,8 +149,6 @@ export function validateScenario(value) {
         step.question ||
         step.resume ||
         step.attachments ||
-        step.publication ||
-        step.exports ||
         step.webSearch ||
         step.webFetch ||
         step.longAnswer)
@@ -189,8 +187,6 @@ export function validateScenario(value) {
       (!(value.steps[index + 1]?.cancel || value.steps[index + 1]?.delete?.step === index) ||
         step.question ||
         step.resume ||
-        step.publication ||
-        step.exports ||
         step.webSearch ||
         step.webFetch)
     )
@@ -238,10 +234,7 @@ export function validateScenario(value) {
         step.attachments)
     )
       fail('invalid_native_scenario');
-    if (
-      step.question &&
-      (step.publication || step.exports || step.webSearch || step.webFetch || step.resume)
-    )
+    if (step.question && (step.webSearch || step.webFetch || step.resume))
       fail('invalid_native_scenario');
   }
   if (value.isolation?.question || value.isolation?.resume) fail('invalid_native_scenario');
@@ -267,14 +260,12 @@ export function validateScenario(value) {
         'cancel',
         'messageAttachments',
         'discovery',
-        ...(value.mode === 'coding' ? ['publication', 'exports'] : []),
       ]) ||
       (step.mention !== undefined && typeof step.mention !== 'boolean') ||
       (step.working !== undefined && typeof step.working !== 'boolean') ||
       (step.question !== undefined && typeof step.question !== 'boolean') ||
       (step.resume !== undefined && typeof step.resume !== 'boolean') ||
-      (step.discovery !== undefined &&
-        (step.discovery !== true || step.publication || step.exports)) ||
+      (step.discovery !== undefined && step.discovery !== true) ||
       !validPrompt(step.prompt) ||
       // A held or refused step has no answer of its own; it may only name what
       // must never appear.
@@ -308,67 +299,30 @@ export function validateScenario(value) {
       if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password)
         fail('invalid_fetch_fixture');
     }
-    for (const kind of ['attachments', 'exports']) {
-      const files = step[kind];
-      if (files !== undefined && (!Array.isArray(files) || !files.length || files.length > 4))
-        fail('invalid_file_fixture');
-      for (const f of files ?? []) {
-        if (
-          !keys(f, kind === 'attachments' ? ['name', 'data'] : ['name', 'bytes', 'sha256']) ||
-          typeof f.name !== 'string' ||
-          !f.name ||
-          f.name.length > 160 ||
-          /[\p{Cc}/\\]/u.test(f.name)
-        )
-          fail('invalid_file_fixture');
-        if (kind === 'attachments') {
-          if (
-            typeof f.data !== 'string' ||
-            f.data.length > 280000 ||
-            !f.data.length ||
-            Buffer.from(f.data, 'base64').toString('base64') !== f.data
-          )
-            fail('invalid_file_fixture');
-        } else if (
-          !Number.isSafeInteger(f.bytes) ||
-          f.bytes < 1 ||
-          f.bytes > 2 * 1024 ** 2 ||
-          !/^[a-f0-9]{64}$/.test(f.sha256 ?? '')
-        )
-          fail('invalid_file_fixture');
-      }
-    }
-    if (value.mode === 'coding') {
-      const p = step.publication;
-      // A discovery-only step can assert read tools without publication.
-      if (p === undefined && (step.webSearch || step.webFetch || step.question || step.discovery))
-        continue;
+    const files = step.attachments;
+    if (files !== undefined && (!Array.isArray(files) || !files.length || files.length > 4))
+      fail('invalid_file_fixture');
+    for (const f of files ?? []) {
       if (
-        !keys(p, ['host', 'project', 'projectId', 'targetBranch', 'files']) ||
-        !/^[a-z0-9.-]+$/.test(p.host ?? '') ||
-        !/^[a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9_.-]+)+$/.test(p.project ?? '') ||
-        !Number.isSafeInteger(p.projectId) ||
-        p.projectId < 1 ||
-        !/^[a-zA-Z0-9_./-]+$/.test(p.targetBranch ?? '') ||
-        !Array.isArray(p.files) ||
-        !p.files.length ||
-        p.files.length > 10
+        !keys(f, ['name', 'data']) ||
+        typeof f.name !== 'string' ||
+        !f.name ||
+        f.name.length > 160 ||
+        /[\p{Cc}/\\]/u.test(f.name) ||
+        typeof f.data !== 'string' ||
+        f.data.length > 280000 ||
+        !f.data.length ||
+        Buffer.from(f.data, 'base64').toString('base64') !== f.data
       )
-        fail('invalid_publication_fixture');
-      for (const file of p.files) {
-        if (
-          !keys(file, ['path', 'contains']) ||
-          typeof file.path !== 'string' ||
-          !file.path ||
-          file.path.startsWith('/') ||
-          file.path.split('/').some((x) => !x || x === '..' || x === '.') ||
-          !Array.isArray(file.contains) ||
-          !file.contains.length ||
-          !file.contains.every((s) => typeof s === 'string' && s.length > 0 && s.length <= 300)
-        )
-          fail('invalid_publication_fixture');
-      }
+        fail('invalid_file_fixture');
     }
+    // A step with tools declares what it checks: a read-only discovery,
+    // search, fetch or question.
+    if (
+      value.mode === 'tools' &&
+      !(step.webSearch || step.webFetch || step.question || step.discovery)
+    )
+      fail('tool_step_evidence_required');
   }
   return value;
 }
@@ -406,8 +360,8 @@ function validChannelSettings(value) {
   );
 }
 /** Tool kinds a scenario needs in the test channel: its `requires`, `webSearch`
- * and `webFetch` for steps that use them, and GitLab for a publication. Every
- * other kind must be unassigned. Works on unvalidated scenario files too. */
+ * and `webFetch` for steps that use them. Every other kind must be
+ * unassigned. Works on unvalidated scenario files too. */
 export function neededTools(scenario) {
   const steps = [
     ...(Array.isArray(scenario?.steps) ? scenario.steps : []),
@@ -416,7 +370,6 @@ export function neededTools(scenario) {
   const kinds = new Set(Array.isArray(scenario?.requires) ? scenario.requires : []);
   if (steps.some((s) => s?.webSearch)) kinds.add('webSearch');
   if (steps.some((s) => s?.webFetch)) kinds.add('webFetch');
-  if (steps.some((s) => s?.publication)) kinds.add('gitlab');
   return TOOL_KINDS.filter((k) => kinds.has(k));
 }
 /** The exact assignment a scenario needs, from the workspace's existing
@@ -792,54 +745,6 @@ export function liveFileTransport(token, fetcher = fetch) {
       }
       throw new LiveError('input_share_identity_unconfirmed');
     },
-    async verify(slack, expected, inspected, channel, rootTs, appUser) {
-      if (inspected.exports?.length !== expected.length)
-        throw new LiveError('export_count_mismatch');
-      const result = [];
-      for (const e of expected) {
-        const matches = inspected.exports.filter((f) => f.name === e.name);
-        const f = matches[0];
-        if (
-          matches.length !== 1 ||
-          f.bytes !== e.bytes ||
-          f.sha256 !== e.sha256 ||
-          f.receipt?.id !== f.id ||
-          f.receipt?.sha256 !== e.sha256 ||
-          f.receipt?.bytes !== e.bytes
-        )
-          throw new LiveError('export_receipt_mismatch');
-        const info = await slack('files.info', { file: f.receipt.fileId });
-        const data = info.file;
-        const shares = [
-          ...(data?.shares?.private?.[channel] ?? []),
-          ...(data?.shares?.public?.[channel] ?? []),
-        ];
-        if (
-          data?.id !== f.receipt.fileId ||
-          data.user !== appUser ||
-          data.size !== e.bytes ||
-          !shares.some((s) => s.thread_ts === rootTs)
-        )
-          throw new LiveError('export_recipient_mismatch');
-        const response = await fetcher(fileUrl(data.url_private_download ?? data.url_private), {
-          redirect: 'error',
-          headers: { authorization: `Bearer ${token}` },
-          signal: AbortSignal.timeout(30000),
-        });
-        if (!response.ok || !response.body) throw new LiveError('export_download_unavailable');
-        const sha = createHash('sha256');
-        let size = 0;
-        for await (const chunk of response.body) {
-          size += chunk.length;
-          if (size > e.bytes) throw new LiveError('export_size_mismatch');
-          sha.update(chunk);
-        }
-        if (size !== e.bytes || sha.digest('hex') !== e.sha256)
-          throw new LiveError('export_bytes_mismatch');
-        result.push({ name: e.name, fileId: data.id, bytes: size, sha256: e.sha256 });
-      }
-      return result;
-    },
     /** Downloads a long answer's `answer.md` and returns its text after
      * checking app, thread, size and the retained answer hash. */
     async answer(slack, fileId, channel, rootTs, appUser, expected) {
@@ -1098,87 +1003,9 @@ function assertVisibleCitations(text, ids) {
   )
     throw new LiveError('provider_citation_not_visible');
 }
-export function publicationEvidence(inspection, fixture) {
-  const receipts = inspection.publications;
-  if (
-    !Array.isArray(receipts) ||
-    receipts.length !== 1 ||
-    receipts[0].run_id !== inspection.runId ||
-    receipts[0].outcome !== 'confirmed'
-  )
-    throw new LiveError('publication_not_confirmed');
-  const e = receipts[0].evidence;
-  if (
-    !e ||
-    e.state !== 'completed' ||
-    e.project !== fixture.project ||
-    e.projectId !== fixture.projectId ||
-    e.targetBranch !== fixture.targetBranch ||
-    !/^[a-f0-9]{40}$/.test(e.commit ?? '') ||
-    !e.branch ||
-    e.branch === e.targetBranch ||
-    !Number.isSafeInteger(e.mrIid) ||
-    e.mrIid < 1 ||
-    e.mrUrl !== `https://${fixture.host}/${fixture.project}/-/merge_requests/${e.mrIid}`
-  )
-    throw new LiveError('publication_receipt_identity_mismatch');
-  return e;
-}
-export function assertPublication(inspection, fixture, observed, previous) {
-  const e = publicationEvidence(inspection, fixture);
-  const { project, mr, files } = observed;
-  if (
-    project.id !== fixture.projectId ||
-    project.path_with_namespace !== fixture.project ||
-    project.default_branch !== fixture.targetBranch ||
-    mr.project_id !== e.projectId ||
-    mr.iid !== e.mrIid ||
-    mr.state !== 'opened' ||
-    mr.source_branch !== e.branch ||
-    mr.target_branch !== e.targetBranch ||
-    mr.web_url !== e.mrUrl ||
-    mr.sha !== e.commit ||
-    !Array.isArray(files) ||
-    files.length !== fixture.files.length
-  )
-    throw new LiveError('published_remote_identity_mismatch');
-  if (
-    previous &&
-    (previous.mrIid !== e.mrIid || previous.branch !== e.branch || previous.commit === e.commit)
-  )
-    throw new LiveError('publication_followup_not_same_mr_new_commit');
-  const verified = fixture.files.map((expected, index) => {
-    const file = files[index];
-    if (
-      file.file_path !== expected.path ||
-      file.commit_id !== e.commit ||
-      file.encoding !== 'text' ||
-      typeof file.content !== 'string'
-    )
-      throw new LiveError('published_file_identity_mismatch');
-    // The tool runtime decodes repository files before redacting them.
-    const bytes = Buffer.from(file.content, 'utf8');
-    const sha256 = hash(bytes);
-    if (bytes.length !== file.size || bytes.length > 200000 || sha256 !== file.content_sha256)
-      throw new LiveError('published_file_bytes_mismatch');
-    for (const fact of expected.contains)
-      if (!file.content.includes(fact)) throw new LiveError('published_file_fact_missing');
-    return { path: expected.path, bytes: bytes.length, sha256 };
-  });
-  return {
-    project: e.project,
-    projectId: e.projectId,
-    branch: e.branch,
-    targetBranch: e.targetBranch,
-    commit: e.commit,
-    mrIid: e.mrIid,
-    mrUrl: e.mrUrl,
-    files: verified,
-  };
-}
 /** Service credentials are read only inside their existing container, never copied to host. */
 export function nativeRead(d, operation, body, execute = compose) {
-  if (!['identity', 'inspect', 'publication', 'requests', 'model'].includes(operation))
+  if (!['identity', 'inspect', 'requests', 'model'].includes(operation))
     fail('unsupported_native_read');
   if (
     operation === 'requests' &&
@@ -1208,30 +1035,12 @@ export function nativeRead(d, operation, body, execute = compose) {
         console.log(JSON.stringify({requests,inference}));
       } else if(op==='model') {
         console.log(JSON.stringify(await call('http://127.0.0.1:'+process.env.NATIVE_APPLICATION_PORT+'/agents/model',process.env.SERVICE_TOKEN,body)));
-      } else if(op==='identity'||op==='publication') {
+      } else if(op==='identity') {
         const c=await call(process.env.ADMIN_URL.replace(/\/$/,'')+'/internal/config',process.env.ADMIN_INTERNAL_TOKEN,null);
         const i=c.installations.find(i=>i.teamId===body.teamId);
         if(!i)throw Error('missing installation');
         const assigned=c.toolAssignments.filter(a=>a.teamId===body.teamId&&a.channelId===body.channelId);
-        if(op==='identity') console.log(JSON.stringify({installation:i,assignedTools:assigned.flatMap(a=>a.tools).length,readyKinds:[...new Set(assigned.flatMap(a=>a.tools).filter(t=>t.ready).map(t=>t.kind))].sort(),version:c.version,hash:c.hash}));
-        else {
-          const candidates=assigned.flatMap(a=>a.tools).filter(t=>t.kind==='gitlab'&&t.host===body.fixture.host);
-          if(candidates.length!==1)throw Error('binding');
-          const t=candidates[0];
-          const read=async(args)=>{
-            if(!['get_project','get_merge_request','get_repository_file'].includes(args.kind))throw Error('operation');
-            const r=await call(process.env.CLI_RUNTIME_URL.replace(/\/$/,'')+'/gitlab',process.env.CLI_RUNTIME_TOKEN,{instanceId:t.instanceId,teamId:body.teamId,credentialVersion:t.credentialVersion,operation:args.kind,operationArgs:args,timeoutMs:30000,maxOutputBytes:200000});
-            if(r.status!=='completed'||r.exitCode!==0||r.truncated)throw Error('read');
-            return JSON.parse(r.output);
-          };
-          const p=body.fixture, e=body.evidence;
-          if(e.project!==p.project||e.projectId!==p.projectId||!/^[a-f0-9]{40}$/.test(e.commit)||!Number.isSafeInteger(e.mrIid))throw Error('receipt');
-          const project=await read({kind:'get_project',project:p.project});
-          const mr=await read({kind:'get_merge_request',project:p.project,merge_request_iid:e.mrIid});
-          const files=[];
-          for(const file of p.files)files.push(await read({kind:'get_repository_file',project:p.project,file_path:file.path,ref:e.commit}));
-          console.log(JSON.stringify({project,mr,files}));
-        }
+        console.log(JSON.stringify({installation:i,assignedTools:assigned.flatMap(a=>a.tools).length,readyKinds:[...new Set(assigned.flatMap(a=>a.tools).filter(t=>t.ready).map(t=>t.kind))].sort(),version:c.version,hash:c.hash}));
       } else {
         const base='http://127.0.0.1:'+process.env.NATIVE_APPLICATION_PORT;
         let i,refused;
@@ -1243,7 +1052,7 @@ export function nativeRead(d, operation, body, execute = compose) {
           refused=/^[a-z_]{1,64}$/.test(e?.message??'')?e.message:'unavailable';
         }
         if(refused) console.log(JSON.stringify({refused}));
-        else console.log(JSON.stringify({runId:i.runId,messageTs:i.messageTs,delivery:i.delivery,active:i.active,suspended:!!i.suspended,receipt:i.receipt,publications:i.publications,exports:i.exports,answerFile:i.answerFile,webSearch:i.webSearch,webCitations:i.webCitations,webFetch:i.webFetch}));
+        else console.log(JSON.stringify({runId:i.runId,messageTs:i.messageTs,delivery:i.delivery,active:i.active,suspended:!!i.suspended,receipt:i.receipt,answerFile:i.answerFile,webSearch:i.webSearch,webCitations:i.webCitations,webFetch:i.webFetch}));
       }
     } catch {process.exitCode=2;}
   `;
@@ -1268,7 +1077,6 @@ export function nativeRead(d, operation, body, execute = compose) {
     if (operation === 'inspect') return { refused: 'unavailable' };
     fail(
       {
-        publication: 'publication_readback_unavailable',
         requests: 'model_request_count_unavailable',
         model: 'selected_model_unavailable',
       }[operation] ?? 'native_admin_identity_unavailable',
@@ -1300,11 +1108,6 @@ export function assertWebSearch(inspection, step) {
     new Set(receipts.map((r) => r.id)).size !== receipts.length
   )
     throw new LiveError('confirmed_provider_search_evidence_missing');
-  if (
-    !step.publication &&
-    ((inspection.publications?.length ?? 0) || (inspection.exports?.length ?? 0))
-  )
-    throw new LiveError('search_discovery_produced_external_artifacts');
   return receipts;
 }
 
@@ -1326,11 +1129,6 @@ export function assertWebFetch(inspection, step) {
     throw new LiveError('confirmed_direct_fetch_evidence_missing');
   if (!step.webSearch && inspection.webSearch?.length)
     throw new LiveError('direct_fetch_fixture_used_search');
-  if (
-    !step.publication &&
-    ((inspection.publications?.length ?? 0) || (inspection.exports?.length ?? 0))
-  )
-    throw new LiveError('fetch_discovery_produced_external_artifacts');
   return receipts;
 }
 
@@ -1339,7 +1137,6 @@ export async function runScenario({
   slack,
   identity,
   inspect,
-  verifyPublication,
   files,
   report,
   save,
@@ -1467,13 +1264,9 @@ export async function runScenario({
     if (fetches && !ready.has('webFetch')) fail('ready_fetch_assignment_required');
     for (const kind of scenario.requires ?? [])
       if (!ready.has(kind)) fail(`ready_${kind}_assignment_required`);
-    if (scenario.mode !== 'coding' && !searches && !fetches && tools.assignedTools !== 0)
+    if (scenario.mode !== 'tools' && !searches && !fetches && tools.assignedTools !== 0)
       fail('answer_fixture_requires_channel_without_tools');
-    if (
-      scenario.mode === 'coding' &&
-      (!tools.assignedTools || (scenario.steps.some((s) => s.publication) && !verifyPublication))
-    )
-      fail('coding_fixture_requires_publication_verification');
+    if (scenario.mode === 'tools' && !tools.assignedTools) fail('tools_fixture_requires_tools');
     report.identity = {
       teamId: auth.team_id,
       channelId: channel,
@@ -1730,8 +1523,6 @@ export async function runScenario({
       if (
         retained.state === 'passed' &&
         retained.answer &&
-        (!value.publication || retained.publication) &&
-        (!value.exports || retained.exports) &&
         (!value.webSearch || retained.webSearch) &&
         (!value.webFetch || retained.webFetch)
       ) {
@@ -1761,18 +1552,6 @@ export async function runScenario({
           citations,
         );
         if (answer.file) await verifyLong(answer, value, rootTs, citations);
-        if (value.exports) {
-          const current = await observe(rootTs, retained);
-          if (current?.runId !== retained.runId) fail('retained_export_run_changed');
-          await files.verify(
-            slack,
-            value.exports,
-            current,
-            channel,
-            rootTs,
-            identity.installation.botUserId,
-          );
-        }
         if (value.webFetch) {
           const current = await observe(rootTs, retained);
           if (current?.runId !== retained.runId) fail('retained_fetch_run_changed');
@@ -1961,12 +1740,6 @@ export async function runScenario({
           }
           if (asked.length) throw new LiveError('expected_question_fact_missing');
         } else if (current.delivery?.outcome === 'delivered') {
-          // A step that declares no publication or export must create none.
-          if (
-            (!value.publication && current.publications?.length) ||
-            (!value.exports && current.exports?.length)
-          )
-            throw new LiveError('discovery_produced_external_artifacts');
           const webSearch = value.webSearch ? assertWebSearch(current, value) : undefined;
           const citations =
             webSearch && report.selectedModel?.route === 'openai'
@@ -1991,23 +1764,6 @@ export async function runScenario({
             !answer.footer?.includes(`Model: *${key}*`)
           )
             throw new LiveError('answer_footer_model_mismatch');
-          const publication = value.publication
-            ? await verifyPublication(
-                current,
-                value.publication,
-                report.attempts.at(-2)?.publication,
-              )
-            : undefined;
-          const exports = value.exports
-            ? await files.verify(
-                slack,
-                value.exports,
-                current,
-                channel,
-                rootTs,
-                identity.installation.botUserId,
-              )
-            : undefined;
           if (value.working) {
             // Presentation removes the reaction after the delivery receipt commits.
             const deadline = Date.now() + 20000;
@@ -2034,8 +1790,6 @@ export async function runScenario({
             state: 'passed',
             runId: current.runId,
             answer: { ...withoutPreview(answer), ...(long ? { long } : {}) },
-            ...(publication ? { publication } : {}),
-            ...(exports ? { exports } : {}),
             ...(webSearch ? { webSearch } : {}),
             ...(citations ? { webCitations: citations } : {}),
             ...(webFetch ? { webFetch } : {}),
@@ -2052,8 +1806,8 @@ export async function runScenario({
       }
       if (Date.now() >= until) throw new LiveError('native_answer_timeout_no_retry');
       // Inspection revalidates source bytes and current Slack authority. Avoid
-      // exhausting Slack read limits while a coding turn is still running.
-      await delay(scenario.mode === 'coding' ? 15000 : 5000);
+      // exhausting Slack read limits while a tool turn is still running.
+      await delay(scenario.mode === 'tools' ? 15000 : 5000);
     }
   }
   let rootTs;
@@ -2295,19 +2049,12 @@ export async function runOne({ root, file, values, skipPassed = false, deps = {}
           }
         : {}),
       manageTools,
-      gitlabHost:
-        scenario.steps.find((s) => s.publication)?.publication.host ??
-        (GITLAB_FIXTURE.host[1].test(env.E2E_GITLAB_HOST?.trim() ?? '')
-          ? env.E2E_GITLAB_HOST.trim()
-          : null),
+      gitlabHost: GITLAB_FIXTURE.host[1].test(env.E2E_GITLAB_HOST?.trim() ?? '')
+        ? env.E2E_GITLAB_HOST.trim()
+        : null,
       signal: deps.signal,
       ...(deps.delay ? { delay: deps.delay } : {}),
-      timeoutMs: scenario.mode === 'coding' ? 660000 : 180000,
-      verifyPublication: async (current, fixture, previous) => {
-        const evidence = publicationEvidence(current, fixture);
-        const observed = read(d, 'publication', { teamId, channelId, fixture, evidence });
-        return assertPublication(current, fixture, observed, previous);
-      },
+      timeoutMs: scenario.mode === 'tools' ? 660000 : 180000,
       inspect: (rootTs, auth) =>
         read(d, 'inspect', {
           installationId: identity.installation.botUserId,

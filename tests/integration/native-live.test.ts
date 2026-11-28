@@ -16,7 +16,6 @@ import {
   keepsPermissionBits,
   main,
   nativeRead,
-  assertPublication,
   liveFileTransport,
   settledRequestCount,
   runSuite,
@@ -159,15 +158,12 @@ it('requires direct-fetch evidence for the exact URL and refuses search substitu
   expect(() => assertWebFetch({ webFetch: [receipt], webSearch: [{}] }, step)).toThrow(
     'direct_fetch_fixture_used_search',
   );
-  expect(() => assertWebFetch({ webFetch: [receipt], publications: [{}] }, step)).toThrow(
-    'fetch_discovery_produced_external_artifacts',
-  );
   expect(
     validateScenario(JSON.parse(fs.readFileSync('tests/live/scenarios/web-fetch.json', 'utf8')))
       .steps,
   ).toHaveLength(2);
 });
-it('requires matched provider search evidence and refuses discovery publication', () => {
+it('requires matched provider search evidence', () => {
   const step = { webSearch: { minSearches: 1 } };
   const receipt = { id: hash('hosted-search-1'), results: 3 };
   expect(assertWebSearch({ webSearch: [receipt] }, step)).toEqual([receipt]);
@@ -175,24 +171,17 @@ it('requires matched provider search evidence and refuses discovery publication'
     expect(() => assertWebSearch({ webSearch }, step)).toThrow(
       'confirmed_provider_search_evidence_missing',
     );
-  expect(() => assertWebSearch({ webSearch: [receipt], publications: [{}] }, step)).toThrow(
-    'search_discovery_produced_external_artifacts',
-  );
-  expect(() => assertWebSearch({ webSearch: [receipt], exports: [{}] }, step)).toThrow(
-    'search_discovery_produced_external_artifacts',
-  );
 });
-it('validates the shipped discovery search scenario without requiring a publication', () => {
+it('validates the shipped discovery search scenario', () => {
   const search = JSON.parse(fs.readFileSync('tests/live/scenarios/web-search.json', 'utf8'));
   expect(validateScenario(search)).toEqual(search);
   search.steps[0].webSearch.minSearches = 0;
   expect(() => validateScenario(search)).toThrow('invalid_search_fixture');
   delete search.steps[0].webSearch;
-  expect(() => validateScenario(search)).toThrow('invalid_publication_fixture');
+  expect(() => validateScenario(search)).toThrow('tool_step_evidence_required');
 });
-it('uploads only fixture bytes and verifies exact current-app file shares without logging credentials', async () => {
+it('uploads only fixture bytes without logging credentials', async () => {
   const bytes = Buffer.from('fixture\n');
-  const sha256 = createHash('sha256').update(bytes).digest('hex');
   const calls: string[] = [];
   const files = liveFileTransport('synthetic-private', async (url: URL, init: RequestInit) => {
     expect(url.hostname).toBe('files.slack.com');
@@ -227,37 +216,6 @@ it('uploads only fixture bytes and verifies exact current-app file shares withou
       (r: unknown) => receipts.push(r),
     ),
   ).toEqual({ channel: 'CTEST', ts: '1.1' });
-  const inspection = {
-    exports: [
-      {
-        id: 'a',
-        name: 'fixture.txt',
-        bytes: bytes.length,
-        sha256,
-        receipt: { id: 'a', bytes: bytes.length, sha256, fileId: 'FTEST' },
-      },
-    ],
-  };
-  expect(
-    await files.verify(
-      slack,
-      [{ name: 'fixture.txt', bytes: bytes.length, sha256 }],
-      inspection,
-      'CTEST',
-      '1.1',
-      'UAPP',
-    ),
-  ).toHaveLength(1);
-  await expect(
-    files.verify(
-      slack,
-      [{ name: 'fixture.txt', bytes: bytes.length, sha256 }],
-      inspection,
-      'CTEST',
-      '2.2',
-      'UAPP',
-    ),
-  ).rejects.toThrow('recipient');
   expect(JSON.stringify(receipts)).not.toContain('synthetic-private');
   expect(calls.filter((c) => c === 'files.completeUploadExternal')).toHaveLength(1);
 });
@@ -484,92 +442,6 @@ describe('native live driver', () => {
       ),
     ).toThrow('bytes_mismatch');
   });
-  it('verifies published bytes at the receipt commit and requires the same MR on follow-up', () => {
-    const commit = 'a'.repeat(40);
-    const publication = {
-      host: 'gitlab.com',
-      project: 'fixture/test',
-      projectId: 115,
-      targetBranch: 'main',
-      files: [{ path: 'shout.js', contains: ['toUpperCase'] }],
-    };
-    const evidence = {
-      state: 'completed',
-      project: publication.project,
-      projectId: 115,
-      commit,
-      branch: 'support-agent/task',
-      targetBranch: 'main',
-      mrIid: 3,
-      mrUrl: 'https://gitlab.com/fixture/test/-/merge_requests/3',
-    };
-    const inspection = {
-      runId: 'run',
-      publications: [{ run_id: 'run', outcome: 'confirmed', evidence }],
-    };
-    const bytes = Buffer.from('text.toUpperCase()');
-    const observed = {
-      project: { id: 115, path_with_namespace: publication.project, default_branch: 'main' },
-      mr: {
-        project_id: 115,
-        iid: 3,
-        state: 'opened',
-        source_branch: evidence.branch,
-        target_branch: 'main',
-        web_url: evidence.mrUrl,
-        sha: commit,
-      },
-      files: [
-        {
-          file_path: 'shout.js',
-          commit_id: commit,
-          encoding: 'text',
-          content: bytes.toString('utf8'),
-          size: bytes.length,
-          content_sha256: hash(bytes.toString()),
-        },
-      ],
-    };
-    const verified = assertPublication(inspection, publication, observed);
-    expect(verified.files[0].sha256).toBe(hash(bytes.toString()));
-    expect(() => assertPublication(inspection, publication, observed, verified)).toThrow(
-      'new_commit',
-    );
-    expect(() =>
-      assertPublication(inspection, publication, {
-        ...observed,
-        mr: { ...observed.mr, target_branch: 'other' },
-      }),
-    ).toThrow('remote_identity');
-    expect(() =>
-      assertPublication(inspection, publication, {
-        ...observed,
-        files: [{ ...observed.files[0], commit_id: 'b'.repeat(40) }],
-      }),
-    ).toThrow('file_identity');
-    expect(() =>
-      assertPublication(inspection, publication, {
-        ...observed,
-        files: [{ ...observed.files[0], content: 'text.toLowerCase()' }],
-      }),
-    ).toThrow('bytes');
-    expect(() =>
-      assertPublication(
-        { ...inspection, publications: [{ ...inspection.publications[0], outcome: 'uncertain' }] },
-        publication,
-        observed,
-      ),
-    ).toThrow('not_confirmed');
-    expect(
-      validateScenario({
-        name: 'coding',
-        mode: 'coding',
-        covers: ['synthetic coding'],
-        budget: { turns: 1, modelRequests: 30 },
-        steps: [{ prompt: 'Implement fixture', contains: ['Verified publication'], publication }],
-      }).mode,
-    ).toBe('coding');
-  });
   it('checks exact visible plain-text blocks despite Slack normalizing the fallback', () => {
     const text = 'alpha\n\nbeta';
     const delivery = {
@@ -675,7 +547,7 @@ describe('native live driver', () => {
     expect(p.stdout).not.toContain('never-export-this');
   });
 
-  it('validates bounded answer scenarios and refuses legacy/coding/placeholder fields', () => {
+  it('validates bounded answer scenarios and refuses legacy and placeholder fields', () => {
     expect(validateScenario(scenario)).toBe(scenario);
     for (const value of [
       { ...scenario, mode: 'claude-code' },
@@ -1045,18 +917,18 @@ describe('native live driver', () => {
       steps: [{ prompt: 'x', contains: ['x'], attachments: [{ name: 'a.txt', data: 'eA==' }] }],
     };
     expect(validateScenario(files)).toBe(files);
-    const coding = {
+    const tool = {
       name: 'tool',
-      mode: 'coding',
+      mode: 'tools',
       covers: ['synthetic tool'],
       budget: { turns: 1, modelRequests: 4 },
       steps: [{ prompt: 'x', contains: ['x'] }],
     };
     for (const value of [
       { ...scenario, model: 'mock' },
-      // A coding step needs a publication or discovery fixture, in both suites.
-      coding,
-      { ...coding, model: 'stub' },
+      // A tool step declares what it checks, in both suites.
+      tool,
+      { ...tool, model: 'stub' },
       { ...ask, steps: [ask.steps[1]] },
       { ...ask, steps: [ask.steps[0], { ...ask.steps[1], prompt: 'teal' }] },
       { ...ask, steps: [ask.steps[0], { ...ask.steps[1], prompt: ' ', mention: false }] },
@@ -1488,44 +1360,6 @@ describe('native live driver', () => {
       { ...value, model: 'gateway', steps: [{ prompt: 'x', contains: ['x'], discovery: false }] },
     ])
       expect(() => validateScenario(bad)).toThrow();
-  });
-  it('fails a step without a declared publication that published anyway', async () => {
-    const text = 'answer';
-    const slack = async (method: string, body: Record<string, unknown> = {}) => {
-      if (method === 'auth.test')
-        return { team_id: 'TTEST', user_id: 'USENDER', bot_id: 'BSENDER' };
-      if (method === 'chat.postMessage') return { ts: '1.1', channel: 'CTEST' };
-      return { messages: [], response_metadata: { next_cursor: '' }, body };
-    };
-    await expect(
-      runScenario({
-        scenario: {
-          name: 'discovery',
-          mode: 'coding',
-          covers: ['x discovery'],
-          budget: { turns: 1, modelRequests: 4 },
-          steps: [{ prompt: 'read only', contains: [text], discovery: true }],
-        },
-        slack,
-        identity: { ...identity, assignedTools: 1, readyKinds: ['gitlab'] },
-        report: { attempts: [] },
-        save: () => {},
-        delay: async () => {},
-        inspect: async () => ({
-          runId: 'r1',
-          messageTs: '1.1',
-          active: false,
-          publications: [{ outcome: 'confirmed' }],
-          delivery: {
-            outcome: 'delivered',
-            slack_ts: '1.2',
-            operation_id: 'op',
-            sha256: hash(text),
-            bytes: 6,
-          },
-        }),
-      }),
-    ).rejects.toThrow('discovery_produced_external_artifacts');
   });
   it('refuses wrong sender and tool-enabled fixture before posting', async () => {
     for (const kind of ['sender', 'tools']) {
@@ -2341,7 +2175,7 @@ describe('driver-managed tools, tool scopes and the model mode switch', () => {
     const value = validateScenario({
       ...scenario,
       name: 'gitlab reads',
-      mode: 'coding',
+      mode: 'tools',
       requires: ['gitlab'],
       isolation: undefined,
       steps: [
@@ -2400,7 +2234,7 @@ describe('driver-managed tools, tool scopes and the model mode switch', () => {
     const service = {
       ...scenario,
       name: 'service',
-      mode: 'coding',
+      mode: 'tools',
       requires: ['atlassian'],
       isolation: undefined,
       steps: [{ prompt: 'read', contains: ['x'], discovery: true }],
@@ -2644,7 +2478,7 @@ describe('driver-managed tools, tool scopes and the model mode switch', () => {
     fs.mkdirSync(folder, { recursive: true });
     const tool = (name: string, extra: Record<string, unknown>) => ({
       name,
-      mode: 'coding',
+      mode: 'tools',
       covers: [`${name} flow`],
       budget: { turns: 1, modelRequests: 4 },
       ...extra,
