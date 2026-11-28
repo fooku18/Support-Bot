@@ -51,7 +51,7 @@ stored and the Costs page shows the counts.
 ## Verification
 
 - Deterministic (2026-11-28): T0 passes. T1 and T2 pass in a Linux container
-  (agent 719 tests, Slack 214, root 135). T3 `application` passes (82 records)
+  (agent 742 tests, Slack 218, root 135; rerun after rebasing onto `6c8828b`). T3 `application` passes (82 records)
   after the vertical's footer checks moved to the second-last block; its
   discovery answer now also asserts both buttons carry the run ID.
 - T4: not run. The shared local instance was locked by another session
