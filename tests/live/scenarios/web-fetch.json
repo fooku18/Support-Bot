@@ -5,7 +5,7 @@
     "turns": 2,
     "modelRequests": 10
   },
-  "mode": "coding",
+  "mode": "tools",
   "steps": [
     {
       "prompt": "Discovery only: use web_fetch to fetch https://example.com/ directly and quote its page title and English body text. Cite the fetched URL. Do not use web search or memory as a substitute. Do not clone, edit, run commands or tests, export, publish, or write to GitLab.",

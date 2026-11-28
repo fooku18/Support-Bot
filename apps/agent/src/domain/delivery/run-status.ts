@@ -35,7 +35,6 @@ export function toolStatus(toolName: string, args: unknown): string | undefined 
   if (toolName.startsWith('slack_')) return 'Reading Slack…';
   if (toolName === 'web_search') return 'Searching the web…';
   if (toolName === 'web_fetch') return 'Reading a web page…';
-  if (toolName === 'export_file') return 'Preparing a file…';
   return 'Working…';
 }
 

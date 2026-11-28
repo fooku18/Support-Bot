@@ -5,7 +5,7 @@
     "turns": 2,
     "modelRequests": 10
   },
-  "mode": "coding",
+  "mode": "tools",
   "steps": [
     {
       "prompt": "Discovery only: use your provider web_search tool to find the title of RFC 2606 and its reserved second-level domain names. Name the exact title and domains and cite a source URL. Do not clone, edit files, run commands or tests, export, publish, or write to GitLab. Do not answer from memory: if search fails, report the failure.",

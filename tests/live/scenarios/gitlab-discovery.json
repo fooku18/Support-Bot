@@ -8,7 +8,7 @@
     "turns": 2,
     "modelRequests": 16
   },
-  "mode": "coding",
+  "mode": "tools",
   "requires": ["gitlab"],
   "steps": [
     {

@@ -1,6 +1,6 @@
 # Remove the Compose-only coding path
 
-Status: In progress
+Status: Done
 
 ## Summary
 
@@ -48,14 +48,12 @@ Slack and Atlassian reads, web search, web fetch, Code Mode, charts,
   refusals included) and the in-image Code Mode check that the `coding`
   suite ran. Code Mode's sandbox probes stay covered in
   `apps/agent/test/runtime/code-mode.test.ts`.
-- Held back: `apps/agent/src/application/instructions.ts` still tells the
-  model how to use coding tools when they are available. They never are
-  now. Another session owns that file tonight; drop the sentence in its
-  next change.
-- Deferred: the live runner (`tests/live/run.mjs`) still accepts
-  `"mode": "coding"`, which now only means a scenario on a channel with
-  tools, and its publication and export fixtures. Renaming the mode and
-  dropping those fixtures needs a T4 run on the shared instance.
+- Follow-up PR: the built-in instructions lose the coding, Workspace,
+  export and publication sentences, and the run status line its
+  `export_file` label. The live runner's `"mode": "coding"` becomes
+  `"mode": "tools"` (a scenario on a channel with tools; each step still
+  declares a discovery, search, fetch or question), and its publication and
+  export fixtures, checks and read-back go.
 
 ## YAGNI review of the other candidates
 
@@ -78,15 +76,18 @@ Slack and Atlassian reads, web search, web fetch, Code Mode, charts,
 
 - Deterministic: see the pull request for revision and results (T0, T1,
   T2, T3 `discovery`, `application`, `backup`, `telemetry`, `tools`).
-- Live: T4 and T5 BLOCKED tonight: the shared test instance is locked by
-  another session. Staging live check after the deploy instead.
+- Live: T4 and T5 were blocked for #51 (the shared test instance was
+  locked). Staging live check after the deploy instead: 2026-11-28 06:03 UTC
+  in #test-1234, GitLab read, line chart and `ask_user` buttons pass.
+- Follow-up PR: T0, T1, T2 and the T4 stub suite on the local instance.
 
 ## Rollout
 
-Merge, then the digest-bump MR in the deployment repo
-(`notes/rollout.md` in the operator's notes). Rollback: the previous digest.
+Merged as #51 (`37d36b7`) and deployed to staging on 2026-11-28 00:44 UTC.
+On first start the admin removed 2 `files`/`localExec` instances and 6
+assignments (audit `tool.kind.remove`, config v21 to v22). Rollback: the
+previous digest; the removed rows come back only from a backup.
 
 ## Open items
 
-- [ ] Deploy and live-check on staging.
-- [ ] Live runner: rename `"mode": "coding"`, drop publication and export fixtures (needs T4).
+None.

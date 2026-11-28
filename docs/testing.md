@@ -576,7 +576,7 @@ Scenario fields beyond prompts and expected text:
 | `longAnswer`          | The answer arrives as a preview and `answer.md`; `previewContains` and `previewExcludes` check the preview                                         |
 | `messageAttachments`  | Slack message attachments (fields, blocks) posted with the mention                                                                                 |
 | `attachments`         | Files uploaded with the mention                                                                                                                    |
-| `discovery`           | A gateway step of a scenario with tools (`"mode": "coding"`) that only reads                                                                       |
+| `discovery`           | A gateway step of a scenario with tools (`"mode": "tools"`) that only reads                                                                        |
 
 `channelSettings` uses the settings service API with `E2E_ADMIN_TOKEN`. It reads the exact prior settings first and
 restores them at the end, also after a failure; an unconfirmed restore fails

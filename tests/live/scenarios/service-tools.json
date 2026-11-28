@@ -10,7 +10,7 @@
     "turns": 5,
     "modelRequests": 40
   },
-  "mode": "coding",
+  "mode": "tools",
   "requires": ["atlassian", "datadog", "cloudflare", "slack"],
   "steps": [
     {
