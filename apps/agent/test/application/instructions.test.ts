@@ -32,8 +32,15 @@ describe('support playbook', () => {
     expect(supportPlaybook).toMatch(/instead of guessing/i);
   });
 
+  it('links earlier reports of the same problem or says none were found', () => {
+    expect(supportPlaybook).toMatch(/earlier reports/i);
+    expect(supportPlaybook).toMatch(/one to three/i);
+    expect(supportPlaybook).toMatch(/permalink/i);
+    expect(supportPlaybook).toMatch(/no earlier report was found/i);
+  });
+
   it('stays compact because it is sent on every step', () => {
-    expect(supportPlaybook.length).toBeLessThanOrEqual(2000);
+    expect(supportPlaybook.length).toBeLessThanOrEqual(2400);
   });
 });
 
