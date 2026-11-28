@@ -164,9 +164,9 @@ describe('lookupOptimizely', () => {
       found: false,
       total: 5,
       matches: [
+        { type: 'experiment', key: 'banner_test', status: 'Running' },
         { type: 'flag', key: 'shop_new_banner' },
         { type: 'flag', key: 'shop_banner_kill_switch' },
-        { type: 'experiment', key: 'banner_test' },
         { type: 'delivery rule', key: 'banner_de' },
         { type: 'event', key: 'banner_clicked' },
       ],
@@ -174,6 +174,40 @@ describe('lookupOptimizely', () => {
     const absent = lookupOptimizely([file('production')], 'shop_old_banner');
     expect(absent).toMatchObject({ found: false, total: 0 });
     expect((absent as { note: string }).note).toContain('is not in datafile');
+  });
+
+  it('lists running experiments first, even when many flags match', () => {
+    const production = file('production');
+    const flags = production.data.featureFlags;
+    for (let i = 0; i < 60; i += 1)
+      flags.push({ ...flags[1]!, id: `fx${i}`, key: `shop_banner_extra_${i}` });
+    const paused = { ...production.data.experiments[0]!, id: '9002', key: 'banner_paused' };
+    paused.status = 'Paused';
+    production.data.experiments.unshift(paused);
+    const result = lookupOptimizely([production], 'banner') as {
+      matches: Array<Record<string, string>>;
+      total: number;
+      truncated: boolean;
+    };
+    expect(result.matches.slice(0, 2)).toEqual([
+      {
+        datafile: 'Shop',
+        environment: 'production',
+        type: 'experiment',
+        key: 'banner_test',
+        id: '9001',
+        status: 'Running',
+      },
+      {
+        datafile: 'Shop',
+        environment: 'production',
+        type: 'experiment',
+        key: 'banner_paused',
+        id: '9002',
+        status: 'Paused',
+      },
+    ]);
+    expect(result).toMatchObject({ total: 66, truncated: true });
   });
 
   it('lists the datafiles for an empty query', () => {

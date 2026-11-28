@@ -358,31 +358,39 @@ function listDatafiles(files: LoadedDatafile[]) {
 
 function search(files: LoadedDatafile[], query: string) {
   const q = query.toLowerCase();
-  const matches: Array<Record<string, string>> = [];
-  let total = 0;
-  const push = (entry: Record<string, string>) => {
-    total += 1;
-    if (matches.length < MAX_MATCHES) matches.push(entry);
-  };
+  const hit = (key: string) => key.toLowerCase().includes(q);
+  const ruleHit = (rule: Rule) => hit(rule.key) || rule.id === query;
+  const running: Array<Record<string, string>> = [];
+  const rest: Array<Record<string, string>> = [];
+  const flags: Array<Record<string, string>> = [];
+  const others: Array<Record<string, string>> = [];
   for (const file of files) {
     const d = file.data;
     const where = { datafile: file.name, environment: file.environment };
+    for (const rule of allExperiments(d))
+      if (ruleHit(rule))
+        (rule.status === 'Running' ? running : rest).push({
+          ...where,
+          type: 'experiment',
+          key: rule.key,
+          id: rule.id,
+          status: rule.status,
+        });
     for (const flag of d.featureFlags)
-      if (flag.key.toLowerCase().includes(q)) push({ ...where, type: 'flag', key: flag.key });
-    const rules = [
-      ...allExperiments(d).map((rule) => ({ rule, type: 'experiment' })),
-      ...d.rollouts.flatMap((r) => r.experiments.map((rule) => ({ rule, type: 'delivery rule' }))),
-    ];
-    for (const { rule, type } of rules)
-      if (rule.key.toLowerCase().includes(q) || rule.id === query)
-        push({ ...where, type, key: rule.key, id: rule.id });
+      if (hit(flag.key)) flags.push({ ...where, type: 'flag', key: flag.key });
+    for (const rule of d.rollouts.flatMap((r) => r.experiments))
+      if (ruleHit(rule))
+        others.push({ ...where, type: 'delivery rule', key: rule.key, id: rule.id });
     for (const a of audienceMap(d).values())
-      if (a.name.toLowerCase().includes(q))
-        push({ ...where, type: 'audience', key: a.name, id: a.id });
-    for (const e of d.events)
-      if (e.key.toLowerCase().includes(q)) push({ ...where, type: 'event', key: e.key });
+      if (hit(a.name)) others.push({ ...where, type: 'audience', key: a.name, id: a.id });
+    for (const e of d.events) if (hit(e.key)) others.push({ ...where, type: 'event', key: e.key });
   }
-  return { matches, total, truncated: total > matches.length };
+  const all = [...running, ...rest, ...flags, ...others];
+  return {
+    matches: all.slice(0, MAX_MATCHES),
+    total: all.length,
+    truncated: all.length > MAX_MATCHES,
+  };
 }
 
 const ABSENT =
