@@ -110,3 +110,7 @@ purge-safe replay prevention.
 
 Deleting a note removes active memory, not Slack history, earlier answers,
 pinned run evidence, prompt audits or backups. This is not secure erasure.
+
+# Channel capability help
+
+Mention the bot with `help` or `what can you do here?` to see this channel’s tools and example questions. Use `!help` for command syntax.
